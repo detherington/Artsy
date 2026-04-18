@@ -107,6 +107,9 @@ class CanvasView: MTKView {
 
         case .eyedropper:
             break
+
+        case .fill:
+            handleFillMouseDown(event)
         }
     }
 
@@ -243,6 +246,43 @@ class CanvasView: MTKView {
 
         let _ = viewModel.endStroke()
         renderer.finalizeStroke()
+    }
+
+    // MARK: - Fill Tool
+
+    private func handleFillMouseDown(_ event: NSEvent) {
+        guard let viewModel = viewModel, let renderer = renderer,
+              let layer = viewModel.layerStack?.activeLayer else { return }
+
+        if layer.isLocked {
+            NSSound.beep()
+            return
+        }
+
+        let viewPoint = convert(event.locationInWindow, from: nil)
+        let canvasPoint = viewModel.transform.viewToCanvas(viewPoint, viewSize: bounds.size)
+
+        let cs = viewModel.canvasSize
+        guard canvasPoint.x >= 0, canvasPoint.x < cs.width,
+              canvasPoint.y >= 0, canvasPoint.y < cs.height else { return }
+
+        // Snapshot BEFORE dispatching async work so redo/undo captures pre-fill state.
+        viewModel.saveUndoSnapshot(renderer: renderer, description: "Fill")
+
+        // Run fill in the background — returns immediately so the UI stays responsive.
+        BucketFill.fillAsync(
+            renderer: renderer,
+            layer: layer,
+            canvasPoint: canvasPoint,
+            canvasSize: cs,
+            fillColor: viewModel.currentColor,
+            tolerance: viewModel.fillTolerance,
+            selectionPath: viewModel.selectionPath
+        ) { [weak renderer, weak layer] in
+            guard let renderer = renderer, let layer = layer else { return }
+            renderer.updateThumbnail(for: layer)
+            // MTKView redraws continuously
+        }
     }
 
     // MARK: - Selection Helpers
@@ -521,6 +561,8 @@ class CanvasView: MTKView {
             viewModel.currentTool = .shape
         case "i", "I":
             viewModel.currentTool = .eyedropper
+        case "g", "G":
+            viewModel.currentTool = .fill
         case "[":
             viewModel.brushSize = max(1, viewModel.brushSize - 2)
         case "]":

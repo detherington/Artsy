@@ -45,6 +45,7 @@
 		C4A0EAB4224D97C307191562 /* KeychainManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 36A07C9E513F89A8F0B88B0A /* KeychainManager.swift */; };
 		AF01B001AAAAAAAAAAAAAAAA /* AppPreferences.swift in Sources */ = {isa = PBXBuildFile; fileRef = AF01B002BBBBBBBBBBBBBBBB /* AppPreferences.swift */; };
 		AF02C001AAAAAAAAAAAAAAAA /* CustomColorPickerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AF02C002BBBBBBBBBBBBBBBB /* CustomColorPickerView.swift */; };
+		AF03D001AAAAAAAAAAAAAAAA /* BucketFill.swift in Sources */ = {isa = PBXBuildFile; fileRef = AF03D002BBBBBBBBBBBBBBBB /* BucketFill.swift */; };
 		C63DD013D230567F0B5C135D /* UnsplashManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = D0124C2EB7D7F7E4BDF1541E /* UnsplashManager.swift */; };
 		CD8BB1C846223F20573100BC /* UndoManager+Canvas.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3771CA3A4B479853C392C68A /* UndoManager+Canvas.swift */; };
 		CE68FED3287DE2BB8EDCD055 /* Shaders.metal in Sources */ = {isa = PBXBuildFile; fileRef = 68B02EDF5AFB8295DE44872D /* Shaders.metal */; };
@@ -87,6 +88,7 @@
 		36A07C9E513F89A8F0B88B0A /* KeychainManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeychainManager.swift; sourceTree = "<group>"; };
 		AF01B002BBBBBBBBBBBBBBBB /* AppPreferences.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppPreferences.swift; sourceTree = "<group>"; };
 		AF02C002BBBBBBBBBBBBBBBB /* CustomColorPickerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CustomColorPickerView.swift; sourceTree = "<group>"; };
+		AF03D002BBBBBBBBBBBBBBBB /* BucketFill.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BucketFill.swift; sourceTree = "<group>"; };
 		36AE7509E7E91DD8165A4E34 /* CondensedPanelView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CondensedPanelView.swift; sourceTree = "<group>"; };
 		3771CA3A4B479853C392C68A /* UndoManager+Canvas.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "UndoManager+Canvas.swift"; sourceTree = "<group>"; };
 		3E8961D5B335007FFFEF2303 /* SelectionMoveHandler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SelectionMoveHandler.swift; sourceTree = "<group>"; };
@@ -151,6 +153,7 @@
 		305426AD360653A5A400D250 /* Canvas */ = {
 			isa = PBXGroup;
 			children = (
+				AF03D002BBBBBBBBBBBBBBBB /* BucketFill.swift */,
 				E8EE6EA5AC4600A2173EF389 /* CanvasDocument.swift */,
 				E108BEC3D2CEE80EF8D1DEE0 /* CanvasRenderer.swift */,
 				629A2719AA300B9498B10E44 /* CanvasTransform.swift */,
@@ -497,6 +500,7 @@
 				C4A0EAB4224D97C307191562 /* KeychainManager.swift in Sources */,
 				AF01B001AAAAAAAAAAAAAAAA /* AppPreferences.swift in Sources */,
 				AF02C001AAAAAAAAAAAAAAAA /* CustomColorPickerView.swift in Sources */,
+				AF03D001AAAAAAAAAAAAAAAA /* BucketFill.swift in Sources */,
 				B4D14A65F4D6EAB7131CDCE0 /* Layer.swift in Sources */,
 				46DC011A581BE663AA0A04DA /* LayerPanelView.swift in Sources */,
 				705C32BC3B4D541E303AF574 /* LayerStack.swift in Sources */,

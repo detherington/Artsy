@@ -156,15 +156,96 @@ struct ToolButton: View {
 
     var body: some View {
         Button(action: action) {
-            Image(systemName: tool.iconName)
-                .font(.system(size: 16))
-                .frame(width: 32, height: 32)
-                .background(isSelected ? Color.accentColor.opacity(0.3) : Color.clear)
-                .cornerRadius(4)
+            Group {
+                if tool == .fill {
+                    Image("paintbucket")
+                        .renderingMode(.template)
+                        .resizable()
+                        .aspectRatio(contentMode: .fit)
+                        .frame(width: 18, height: 18)
+                } else {
+                    Image(systemName: tool.iconName)
+                        .font(.system(size: 16))
+                }
+            }
+            .frame(width: 32, height: 32)
+            .background(isSelected ? Color.accentColor.opacity(0.3) : Color.clear)
+            .cornerRadius(4)
         }
         .buttonStyle(.plain)
         .foregroundColor(isSelected ? .accentColor : .gray)
         .help("\(tool.rawValue) (\(tool.shortcutKey))")
+    }
+}
+
+/// Custom SwiftUI paint-bucket icon — a tilted diamond bucket with the top half
+/// hollow, bottom half filled, plus a diagonal handle line and a paint drop.
+struct PaintBucketIcon: View {
+    var body: some View {
+        GeometryReader { geo in
+            let w = geo.size.width
+            let h = geo.size.height
+            let stroke = max(1.3, w * 0.11)
+
+            // Diamond vertices (rotated square)
+            let top    = CGPoint(x: w * 0.50, y: h * 0.22)
+            let right  = CGPoint(x: w * 0.85, y: h * 0.55)
+            let bottom = CGPoint(x: w * 0.50, y: h * 0.88)
+            let left   = CGPoint(x: w * 0.15, y: h * 0.55)
+
+            ZStack {
+                // Handle — diagonal line crossing above the top vertex
+                Path { p in
+                    p.move(to: CGPoint(x: w * 0.40, y: h * 0.06))
+                    p.addLine(to: CGPoint(x: w * 0.82, y: h * 0.30))
+                }
+                .stroke(style: StrokeStyle(lineWidth: stroke * 0.7, lineCap: .round))
+
+                // Bottom half — filled triangle (left → bottom → right)
+                Path { p in
+                    p.move(to: left)
+                    p.addLine(to: right)
+                    p.addLine(to: bottom)
+                    p.closeSubpath()
+                }
+                .fill()
+
+                // Diamond outline (full rhombus)
+                Path { p in
+                    p.move(to: top)
+                    p.addLine(to: right)
+                    p.addLine(to: bottom)
+                    p.addLine(to: left)
+                    p.closeSubpath()
+                }
+                .stroke(style: StrokeStyle(lineWidth: stroke, lineJoin: .round))
+
+                // Paint drop — small teardrop to the lower-right
+                Path { p in
+                    let cx = w * 0.88
+                    let cy = h * 0.80
+                    let r  = w * 0.08
+                    p.move(to: CGPoint(x: cx, y: cy - r * 1.35))
+                    p.addQuadCurve(
+                        to: CGPoint(x: cx + r, y: cy),
+                        control: CGPoint(x: cx + r * 0.6, y: cy - r * 0.7)
+                    )
+                    p.addArc(
+                        center: CGPoint(x: cx, y: cy),
+                        radius: r,
+                        startAngle: .zero,
+                        endAngle: .degrees(180),
+                        clockwise: false
+                    )
+                    p.addQuadCurve(
+                        to: CGPoint(x: cx, y: cy - r * 1.35),
+                        control: CGPoint(x: cx - r * 0.6, y: cy - r * 0.7)
+                    )
+                    p.closeSubpath()
+                }
+                .fill()
+            }
+        }
     }
 }
 

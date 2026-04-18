@@ -22,5 +22,13 @@
         ]]></description>
         <enclosure url="https://github.com/detherington/Artsy/releases/download/v0.2.0/Artsy-0.2.0.dmg" length="4398170" type="application/octet-stream" sparkle:edSignature="GUdRnraZAEGq2BklqUZAvRgohgGrd7y7rq8CsELAOolKKGZrIaAs1vKBqIFd3hjUcUtVKDvXwNFAuL+MutCQBw=="/>
     </item>
+    <item>
+        <title>Version 0.3.0</title>
+        <pubDate>Sat, 18 Apr 2026 01:19:15 +0000</pubDate>
+        <sparkle:version>3</sparkle:version>
+        <sparkle:shortVersionString>0.3.0</sparkle:shortVersionString>
+        <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+        <enclosure url="https://github.com/detherington/Artsy/releases/download/v0.3.0/Artsy-0.3.0.dmg" length="4473093" type="application/octet-stream" sparkle:edSignature="M5JsD2vawulWkzTxAnXMZrv+wRVxtPQz2CWfDXQEFszApu/QG5lt1B8SI9xO1EP7JQFdUARhIw3WhBoy9gcCAg=="/>
+    </item>
 </channel>
 </rss>

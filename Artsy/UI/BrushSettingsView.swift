@@ -7,10 +7,77 @@ struct BrushSettingsView: View {
         Group {
             if viewModel.currentTool == .shape {
                 ShapeSettingsContent(viewModel: viewModel)
+            } else if viewModel.currentTool == .fill {
+                FillSettingsContent(viewModel: viewModel)
             } else {
                 BrushSettingsContent(viewModel: viewModel)
             }
         }
+    }
+}
+
+struct FillSettingsContent: View {
+    @ObservedObject var viewModel: CanvasViewModel
+    @State private var showColorPicker = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("Bucket Fill")
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundColor(.white)
+
+            // Color swatch (foreground = fill color)
+            HStack {
+                Text("Color")
+                    .font(.system(size: 11))
+                    .foregroundColor(.gray)
+                    .frame(width: 62, alignment: .leading)
+                Spacer()
+                Rectangle()
+                    .fill(Color(nsColor: viewModel.currentColor.nsColor))
+                    .frame(width: 20, height: 20)
+                    .border(Color.white.opacity(0.4), width: 1)
+                    .contentShape(Rectangle())
+                    .onTapGesture { showColorPicker = true }
+                    .popover(isPresented: $showColorPicker, arrowEdge: .trailing) {
+                        CustomColorPickerView(
+                            color: Binding(
+                                get: { viewModel.currentColor },
+                                set: {
+                                    viewModel.currentColor = $0
+                                    viewModel.foregroundColor = $0
+                                }
+                            ),
+                            onCommit: { showColorPicker = false }
+                        )
+                    }
+            }
+
+            // Tolerance slider (0 = exact match, 100 = very loose)
+            HStack {
+                Text("Tolerance")
+                    .font(.system(size: 10))
+                    .foregroundColor(.gray)
+                    .frame(width: 62, alignment: .leading)
+                Slider(
+                    value: Binding(
+                        get: { Double(viewModel.fillTolerance) },
+                        set: { viewModel.fillTolerance = Int($0) }
+                    ),
+                    in: 0...100
+                )
+                Text("\(viewModel.fillTolerance)")
+                    .font(.system(size: 10, design: .monospaced))
+                    .foregroundColor(.gray)
+                    .frame(width: 28, alignment: .trailing)
+            }
+
+            Text("Click a pixel to flood-fill matching neighbors. Higher tolerance fills more.")
+                .font(.system(size: 9))
+                .foregroundColor(.gray.opacity(0.7))
+                .lineLimit(3)
+        }
+        .padding(.horizontal, 16).padding(.vertical, 4)
     }
 }
 

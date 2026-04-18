@@ -35,6 +35,7 @@ enum ShapeMode: String, CaseIterable, Identifiable {
 enum ToolType: String, CaseIterable, Identifiable {
     case brush = "Brush"
     case eraser = "Eraser"
+    case fill = "Fill"
     case eyedropper = "Eyedropper"
     case selection = "Selection"
     case shape = "Shape"
@@ -46,6 +47,7 @@ enum ToolType: String, CaseIterable, Identifiable {
         switch self {
         case .brush: return "B"
         case .eraser: return "E"
+        case .fill: return "G"
         case .eyedropper: return "I"
         case .selection: return "S"
         case .shape: return "U"
@@ -57,6 +59,7 @@ enum ToolType: String, CaseIterable, Identifiable {
         switch self {
         case .brush: return "paintbrush.pointed"
         case .eraser: return "eraser"
+        case .fill: return "paintbucket.fill"
         case .eyedropper: return "eyedropper"
         case .selection: return "rectangle.dashed"
         case .shape: return "square.on.circle"

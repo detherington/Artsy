@@ -71,6 +71,9 @@ final class CanvasViewModel: ObservableObject {
     @Published var foregroundColor: StrokeColor = .black
     @Published var swapBackgroundColor: StrokeColor = .white
 
+    // Bucket fill tool — tolerance in 0-255 color distance units per channel.
+    @Published var fillTolerance: Int = 16
+
     // MARK: - Document state
     /// URL this canvas is saved to, if any. Set after save/load.
     @Published var fileURL: URL? = nil
