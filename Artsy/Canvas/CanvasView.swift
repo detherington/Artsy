@@ -106,7 +106,7 @@ class CanvasView: MTKView {
             updateShapePreview(to: canvasPoint)
 
         case .eyedropper:
-            break
+            handleEyedropperMouseDown(event)
 
         case .fill:
             handleFillMouseDown(event)
@@ -246,6 +246,77 @@ class CanvasView: MTKView {
 
         let _ = viewModel.endStroke()
         renderer.finalizeStroke()
+    }
+
+    // MARK: - Eyedropper Tool
+
+    private func handleEyedropperMouseDown(_ event: NSEvent) {
+        guard let viewModel = viewModel, let renderer = renderer,
+              let composite = renderer.compositeTexture else { return }
+
+        let viewPoint = convert(event.locationInWindow, from: nil)
+        let canvasPoint = viewModel.transform.viewToCanvas(viewPoint, viewSize: bounds.size)
+
+        let cs = viewModel.canvasSize
+        guard canvasPoint.x >= 0, canvasPoint.x < cs.width,
+              canvasPoint.y >= 0, canvasPoint.y < cs.height else { return }
+
+        // Canvas coords (Y-up) → texture coords (Y-down)
+        let tx = Int(canvasPoint.x.rounded())
+        let ty = Int((cs.height - canvasPoint.y).rounded())
+        guard tx >= 0, tx < composite.width, ty >= 0, ty < composite.height else { return }
+
+        // Sample a single pixel — 1×1 staging texture, tiny blit, brief wait is fine.
+        guard let staging = try? renderer.textureManager.makeSharedTexture(
+            width: 1, height: 1, label: "Eyedropper"
+        ),
+        let cmdBuf = renderer.context.commandQueue.makeCommandBuffer(),
+        let blit = cmdBuf.makeBlitCommandEncoder() else { return }
+
+        blit.copy(
+            from: composite,
+            sourceSlice: 0,
+            sourceLevel: 0,
+            sourceOrigin: MTLOrigin(x: tx, y: ty, z: 0),
+            sourceSize: MTLSize(width: 1, height: 1, depth: 1),
+            to: staging,
+            destinationSlice: 0,
+            destinationLevel: 0,
+            destinationOrigin: MTLOrigin(x: 0, y: 0, z: 0)
+        )
+        blit.endEncoding()
+        cmdBuf.commit()
+        cmdBuf.waitUntilCompleted()
+
+        var f16: [UInt16] = [0, 0, 0, 0]
+        f16.withUnsafeMutableBytes { raw in
+            staging.getBytes(
+                raw.baseAddress!,
+                bytesPerRow: 8,
+                from: MTLRegion(
+                    origin: MTLOrigin(x: 0, y: 0, z: 0),
+                    size: MTLSize(width: 1, height: 1, depth: 1)
+                ),
+                mipmapLevel: 0
+            )
+        }
+
+        let r = Float(Float16(bitPattern: f16[0]))
+        let g = Float(Float16(bitPattern: f16[1]))
+        let b = Float(Float16(bitPattern: f16[2]))
+        // Clamp alpha to 1 — picked color is meant to be applied opaquely.
+        let a: Float = 1.0
+        let picked = StrokeColor(
+            red: max(0, min(1, r)),
+            green: max(0, min(1, g)),
+            blue: max(0, min(1, b)),
+            alpha: a
+        )
+        viewModel.foregroundColor = picked
+        viewModel.currentColor = picked
+
+        // Switch back to brush — common UX convention.
+        viewModel.currentTool = .brush
     }
 
     // MARK: - Fill Tool

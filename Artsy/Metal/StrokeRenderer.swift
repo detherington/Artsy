@@ -56,8 +56,12 @@ final class StrokeRenderer {
             }
         }
 
-        // 2. Round caps at start/end (or a single dot if only one point)
-        let (capVerts, capIndices) = brushEngine.generateCapVertices(for: points, brush: brush)
+        // 2. Round caps at start/end (or a single dot if only one point).
+        // Skip caps for fixed-nib (calligraphy) brushes — round caps would spoil
+        // the crisp angular nib look. The ribbon's edges are the correct shape.
+        let (capVerts, capIndices) = brush.fixedNibAngle == nil
+            ? brushEngine.generateCapVertices(for: points, brush: brush)
+            : ([], [])
         if !capVerts.isEmpty, let capVB = makeBuffer(capVerts), let capIB = makeIndexBuffer(capIndices) {
             let capPipeline = radialCapPipelineState(brush: brush, isEraser: isEraser)
             encoder.setRenderPipelineState(capPipeline)
@@ -84,6 +88,7 @@ final class StrokeRenderer {
         case .textured: return context.strokeTexturedPipelineState
         case .watercolor: return context.strokeWatercolorPipelineState
         case .acrylic: return context.strokeAcrylicPipelineState
+        case .oil: return context.strokeOilPipelineState
         }
     }
 
@@ -93,6 +98,7 @@ final class StrokeRenderer {
         case .pencil: return context.strokeRadialPencilPipelineState
         case .watercolor: return context.strokeRadialWatercolorPipelineState
         case .acrylic: return context.strokeRadialAcrylicPipelineState
+        case .oil: return context.strokeRadialOilPipelineState
         case .procedural, .textured: return context.strokeRadialPipelineState
         }
     }

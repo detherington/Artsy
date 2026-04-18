@@ -24,25 +24,36 @@ final class BrushEngine {
         vertices.reserveCapacity(points.count * 5 * 2)
         indices.reserveCapacity((points.count - 1) * 6)
 
-        // Pre-compute perpendicular normals for all points
+        // Pre-compute perpendicular normals for all points.
+        // If the brush has a fixedNibAngle (calligraphy), every ribbon cross-section
+        // uses the SAME perpendicular direction, which produces the classic
+        // thick-when-perpendicular-to-nib / thin-when-along-nib variation.
         var normals = [(Float, Float)]()
         normals.reserveCapacity(points.count)
 
-        for i in 0..<points.count {
-            let dx: Float
-            let dy: Float
-            if i == 0 {
-                dx = Float(points[1].position.x - points[0].position.x)
-                dy = Float(points[1].position.y - points[0].position.y)
-            } else if i == points.count - 1 {
-                dx = Float(points[i].position.x - points[i-1].position.x)
-                dy = Float(points[i].position.y - points[i-1].position.y)
-            } else {
-                dx = Float(points[i+1].position.x - points[i-1].position.x)
-                dy = Float(points[i+1].position.y - points[i-1].position.y)
+        if let nibAngle = brush.fixedNibAngle {
+            let nx = cos(nibAngle)
+            let ny = sin(nibAngle)
+            for _ in 0..<points.count {
+                normals.append((nx, ny))
             }
-            let len = max(sqrt(dx * dx + dy * dy), 0.001)
-            normals.append((-dy / len, dx / len))
+        } else {
+            for i in 0..<points.count {
+                let dx: Float
+                let dy: Float
+                if i == 0 {
+                    dx = Float(points[1].position.x - points[0].position.x)
+                    dy = Float(points[1].position.y - points[0].position.y)
+                } else if i == points.count - 1 {
+                    dx = Float(points[i].position.x - points[i-1].position.x)
+                    dy = Float(points[i].position.y - points[i-1].position.y)
+                } else {
+                    dx = Float(points[i+1].position.x - points[i-1].position.x)
+                    dy = Float(points[i+1].position.y - points[i-1].position.y)
+                }
+                let len = max(sqrt(dx * dx + dy * dy), 0.001)
+                normals.append((-dy / len, dx / len))
+            }
         }
 
         // Generate vertices

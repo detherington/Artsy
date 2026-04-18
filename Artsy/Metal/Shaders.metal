@@ -91,6 +91,28 @@ fragment float4 strokeRadialWatercolorFragment(
     return float4(color, brushColor.a * alpha);
 }
 
+// Round tip for oil paint — impasto, bristle streaks, more textured than acrylic
+fragment float4 strokeRadialOilFragment(
+    StrokeVertexOut in [[stage_in]],
+    constant float4 &brushColor [[buffer(0)]],
+    constant float &hardness [[buffer(1)]]
+) {
+    float dist = distance(in.texCoord, float2(0.5, 0.5)) * 2.0;
+    float shape = 1.0 - smoothstep(hardness + 0.05, 0.98, dist);
+
+    float2 p = in.position.xy;
+    // Pronounced canvas texture + clump-like high-frequency noise for impasto
+    float canvas = fract(sin(dot(floor(p * 0.25), float2(12.9898, 78.233))) * 43758.5453);
+    float canvasTexture = mix(0.82, 1.0, canvas);
+
+    // Center impasto highlight: slightly brighter towards the middle as if paint is piled up
+    float impasto = 1.0 + (1.0 - dist) * 0.15;
+    float3 color = clamp(brushColor.rgb * impasto, 0.0, 1.0);
+
+    float alpha = shape * canvasTexture * in.opacity;
+    return float4(color, brushColor.a * alpha);
+}
+
 // Round tip for acrylic (cap version of acrylic brush)
 fragment float4 strokeRadialAcrylicFragment(
     StrokeVertexOut in [[stage_in]],
@@ -178,6 +200,40 @@ fragment float4 strokeWatercolorFragment(
 }
 
 // Acrylic: thick, opaque paint with subtle canvas/bristle texture
+// Oil paint ribbon — stronger bristle streaks + impasto highlights
+fragment float4 strokeOilFragment(
+    StrokeVertexOut in [[stage_in]],
+    constant float4 &brushColor [[buffer(0)]],
+    constant float &hardness [[buffer(1)]]
+) {
+    float dist = abs(in.texCoord.x - 0.5) * 2.0;
+    // Sharper edge than acrylic for chunky paint feel
+    float shape = 1.0 - smoothstep(hardness + 0.05, 0.98, dist);
+
+    // Bristle streaks parallel to stroke direction (quantize cross-stroke into 40 lanes)
+    float laneSeed = floor(in.texCoord.x * 40.0);
+    float bristle = fract(sin(laneSeed * 45.17) * 43758.5453);
+    // Wider dark/light variation than acrylic for visible brush bristles
+    float bristleAlpha = mix(0.7, 1.05, bristle);
+
+    float2 p = in.position.xy;
+    // Canvas weave — larger + stronger grain than acrylic
+    float canvas = fract(sin(dot(floor(p * 0.25), float2(12.9898, 78.233))) * 43758.5453);
+    float canvasTexture = mix(0.82, 1.0, canvas);
+
+    // Second, finer noise to break up the bristles
+    float2 fp = p * 0.8;
+    float fine = fract(sin(dot(floor(fp), float2(4.837, 31.727))) * 23457.1357);
+
+    // Paint thickness — center of ribbon has slight impasto highlight
+    float centerBoost = 1.0 + (1.0 - dist) * 0.12;
+    float thickness = mix(0.9, 1.12, bristle * 0.5 + fine * 0.5) * centerBoost;
+    float3 color = clamp(brushColor.rgb * thickness, 0.0, 1.0);
+
+    float alpha = shape * bristleAlpha * canvasTexture * in.opacity;
+    return float4(color, brushColor.a * alpha);
+}
+
 fragment float4 strokeAcrylicFragment(
     StrokeVertexOut in [[stage_in]],
     constant float4 &brushColor [[buffer(0)]],

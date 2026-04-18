@@ -1,0 +1,9 @@
+{
+  "images" : [
+    { "filename" : "brush-ink-brush.png",    "idiom" : "universal", "scale" : "1x" },
+    { "filename" : "brush-ink-brush@2x.png", "idiom" : "universal", "scale" : "2x" },
+    { "filename" : "brush-ink-brush@3x.png", "idiom" : "universal", "scale" : "3x" }
+  ],
+  "info" : { "author" : "xcode", "version" : 1 },
+  "properties" : { "template-rendering-intent" : "template" }
+}

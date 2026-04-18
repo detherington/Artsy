@@ -12,12 +12,14 @@ final class MetalContext {
     let strokeTexturedPipelineState: MTLRenderPipelineState
     let strokeWatercolorPipelineState: MTLRenderPipelineState
     let strokeAcrylicPipelineState: MTLRenderPipelineState
+    let strokeOilPipelineState: MTLRenderPipelineState
     let strokeEraserPipelineState: MTLRenderPipelineState
     // Radial-distance variants for stroke caps (rounded endpoints, Procreate-style)
     let strokeRadialPipelineState: MTLRenderPipelineState
     let strokeRadialPencilPipelineState: MTLRenderPipelineState
     let strokeRadialWatercolorPipelineState: MTLRenderPipelineState
     let strokeRadialAcrylicPipelineState: MTLRenderPipelineState
+    let strokeRadialOilPipelineState: MTLRenderPipelineState
     let strokeRadialEraserPipelineState: MTLRenderPipelineState
     let compositeNormalPipelineState: MTLRenderPipelineState
     let compositeBlendPipelineState: MTLRenderPipelineState
@@ -110,6 +112,12 @@ final class MetalContext {
             fragmentFunction: "strokeAcrylicFragment"
         )
 
+        // Stroke oil — impasto + bristle streaks
+        self.strokeOilPipelineState = try MetalContext.makeStrokePipeline(
+            device: device, library: library, vertexDescriptor: strokeVD,
+            fragmentFunction: "strokeOilFragment"
+        )
+
         // Stroke eraser — uses destination-out blending to remove pixels
         self.strokeEraserPipelineState = try MetalContext.makeEraserPipeline(
             device: device, library: library, vertexDescriptor: strokeVD
@@ -131,6 +139,10 @@ final class MetalContext {
         self.strokeRadialAcrylicPipelineState = try MetalContext.makeStrokePipeline(
             device: device, library: library, vertexDescriptor: strokeVD,
             fragmentFunction: "strokeRadialAcrylicFragment"
+        )
+        self.strokeRadialOilPipelineState = try MetalContext.makeStrokePipeline(
+            device: device, library: library, vertexDescriptor: strokeVD,
+            fragmentFunction: "strokeRadialOilFragment"
         )
         // Eraser cap also uses destination-out blending with the radial shape
         let radialEraserDesc = MTLRenderPipelineDescriptor()

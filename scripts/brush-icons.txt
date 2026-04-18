@@ -1,0 +1,64 @@
+# Brush icon mapping — one line per brush.
+#
+# Format:  <brush-key>    <prefix>/<icon-name>
+#
+# Browse icons at https://icon-sets.iconify.design/ (filter by keyword, try
+# different libraries). The ID above an icon preview is "<prefix>:<name>";
+# write it with a "/" here. ~200,000 icons available across ~150 libraries.
+#
+# To swap an icon: edit this line, then run scripts/install-brush-icons.sh
+#
+# Useful prefixes:
+#   mdi           Material Design Icons (7,500)  — classic, comprehensive
+#   fluent        Fluent UI (Microsoft, 20,000+) — multiple sizes/weights
+#   ph            Phosphor (9,000)               — 6 weights per icon (ph/foo, ph/foo-bold, ph/foo-fill)
+#   game-icons    Game Icons (4,000+)            — hand-drawn, artistic
+#   solar         Solar (7,400)                  — 6 styles (linear/bold/broken/etc.)
+#   tabler        Tabler (4,800)                 — thin geometric
+#   lucide        Lucide (1,500)                 — minimal
+#   hugeicons     Hugeicons (4,400)              — modern
+#   fa6-solid     Font Awesome 6 solid           — broad
+
+# --- Sketching ---
+hard-round         ph/circle-fill
+soft-round         ph/circle
+pencil             mdi/pencil
+graphite           mdi/pencil-outline
+conte              mdi/lead-pencil
+chalk              mdi/grain
+pastel             fluent-emoji-high-contrast/crayon
+
+# --- Inking ---
+ink-brush          game-icons/paint-brush
+sumi-e             mdi/brush
+calligraphy        game-icons/quill-ink
+technical-pen      mdi/fountain-pen-tip
+fineliner          mdi/pen
+ballpoint          fluent/pen-24-regular
+gel-pen            mdi/fountain-pen
+
+# --- Painting ---
+marker             mdi/marker
+airbrush           mdi/spray
+watercolor         ion/water-outline
+acrylic            ph/paint-brush-household-thin
+oil                ph/paint-brush-thin
+
+# Some alternatives you might like — swap above and rerun the script:
+#   pencil         ph/pencil          (thinner silhouette)
+#   chalk          game-icons/crayon  (literal chalk stick)
+#   chalk          mdi/chalkboard     (chalkboard)
+#   pastel         mdi/palette-swatch (colorful swatches)
+#   ink-brush      fluent/ink-stroke-24-filled
+#   sumi-e         solar/brush-bold
+#   calligraphy    mdi/fountain-pen-tip
+#   calligraphy    game-icons/feather
+#   technical-pen  fluent/drafting-compass-24-filled
+#   ballpoint      mdi/ballpen
+#   gel-pen        solar/pen-new-square-bold
+#   airbrush       game-icons/paint-brush  (if spray looks wrong)
+#   watercolor     mdi/water-outline
+#   watercolor     mdi/palette
+#   acrylic        game-icons/paint-brush
+#   oil            game-icons/paint-roller
+#   oil            mdi/palette

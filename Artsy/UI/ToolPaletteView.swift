@@ -113,25 +113,65 @@ struct ToolPaletteView: View {
             }
             .help("Brush size: \(Int(viewModel.brushSize))px  ([ / ] to adjust)")
 
-            Spacer()
+            Spacer(minLength: 4)
 
-            // Brush presets
-            ForEach(Array(BrushDescriptor.allDefaults.enumerated()), id: \.element.id) { index, brush in
-                BrushPresetButton(
-                    brush: brush,
-                    isSelected: viewModel.currentBrush.id == brush.id,
-                    index: index + 1,
-                    action: {
-                        viewModel.currentBrush = brush
-                        viewModel.currentTool = .brush
+            // Brush presets — grouped by category, scrollable so it scales with count
+            ScrollView(.vertical, showsIndicators: false) {
+                VStack(spacing: 2) {
+                    ForEach(Array(categorizedBrushes.enumerated()), id: \.offset) { groupIdx, group in
+                        if groupIdx > 0 {
+                            Rectangle()
+                                .fill(Color.white.opacity(0.08))
+                                .frame(height: 1)
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 3)
+                        }
+                        ForEach(group.brushes, id: \.globalIndex) { entry in
+                            BrushPresetButton(
+                                brush: entry.brush,
+                                isSelected: viewModel.currentBrush.id == entry.brush.id,
+                                index: entry.globalIndex + 1,
+                                action: {
+                                    viewModel.currentBrush = entry.brush
+                                    viewModel.currentTool = .brush
+                                }
+                            )
+                        }
                     }
-                )
+                }
+                .padding(.bottom, 4)
             }
         }
         .padding(.vertical, 8)
         .padding(.horizontal, 4)
         .frame(width: 48)
         .background(Color(nsColor: NSColor(white: 0.15, alpha: 1.0)))
+    }
+
+    // MARK: - Brush grouping
+
+    /// Brush entry with the global index used by keyboard shortcuts 1–9.
+    private struct BrushEntry {
+        let brush: BrushDescriptor
+        let globalIndex: Int
+    }
+
+    private struct BrushGroup {
+        let category: BrushCategory
+        let brushes: [BrushEntry]
+    }
+
+    /// Groups all brushes by category in a fixed display order, preserving the
+    /// global position in `allDefaults` for keyboard-shortcut indexing.
+    private var categorizedBrushes: [BrushGroup] {
+        let order: [BrushCategory] = [.sketching, .inking, .painting, .utility]
+        let entries = BrushDescriptor.allDefaults.enumerated().map {
+            BrushEntry(brush: $0.element, globalIndex: $0.offset)
+        }
+        return order.compactMap { cat in
+            let items = entries.filter { $0.brush.category == cat }
+            return items.isEmpty ? nil : BrushGroup(category: cat, brushes: items)
+        }
     }
 
     private func selectTool(_ tool: ToolType) {
@@ -293,34 +333,55 @@ struct BrushPresetButton: View {
     let index: Int
     let action: () -> Void
 
-    private var iconName: String {
+    /// Asset name in Assets.xcassets (e.g. "brush-pencil"). Template images
+    /// are tinted by the button's foreground color.
+    private var assetName: String {
         switch brush.name {
-        case "Hard Round": return "pencil.tip"
-        case "Soft Round": return "circle.fill"
-        case "Pencil": return "pencil"
-        case "Ink Brush": return "paintbrush.pointed.fill"
-        case "Marker": return "highlighter"
-        case "Watercolor": return "drop.fill"
-        case "Acrylic": return "paintbrush.fill"
-        default: return "circle.fill"
+        case "Hard Round":     return "brush-hard-round"
+        case "Soft Round":     return "brush-soft-round"
+        case "Pencil":         return "brush-pencil"
+        case "Graphite Stick": return "brush-graphite"
+        case "Conté":          return "brush-conte"
+        case "Chalk":          return "brush-chalk"
+        case "Pastel":         return "brush-pastel"
+        case "Ink Brush":      return "brush-ink-brush"
+        case "Sumi-e":         return "brush-sumi-e"
+        case "Calligraphy":    return "brush-calligraphy"
+        case "Technical Pen":  return "brush-technical-pen"
+        case "Fineliner":      return "brush-fineliner"
+        case "Ballpoint":      return "brush-ballpoint"
+        case "Gel Pen":        return "brush-gel-pen"
+        case "Marker":         return "brush-marker"
+        case "Airbrush":       return "brush-airbrush"
+        case "Watercolor":     return "brush-watercolor"
+        case "Acrylic":        return "brush-acrylic"
+        case "Oil":            return "brush-oil"
+        default:               return "brush-hard-round"
         }
     }
 
     var body: some View {
         Button(action: action) {
             VStack(spacing: 1) {
-                Image(systemName: iconName)
-                    .font(.system(size: 14))
-                Text("\(index)")
-                    .font(.system(size: 8, design: .monospaced))
+                Image(assetName)
+                    .renderingMode(.template)
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
+                    .frame(width: 18, height: 18)
+                if index <= 9 {
+                    Text("\(index)")
+                        .font(.system(size: 8, design: .monospaced))
+                } else {
+                    Color.clear.frame(height: 1)
+                }
             }
-            .frame(width: 36, height: 34)
+            .frame(width: 36, height: 30)
             .background(isSelected ? Color.accentColor.opacity(0.3) : Color.clear)
             .cornerRadius(4)
         }
         .buttonStyle(.plain)
         .foregroundColor(isSelected ? .white : .gray)
-        .help("\(brush.name) (\(index))")
+        .help(index <= 9 ? "\(brush.name) (\(index))" : brush.name)
     }
 }
 
