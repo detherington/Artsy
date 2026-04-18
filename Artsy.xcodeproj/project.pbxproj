@@ -1,0 +1,790 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		02177C5233136639E672BDF0 /* BrushDescriptor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9C62A909BCD9D532B7728EE0 /* BrushDescriptor.swift */; };
+		0591EA527AD0B06CB70EA71F /* CompositorPipeline.swift in Sources */ = {isa = PBXBuildFile; fileRef = 503F3A4D683A28C2D0F3CA61 /* CompositorPipeline.swift */; };
+		09386C46324D038E9A39D68D /* StrokeInterpolator.swift in Sources */ = {isa = PBXBuildFile; fileRef = CABAD15A8043DE4840509F6F /* StrokeInterpolator.swift */; };
+		0E66A305C307AAE73C331D63 /* Tool.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7A8B609744A10C0F5D14636 /* Tool.swift */; };
+		191856BE27F6BB1CC02CF739 /* StrokeSmoothing.swift in Sources */ = {isa = PBXBuildFile; fileRef = 49CF8EADC65864B304E57C66 /* StrokeSmoothing.swift */; };
+		1B650C7F7177AD18DDC7C684 /* StrokeRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = BE58DE4CC964D524A0221361 /* StrokeRenderer.swift */; };
+		211333D0F25AD782C00CACCA /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A9B5B66FC7F18B7121C9034F /* Assets.xcassets */; };
+		23C7D0FA63DAA9E57CBE795D /* StatusBarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2B515082F1EB90971F0B71A8 /* StatusBarView.swift */; };
+		2B92C2DAA93D910872043D2F /* BrushEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2D8F7EDA762E3FA8B6C4FA45 /* BrushEngine.swift */; };
+		313101C5C7B2E0FC8B60C730 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = F6E4F7C4EF3819240960383A /* AppDelegate.swift */; };
+		31A01E1B3ACA8A5C726645F9 /* UnsplashPanelView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E6628365B71C263026F81811 /* UnsplashPanelView.swift */; };
+		33BDE74BD2B1C72B7524F609 /* UnsplashService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5DD13AB08798219682D052C4 /* UnsplashService.swift */; };
+		3ABEF9858237241D63222A2F /* AIPromptBuilder.swift in Sources */ = {isa = PBXBuildFile; fileRef = A81A3FDEC958C2A5A707F738 /* AIPromptBuilder.swift */; };
+		46DC011A581BE663AA0A04DA /* LayerPanelView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 49CD9D8A37644262890FEB83 /* LayerPanelView.swift */; };
+		48367BBE0244FF3F8F06F356 /* MainWindowController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2A4A7C26F5BDA244973B1C73 /* MainWindowController.swift */; };
+		4B89F297CD86FF169CA2BF02 /* AIService.swift in Sources */ = {isa = PBXBuildFile; fileRef = EEE3613F6384791B0F940514 /* AIService.swift */; };
+		4D5B08BA130C75EDC7E2B082 /* AIConfiguration.swift in Sources */ = {isa = PBXBuildFile; fileRef = E82480AA39FA616279063585 /* AIConfiguration.swift */; };
+		4D9B317B9C53C340867F2690 /* MetalContext.swift in Sources */ = {isa = PBXBuildFile; fileRef = 59797061B065607E467C8C83 /* MetalContext.swift */; };
+		4E25CB2619655D087BEE4FB0 /* ImageExporter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4CC0B866C90269C400161541 /* ImageExporter.swift */; };
+		522215269B9DCDBD86684CFF /* SelectionMoveHandler.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E8961D5B335007FFFEF2303 /* SelectionMoveHandler.swift */; };
+		698D07B602E06901DEE503DD /* CanvasTransform.swift in Sources */ = {isa = PBXBuildFile; fileRef = 629A2719AA300B9498B10E44 /* CanvasTransform.swift */; };
+		6B4D8A05ADC7F0CABC026B06 /* SelectionOverlayView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F9D8011F75833D68C69FF415 /* SelectionOverlayView.swift */; };
+		701636E5EEC34523035AC7DB /* CustomStylePreset.swift in Sources */ = {isa = PBXBuildFile; fileRef = CCB19C4C351A6A11D321C5B0 /* CustomStylePreset.swift */; };
+		705C32BC3B4D541E303AF574 /* LayerStack.swift in Sources */ = {isa = PBXBuildFile; fileRef = 513F372D85789B03F682C5E4 /* LayerStack.swift */; };
+		707E634D2647E81D0E3B73F1 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BD8E45F79CA68DA8870D2281 /* SettingsView.swift */; };
+		72038A2F94742B90DCD12CEF /* PressureCurve.swift in Sources */ = {isa = PBXBuildFile; fileRef = 22EA3B8567263273990426D0 /* PressureCurve.swift */; };
+		8441F30F353D60A3858D782A /* RightPanelView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A5F99C119AED589ACA0D28D0 /* RightPanelView.swift */; };
+		88EBC34DBBB9DF740B9D5A27 /* AIPanelView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 34BD4F2B47E4771F72C70136 /* AIPanelView.swift */; };
+		897AC2FB25C0D205E9A44ABC /* OpenAIService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 69D712A439DB900955FC550A /* OpenAIService.swift */; };
+		A1FE7EBBB0415CC1B00B201E /* TabletEventHandler.swift in Sources */ = {isa = PBXBuildFile; fileRef = F44532810C60B86CBAA65204 /* TabletEventHandler.swift */; };
+		AA5A098CDBEB618185360A3E /* ArtsyDoc.icns in Resources */ = {isa = PBXBuildFile; fileRef = BB624EDD0614857BAEA2DD18 /* ArtsyDoc.icns */; };
+		B4D14A65F4D6EAB7131CDCE0 /* Layer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7023812567A45EDAFA5CCF5A /* Layer.swift */; };
+		B60D985251FE10BF9AD67488 /* GeminiService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6B34CD5EE1049AD9F6BD76D4 /* GeminiService.swift */; };
+		BD42CF919BB05DBB67196099 /* CanvasRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = E108BEC3D2CEE80EF8D1DEE0 /* CanvasRenderer.swift */; };
+		C2C4F71675E40BD88CB07363 /* AIResultsManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = E912486DF62DFA3EEDFF4762 /* AIResultsManager.swift */; };
+		C4A0EAB4224D97C307191562 /* KeychainManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 36A07C9E513F89A8F0B88B0A /* KeychainManager.swift */; };
+		AF01B001AAAAAAAAAAAAAAAA /* AppPreferences.swift in Sources */ = {isa = PBXBuildFile; fileRef = AF01B002BBBBBBBBBBBBBBBB /* AppPreferences.swift */; };
+		AF02C001AAAAAAAAAAAAAAAA /* CustomColorPickerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AF02C002BBBBBBBBBBBBBBBB /* CustomColorPickerView.swift */; };
+		C63DD013D230567F0B5C135D /* UnsplashManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = D0124C2EB7D7F7E4BDF1541E /* UnsplashManager.swift */; };
+		CD8BB1C846223F20573100BC /* UndoManager+Canvas.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3771CA3A4B479853C392C68A /* UndoManager+Canvas.swift */; };
+		CE68FED3287DE2BB8EDCD055 /* Shaders.metal in Sources */ = {isa = PBXBuildFile; fileRef = 68B02EDF5AFB8295DE44872D /* Shaders.metal */; };
+		D0C112212538E3221EC4A155 /* CanvasDocument.swift in Sources */ = {isa = PBXBuildFile; fileRef = E8EE6EA5AC4600A2173EF389 /* CanvasDocument.swift */; };
+		D24B34DBCA6E731D710E99C6 /* DistractionFreeContainerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3EB4FF7DB7F419C634FDCB4 /* DistractionFreeContainerView.swift */; };
+		D2B5D50B8165BB841FB8D907 /* PressureCurveTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0B9932655AF3FC9573F89EB /* PressureCurveTests.swift */; };
+		D68D8F8119E3B54809BB0686 /* CanvasViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1BAE745B52E51B4C39233DC2 /* CanvasViewModel.swift */; };
+		DF2BF50A9C3CD1D088D0CE20 /* NewCanvasView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1EA099CE5CB6D694FA248491 /* NewCanvasView.swift */; };
+		DFDEC521B68B89833E11687E /* BrushSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB157DCFAA0D25C78F80DBE7 /* BrushSettingsView.swift */; };
+		E5E9C3977E0EB35BF7BAD1B1 /* main.swift in Sources */ = {isa = PBXBuildFile; fileRef = 70C7D5DCFE4BD75F79E194C7 /* main.swift */; };
+		E6A5C0FFCC666057658E3E29 /* StrokePoint.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4BAE3461ED09A5C4765BCEC9 /* StrokePoint.swift */; };
+		E800A25699A18BBCB94DEE8F /* Stroke.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6BBAFD41A746635A11C7A0DF /* Stroke.swift */; };
+		F2FC3762E2A38278101C5733 /* CanvasView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A673F35EA05267841073131 /* CanvasView.swift */; };
+		F3C1765F90FA554F0C4A7032 /* CondensedPanelView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 36AE7509E7E91DD8165A4E34 /* CondensedPanelView.swift */; };
+		FA3FF53DEC64A0BB6FBABC25 /* TextureManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = C5039E326A13D6BD1B8F7CFA /* TextureManager.swift */; };
+		FC15FB9E538FD0DDABD2ACB2 /* ToolPaletteView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4A78876D6B37CD12F5E38C89 /* ToolPaletteView.swift */; };
+		55AABB0000000000000002AA /* Sparkle.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 55AABB0000000000000001AA /* Sparkle.framework */; };
+		55AABB0000000000000003AA /* Sparkle.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 55AABB0000000000000001AA /* Sparkle.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		10363B84026A482B5832BAE2 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 19519F19E9DF4B8BBDC2309C /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = FD4B5848719831076E1F6BD5;
+			remoteInfo = Artsy;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXFileReference section */
+		1BAE745B52E51B4C39233DC2 /* CanvasViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CanvasViewModel.swift; sourceTree = "<group>"; };
+		1EA099CE5CB6D694FA248491 /* NewCanvasView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NewCanvasView.swift; sourceTree = "<group>"; };
+		22EA3B8567263273990426D0 /* PressureCurve.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PressureCurve.swift; sourceTree = "<group>"; };
+		2996CF57FB968263A972904C /* Artsy.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Artsy.entitlements; sourceTree = "<group>"; };
+		2A4A7C26F5BDA244973B1C73 /* MainWindowController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainWindowController.swift; sourceTree = "<group>"; };
+		2B515082F1EB90971F0B71A8 /* StatusBarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatusBarView.swift; sourceTree = "<group>"; };
+		2D8F7EDA762E3FA8B6C4FA45 /* BrushEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrushEngine.swift; sourceTree = "<group>"; };
+		34BD4F2B47E4771F72C70136 /* AIPanelView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIPanelView.swift; sourceTree = "<group>"; };
+		36A07C9E513F89A8F0B88B0A /* KeychainManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeychainManager.swift; sourceTree = "<group>"; };
+		AF01B002BBBBBBBBBBBBBBBB /* AppPreferences.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppPreferences.swift; sourceTree = "<group>"; };
+		AF02C002BBBBBBBBBBBBBBBB /* CustomColorPickerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CustomColorPickerView.swift; sourceTree = "<group>"; };
+		36AE7509E7E91DD8165A4E34 /* CondensedPanelView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CondensedPanelView.swift; sourceTree = "<group>"; };
+		3771CA3A4B479853C392C68A /* UndoManager+Canvas.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "UndoManager+Canvas.swift"; sourceTree = "<group>"; };
+		3E8961D5B335007FFFEF2303 /* SelectionMoveHandler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SelectionMoveHandler.swift; sourceTree = "<group>"; };
+		44593BFA95845A8C3563EE36 /* Artsy-Release.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = "Artsy-Release.entitlements"; sourceTree = "<group>"; };
+		49CD9D8A37644262890FEB83 /* LayerPanelView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LayerPanelView.swift; sourceTree = "<group>"; };
+		49CF8EADC65864B304E57C66 /* StrokeSmoothing.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StrokeSmoothing.swift; sourceTree = "<group>"; };
+		4A78876D6B37CD12F5E38C89 /* ToolPaletteView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ToolPaletteView.swift; sourceTree = "<group>"; };
+		4BAE3461ED09A5C4765BCEC9 /* StrokePoint.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StrokePoint.swift; sourceTree = "<group>"; };
+		4CC0B866C90269C400161541 /* ImageExporter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImageExporter.swift; sourceTree = "<group>"; };
+		503F3A4D683A28C2D0F3CA61 /* CompositorPipeline.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CompositorPipeline.swift; sourceTree = "<group>"; };
+		513F372D85789B03F682C5E4 /* LayerStack.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LayerStack.swift; sourceTree = "<group>"; };
+		59797061B065607E467C8C83 /* MetalContext.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MetalContext.swift; sourceTree = "<group>"; };
+		5DD13AB08798219682D052C4 /* UnsplashService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UnsplashService.swift; sourceTree = "<group>"; };
+		629A2719AA300B9498B10E44 /* CanvasTransform.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CanvasTransform.swift; sourceTree = "<group>"; };
+		68B02EDF5AFB8295DE44872D /* Shaders.metal */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.metal; path = Shaders.metal; sourceTree = "<group>"; };
+		69D712A439DB900955FC550A /* OpenAIService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenAIService.swift; sourceTree = "<group>"; };
+		6B34CD5EE1049AD9F6BD76D4 /* GeminiService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GeminiService.swift; sourceTree = "<group>"; };
+		6BBAFD41A746635A11C7A0DF /* Stroke.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Stroke.swift; sourceTree = "<group>"; };
+		7023812567A45EDAFA5CCF5A /* Layer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Layer.swift; sourceTree = "<group>"; };
+		70C7D5DCFE4BD75F79E194C7 /* main.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = main.swift; sourceTree = "<group>"; };
+		7A673F35EA05267841073131 /* CanvasView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CanvasView.swift; sourceTree = "<group>"; };
+		8B933F490F0C008A1263AE41 /* ArtsyTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = ArtsyTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		9B23963C8D0030AF31D57E73 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		9C62A909BCD9D532B7728EE0 /* BrushDescriptor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrushDescriptor.swift; sourceTree = "<group>"; };
+		A5F99C119AED589ACA0D28D0 /* RightPanelView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RightPanelView.swift; sourceTree = "<group>"; };
+		A81A3FDEC958C2A5A707F738 /* AIPromptBuilder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIPromptBuilder.swift; sourceTree = "<group>"; };
+		A9B5B66FC7F18B7121C9034F /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		BB624EDD0614857BAEA2DD18 /* ArtsyDoc.icns */ = {isa = PBXFileReference; lastKnownFileType = image.icns; path = ArtsyDoc.icns; sourceTree = "<group>"; };
+		BD8E45F79CA68DA8870D2281 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
+		BE58DE4CC964D524A0221361 /* StrokeRenderer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StrokeRenderer.swift; sourceTree = "<group>"; };
+		C5039E326A13D6BD1B8F7CFA /* TextureManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TextureManager.swift; sourceTree = "<group>"; };
+		C7A8B609744A10C0F5D14636 /* Tool.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Tool.swift; sourceTree = "<group>"; };
+		CABAD15A8043DE4840509F6F /* StrokeInterpolator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StrokeInterpolator.swift; sourceTree = "<group>"; };
+		CCB19C4C351A6A11D321C5B0 /* CustomStylePreset.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CustomStylePreset.swift; sourceTree = "<group>"; };
+		D0124C2EB7D7F7E4BDF1541E /* UnsplashManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UnsplashManager.swift; sourceTree = "<group>"; };
+		D3EB4FF7DB7F419C634FDCB4 /* DistractionFreeContainerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DistractionFreeContainerView.swift; sourceTree = "<group>"; };
+		DB157DCFAA0D25C78F80DBE7 /* BrushSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrushSettingsView.swift; sourceTree = "<group>"; };
+		E108BEC3D2CEE80EF8D1DEE0 /* CanvasRenderer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CanvasRenderer.swift; sourceTree = "<group>"; };
+		E6628365B71C263026F81811 /* UnsplashPanelView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UnsplashPanelView.swift; sourceTree = "<group>"; };
+		E82480AA39FA616279063585 /* AIConfiguration.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIConfiguration.swift; sourceTree = "<group>"; };
+		E8EE6EA5AC4600A2173EF389 /* CanvasDocument.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CanvasDocument.swift; sourceTree = "<group>"; };
+		E912486DF62DFA3EEDFF4762 /* AIResultsManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIResultsManager.swift; sourceTree = "<group>"; };
+		EEE3613F6384791B0F940514 /* AIService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIService.swift; sourceTree = "<group>"; };
+		F0B9932655AF3FC9573F89EB /* PressureCurveTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PressureCurveTests.swift; sourceTree = "<group>"; };
+		F3C850C56BFA6E2F424FDB16 /* Artsy.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Artsy.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		F44532810C60B86CBAA65204 /* TabletEventHandler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TabletEventHandler.swift; sourceTree = "<group>"; };
+		F6E4F7C4EF3819240960383A /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
+		F9D8011F75833D68C69FF415 /* SelectionOverlayView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SelectionOverlayView.swift; sourceTree = "<group>"; };
+		55AABB0000000000000001AA /* Sparkle.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; path = Sparkle.framework; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXGroup section */
+		0400C96FBD03ED8163F6614F /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				F3C850C56BFA6E2F424FDB16 /* Artsy.app */,
+				8B933F490F0C008A1263AE41 /* ArtsyTests.xctest */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		305426AD360653A5A400D250 /* Canvas */ = {
+			isa = PBXGroup;
+			children = (
+				E8EE6EA5AC4600A2173EF389 /* CanvasDocument.swift */,
+				E108BEC3D2CEE80EF8D1DEE0 /* CanvasRenderer.swift */,
+				629A2719AA300B9498B10E44 /* CanvasTransform.swift */,
+				7A673F35EA05267841073131 /* CanvasView.swift */,
+				1BAE745B52E51B4C39233DC2 /* CanvasViewModel.swift */,
+				3E8961D5B335007FFFEF2303 /* SelectionMoveHandler.swift */,
+				F9D8011F75833D68C69FF415 /* SelectionOverlayView.swift */,
+			);
+			path = Canvas;
+			sourceTree = "<group>";
+		};
+		30F8CBE1AC0CF03D0DA0FDA3 /* UI */ = {
+			isa = PBXGroup;
+			children = (
+				DB157DCFAA0D25C78F80DBE7 /* BrushSettingsView.swift */,
+				36AE7509E7E91DD8165A4E34 /* CondensedPanelView.swift */,
+				49CD9D8A37644262890FEB83 /* LayerPanelView.swift */,
+				1EA099CE5CB6D694FA248491 /* NewCanvasView.swift */,
+				A5F99C119AED589ACA0D28D0 /* RightPanelView.swift */,
+				BD8E45F79CA68DA8870D2281 /* SettingsView.swift */,
+				2B515082F1EB90971F0B71A8 /* StatusBarView.swift */,
+				4A78876D6B37CD12F5E38C89 /* ToolPaletteView.swift */,
+				9BB66B16CCCE0203E60E9A49 /* AIPanel */,
+				ACE5880AE63A8E10898D3826 /* UnsplashPanel */,
+				AF02C100CCCCCCCCCCCCCCCC /* ColorPicker */,
+			);
+			path = UI;
+			sourceTree = "<group>";
+		};
+		35A69E7194AB11201FF96767 /* Utilities */ = {
+			isa = PBXGroup;
+			children = (
+				AF01B002BBBBBBBBBBBBBBBB /* AppPreferences.swift */,
+				4CC0B866C90269C400161541 /* ImageExporter.swift */,
+				36A07C9E513F89A8F0B88B0A /* KeychainManager.swift */,
+				3771CA3A4B479853C392C68A /* UndoManager+Canvas.swift */,
+			);
+			path = Utilities;
+			sourceTree = "<group>";
+		};
+		3DAA4D022C58EF9FAEB4B8AC /* Brushes */ = {
+			isa = PBXGroup;
+			children = (
+				9C62A909BCD9D532B7728EE0 /* BrushDescriptor.swift */,
+				2D8F7EDA762E3FA8B6C4FA45 /* BrushEngine.swift */,
+			);
+			path = Brushes;
+			sourceTree = "<group>";
+		};
+		4F184FB3F3F7E9936E5DC554 = {
+			isa = PBXGroup;
+			children = (
+				C2912B189A0CE8F46F83BDD7 /* Artsy */,
+				B48AF066E85C8962CFFD499C /* ArtsyTests */,
+				0400C96FBD03ED8163F6614F /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		76AB9238CF5BF1DF52452A54 /* Resources */ = {
+			isa = PBXGroup;
+			children = (
+				BB624EDD0614857BAEA2DD18 /* ArtsyDoc.icns */,
+				A9B5B66FC7F18B7121C9034F /* Assets.xcassets */,
+			);
+			path = Resources;
+			sourceTree = "<group>";
+		};
+		9899ABB99A7EB6CCE0941B81 /* Layers */ = {
+			isa = PBXGroup;
+			children = (
+				7023812567A45EDAFA5CCF5A /* Layer.swift */,
+				513F372D85789B03F682C5E4 /* LayerStack.swift */,
+			);
+			path = Layers;
+			sourceTree = "<group>";
+		};
+		9BB66B16CCCE0203E60E9A49 /* AIPanel */ = {
+			isa = PBXGroup;
+			children = (
+				34BD4F2B47E4771F72C70136 /* AIPanelView.swift */,
+			);
+			path = AIPanel;
+			sourceTree = "<group>";
+		};
+		A7A4FDB3D5B4C967FDEEE311 /* Unsplash */ = {
+			isa = PBXGroup;
+			children = (
+				D0124C2EB7D7F7E4BDF1541E /* UnsplashManager.swift */,
+				5DD13AB08798219682D052C4 /* UnsplashService.swift */,
+			);
+			path = Unsplash;
+			sourceTree = "<group>";
+		};
+		AAC2C984BB2A1334A62D7003 /* Tools */ = {
+			isa = PBXGroup;
+			children = (
+				C7A8B609744A10C0F5D14636 /* Tool.swift */,
+			);
+			path = Tools;
+			sourceTree = "<group>";
+		};
+		ACE5880AE63A8E10898D3826 /* UnsplashPanel */ = {
+			isa = PBXGroup;
+			children = (
+				E6628365B71C263026F81811 /* UnsplashPanelView.swift */,
+			);
+			path = UnsplashPanel;
+			sourceTree = "<group>";
+		};
+		AF02C100CCCCCCCCCCCCCCCC /* ColorPicker */ = {
+			isa = PBXGroup;
+			children = (
+				AF02C002BBBBBBBBBBBBBBBB /* CustomColorPickerView.swift */,
+			);
+			path = ColorPicker;
+			sourceTree = "<group>";
+		};
+		B48AF066E85C8962CFFD499C /* ArtsyTests */ = {
+			isa = PBXGroup;
+			children = (
+				F0B9932655AF3FC9573F89EB /* PressureCurveTests.swift */,
+			);
+			path = ArtsyTests;
+			sourceTree = "<group>";
+		};
+		C2912B189A0CE8F46F83BDD7 /* Artsy */ = {
+			isa = PBXGroup;
+			children = (
+				DA3AFA5B62EB0CD57CFAEBFC /* AI */,
+				CFC831D040A13F3E76755AFE /* App */,
+				3DAA4D022C58EF9FAEB4B8AC /* Brushes */,
+				305426AD360653A5A400D250 /* Canvas */,
+				FD0C637A3F3286C2D3F27B61 /* Drawing */,
+				55AABB0000000000000006AA /* Frameworks */,
+				9899ABB99A7EB6CCE0941B81 /* Layers */,
+				D144A5F7E552DC1AE9ED79EC /* Metal */,
+				76AB9238CF5BF1DF52452A54 /* Resources */,
+				AAC2C984BB2A1334A62D7003 /* Tools */,
+				30F8CBE1AC0CF03D0DA0FDA3 /* UI */,
+				A7A4FDB3D5B4C967FDEEE311 /* Unsplash */,
+				35A69E7194AB11201FF96767 /* Utilities */,
+			);
+			path = Artsy;
+			sourceTree = "<group>";
+		};
+		55AABB0000000000000006AA /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				55AABB0000000000000001AA /* Sparkle.framework */,
+			);
+			path = Frameworks;
+			sourceTree = "<group>";
+		};
+		CFC831D040A13F3E76755AFE /* App */ = {
+			isa = PBXGroup;
+			children = (
+				F6E4F7C4EF3819240960383A /* AppDelegate.swift */,
+				44593BFA95845A8C3563EE36 /* Artsy-Release.entitlements */,
+				2996CF57FB968263A972904C /* Artsy.entitlements */,
+				D3EB4FF7DB7F419C634FDCB4 /* DistractionFreeContainerView.swift */,
+				9B23963C8D0030AF31D57E73 /* Info.plist */,
+				70C7D5DCFE4BD75F79E194C7 /* main.swift */,
+				2A4A7C26F5BDA244973B1C73 /* MainWindowController.swift */,
+			);
+			path = App;
+			sourceTree = "<group>";
+		};
+		D144A5F7E552DC1AE9ED79EC /* Metal */ = {
+			isa = PBXGroup;
+			children = (
+				503F3A4D683A28C2D0F3CA61 /* CompositorPipeline.swift */,
+				59797061B065607E467C8C83 /* MetalContext.swift */,
+				68B02EDF5AFB8295DE44872D /* Shaders.metal */,
+				BE58DE4CC964D524A0221361 /* StrokeRenderer.swift */,
+				C5039E326A13D6BD1B8F7CFA /* TextureManager.swift */,
+			);
+			path = Metal;
+			sourceTree = "<group>";
+		};
+		DA3AFA5B62EB0CD57CFAEBFC /* AI */ = {
+			isa = PBXGroup;
+			children = (
+				E82480AA39FA616279063585 /* AIConfiguration.swift */,
+				A81A3FDEC958C2A5A707F738 /* AIPromptBuilder.swift */,
+				E912486DF62DFA3EEDFF4762 /* AIResultsManager.swift */,
+				EEE3613F6384791B0F940514 /* AIService.swift */,
+				CCB19C4C351A6A11D321C5B0 /* CustomStylePreset.swift */,
+				6B34CD5EE1049AD9F6BD76D4 /* GeminiService.swift */,
+				69D712A439DB900955FC550A /* OpenAIService.swift */,
+			);
+			path = AI;
+			sourceTree = "<group>";
+		};
+		FD0C637A3F3286C2D3F27B61 /* Drawing */ = {
+			isa = PBXGroup;
+			children = (
+				22EA3B8567263273990426D0 /* PressureCurve.swift */,
+				6BBAFD41A746635A11C7A0DF /* Stroke.swift */,
+				CABAD15A8043DE4840509F6F /* StrokeInterpolator.swift */,
+				4BAE3461ED09A5C4765BCEC9 /* StrokePoint.swift */,
+				49CF8EADC65864B304E57C66 /* StrokeSmoothing.swift */,
+				F44532810C60B86CBAA65204 /* TabletEventHandler.swift */,
+			);
+			path = Drawing;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		E22B2A1EC51D00F70382AB74 /* ArtsyTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 38AF35F0713970E5675988DA /* Build configuration list for PBXNativeTarget "ArtsyTests" */;
+			buildPhases = (
+				7449092952A2E64C2BD367FF /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				A0596217D61EF1353EC70A1F /* PBXTargetDependency */,
+			);
+			name = ArtsyTests;
+			packageProductDependencies = (
+			);
+			productName = ArtsyTests;
+			productReference = 8B933F490F0C008A1263AE41 /* ArtsyTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
+		FD4B5848719831076E1F6BD5 /* Artsy */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = E87A59D2A6DB6063375C5F7D /* Build configuration list for PBXNativeTarget "Artsy" */;
+			buildPhases = (
+				0635D5A6E1AD94AB98E1DA3F /* Sources */,
+				55AABB0000000000000004AA /* Frameworks */,
+				CD7BD6BD4A23BDC30D55192C /* Resources */,
+				55AABB0000000000000005AA /* Embed Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = Artsy;
+			packageProductDependencies = (
+			);
+			productName = Artsy;
+			productReference = F3C850C56BFA6E2F424FDB16 /* Artsy.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		19519F19E9DF4B8BBDC2309C /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = YES;
+				LastUpgradeCheck = 1500;
+				TargetAttributes = {
+					FD4B5848719831076E1F6BD5 = {
+						ProvisioningStyle = Automatic;
+					};
+				};
+			};
+			buildConfigurationList = 712485B8AB922521294A32B3 /* Build configuration list for PBXProject "Artsy" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				Base,
+				en,
+			);
+			mainGroup = 4F184FB3F3F7E9936E5DC554;
+			minimizedProjectReferenceProxies = 1;
+			preferredProjectObjectVersion = 77;
+			productRefGroup = 0400C96FBD03ED8163F6614F /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				FD4B5848719831076E1F6BD5 /* Artsy */,
+				E22B2A1EC51D00F70382AB74 /* ArtsyTests */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		55AABB0000000000000005AA /* Embed Frameworks */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 10;
+			files = (
+				55AABB0000000000000003AA /* Sparkle.framework in Embed Frameworks */,
+			);
+			name = "Embed Frameworks";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		55AABB0000000000000004AA /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				55AABB0000000000000002AA /* Sparkle.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXResourcesBuildPhase section */
+		CD7BD6BD4A23BDC30D55192C /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				AA5A098CDBEB618185360A3E /* ArtsyDoc.icns in Resources */,
+				211333D0F25AD782C00CACCA /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		0635D5A6E1AD94AB98E1DA3F /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				4D5B08BA130C75EDC7E2B082 /* AIConfiguration.swift in Sources */,
+				88EBC34DBBB9DF740B9D5A27 /* AIPanelView.swift in Sources */,
+				3ABEF9858237241D63222A2F /* AIPromptBuilder.swift in Sources */,
+				C2C4F71675E40BD88CB07363 /* AIResultsManager.swift in Sources */,
+				4B89F297CD86FF169CA2BF02 /* AIService.swift in Sources */,
+				313101C5C7B2E0FC8B60C730 /* AppDelegate.swift in Sources */,
+				02177C5233136639E672BDF0 /* BrushDescriptor.swift in Sources */,
+				2B92C2DAA93D910872043D2F /* BrushEngine.swift in Sources */,
+				DFDEC521B68B89833E11687E /* BrushSettingsView.swift in Sources */,
+				D0C112212538E3221EC4A155 /* CanvasDocument.swift in Sources */,
+				BD42CF919BB05DBB67196099 /* CanvasRenderer.swift in Sources */,
+				698D07B602E06901DEE503DD /* CanvasTransform.swift in Sources */,
+				F2FC3762E2A38278101C5733 /* CanvasView.swift in Sources */,
+				D68D8F8119E3B54809BB0686 /* CanvasViewModel.swift in Sources */,
+				0591EA527AD0B06CB70EA71F /* CompositorPipeline.swift in Sources */,
+				F3C1765F90FA554F0C4A7032 /* CondensedPanelView.swift in Sources */,
+				701636E5EEC34523035AC7DB /* CustomStylePreset.swift in Sources */,
+				D24B34DBCA6E731D710E99C6 /* DistractionFreeContainerView.swift in Sources */,
+				B60D985251FE10BF9AD67488 /* GeminiService.swift in Sources */,
+				4E25CB2619655D087BEE4FB0 /* ImageExporter.swift in Sources */,
+				C4A0EAB4224D97C307191562 /* KeychainManager.swift in Sources */,
+				AF01B001AAAAAAAAAAAAAAAA /* AppPreferences.swift in Sources */,
+				AF02C001AAAAAAAAAAAAAAAA /* CustomColorPickerView.swift in Sources */,
+				B4D14A65F4D6EAB7131CDCE0 /* Layer.swift in Sources */,
+				46DC011A581BE663AA0A04DA /* LayerPanelView.swift in Sources */,
+				705C32BC3B4D541E303AF574 /* LayerStack.swift in Sources */,
+				48367BBE0244FF3F8F06F356 /* MainWindowController.swift in Sources */,
+				4D9B317B9C53C340867F2690 /* MetalContext.swift in Sources */,
+				DF2BF50A9C3CD1D088D0CE20 /* NewCanvasView.swift in Sources */,
+				897AC2FB25C0D205E9A44ABC /* OpenAIService.swift in Sources */,
+				72038A2F94742B90DCD12CEF /* PressureCurve.swift in Sources */,
+				8441F30F353D60A3858D782A /* RightPanelView.swift in Sources */,
+				522215269B9DCDBD86684CFF /* SelectionMoveHandler.swift in Sources */,
+				6B4D8A05ADC7F0CABC026B06 /* SelectionOverlayView.swift in Sources */,
+				707E634D2647E81D0E3B73F1 /* SettingsView.swift in Sources */,
+				CE68FED3287DE2BB8EDCD055 /* Shaders.metal in Sources */,
+				23C7D0FA63DAA9E57CBE795D /* StatusBarView.swift in Sources */,
+				E800A25699A18BBCB94DEE8F /* Stroke.swift in Sources */,
+				09386C46324D038E9A39D68D /* StrokeInterpolator.swift in Sources */,
+				E6A5C0FFCC666057658E3E29 /* StrokePoint.swift in Sources */,
+				1B650C7F7177AD18DDC7C684 /* StrokeRenderer.swift in Sources */,
+				191856BE27F6BB1CC02CF739 /* StrokeSmoothing.swift in Sources */,
+				A1FE7EBBB0415CC1B00B201E /* TabletEventHandler.swift in Sources */,
+				FA3FF53DEC64A0BB6FBABC25 /* TextureManager.swift in Sources */,
+				0E66A305C307AAE73C331D63 /* Tool.swift in Sources */,
+				FC15FB9E538FD0DDABD2ACB2 /* ToolPaletteView.swift in Sources */,
+				CD8BB1C846223F20573100BC /* UndoManager+Canvas.swift in Sources */,
+				C63DD013D230567F0B5C135D /* UnsplashManager.swift in Sources */,
+				31A01E1B3ACA8A5C726645F9 /* UnsplashPanelView.swift in Sources */,
+				33BDE74BD2B1C72B7524F609 /* UnsplashService.swift in Sources */,
+				E5E9C3977E0EB35BF7BAD1B1 /* main.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		7449092952A2E64C2BD367FF /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				D2B5D50B8165BB841FB8D907 /* PressureCurveTests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		A0596217D61EF1353EC70A1F /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = FD4B5848719831076E1F6BD5 /* Artsy */;
+			targetProxy = 10363B84026A482B5832BAE2 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin XCBuildConfiguration section */
+		015FA4CE9F0618B8F546662C /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = Artsy/App/Artsy.entitlements;
+				CODE_SIGN_IDENTITY = "-";
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				FRAMEWORK_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(SRCROOT)/Artsy/Frameworks",
+				);
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = Artsy/App/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				METAL_LIBRARY_OUTPUT_DIR = "$(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)";
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				PRODUCT_BUNDLE_IDENTIFIER = com.artsy.app;
+				SDKROOT = macosx;
+				SWIFT_VERSION = 5.9;
+			};
+			name = Debug;
+		};
+		63FE9E7185DB7FF6E5B9C9AE /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = macosx;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
+		814F59F3FC3DAAFE6CA38623 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = Artsy/App/Artsy.entitlements;
+				CODE_SIGN_IDENTITY = "-";
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				FRAMEWORK_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(SRCROOT)/Artsy/Frameworks",
+				);
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = Artsy/App/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				METAL_LIBRARY_OUTPUT_DIR = "$(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)";
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				PRODUCT_BUNDLE_IDENTIFIER = com.artsy.app;
+				SDKROOT = macosx;
+				SWIFT_VERSION = 5.9;
+			};
+			name = Release;
+		};
+		E130B2C6A9858EE99CDE5C5D /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				COMBINE_HIDPI_IMAGES = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@loader_path/../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.artsy.ArtsyTests;
+				SDKROOT = macosx;
+				SWIFT_VERSION = 5.9;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Artsy.app/Contents/MacOS/Artsy";
+			};
+			name = Debug;
+		};
+		E68C5A5855BB400845A817D7 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"$(inherited)",
+					"DEBUG=1",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = macosx;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+		E7A32DEDFF8275F8AC598F0F /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				COMBINE_HIDPI_IMAGES = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@loader_path/../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.artsy.ArtsyTests;
+				SDKROOT = macosx;
+				SWIFT_VERSION = 5.9;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Artsy.app/Contents/MacOS/Artsy";
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		38AF35F0713970E5675988DA /* Build configuration list for PBXNativeTarget "ArtsyTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				E130B2C6A9858EE99CDE5C5D /* Debug */,
+				E7A32DEDFF8275F8AC598F0F /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		712485B8AB922521294A32B3 /* Build configuration list for PBXProject "Artsy" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				E68C5A5855BB400845A817D7 /* Debug */,
+				63FE9E7185DB7FF6E5B9C9AE /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		E87A59D2A6DB6063375C5F7D /* Build configuration list for PBXNativeTarget "Artsy" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				015FA4CE9F0618B8F546662C /* Debug */,
+				814F59F3FC3DAAFE6CA38623 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = 19519F19E9DF4B8BBDC2309C /* Project object */;
+}

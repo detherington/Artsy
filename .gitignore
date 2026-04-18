@@ -1,0 +1,42 @@
+# macOS
+.DS_Store
+*.swp
+
+# Xcode
+build/
+DerivedData/
+*.xcworkspace/
+xcuserdata/
+*.xcodeproj/project.xcworkspace/xcuserdata/
+*.xcodeproj/xcuserdata/
+*.moved-aside
+*.hmap
+*.ipa
+*.dSYM.zip
+*.dSYM
+*.profraw
+default.profraw
+
+# Swift Package Manager
+.build/
+Packages/
+Package.pins
+*.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/
+.swiftpm/
+
+# Sparkle — keep appcast.xml + sparkle_public_key, ignore everything else
+/sparkle-tools/
+/dmg_work/
+
+# Output artifacts (DMGs live in GitHub Releases, not the repo)
+/Artsy-Installer.dmg
+/Artsy-*.dmg
+/build/
+/tmp/
+
+# Local Claude / IDE state
+.claude/
+
+# Scratch
+*.tmp
+*.log
