@@ -7,8 +7,8 @@
 	<key>CFBundleDocumentTypes</key>
 	<array>
 		<dict>
-			<key>CFBundleTypeIconFile</key>
-			<string>AppIcon</string>
+			<key>CFBundleTypeIconSystemGenerated</key>
+			<integer>1</integer>
 			<key>CFBundleTypeName</key>
 			<string>Artsy Document</string>
 			<key>CFBundleTypeRole</key>
@@ -36,9 +36,9 @@
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
-	<string>0.6.0</string>
+	<string>0.6.1</string>
 	<key>CFBundleVersion</key>
-	<string>6</string>
+	<string>7</string>
 	<key>LSMinimumSystemVersion</key>
 	<string>$(MACOSX_DEPLOYMENT_TARGET)</string>
 	<key>NSSupportsAutomaticTermination</key>
@@ -63,10 +63,6 @@
 			</array>
 			<key>UTTypeDescription</key>
 			<string>Artsy Document</string>
-			<key>UTTypeIconFiles</key>
-			<array>
-				<string>ArtsyDoc.icns</string>
-			</array>
 			<key>UTTypeIdentifier</key>
 			<string>com.artsy.document</string>
 			<key>UTTypeTagSpecification</key>
