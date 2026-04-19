@@ -7,6 +7,7 @@ struct RightPanelView: View {
 
     // Section expansion state
     @State private var brushExpanded = true
+    @State private var symmetryExpanded = false
     @State private var layersExpanded = true
     @State private var aiExpanded = false
     @State private var unsplashExpanded = false
@@ -64,6 +65,23 @@ struct RightPanelView: View {
                         iconName: viewModel.currentTool == .shape ? "square.on.circle" : "paintbrush.pointed"
                     ) {
                         BrushSettingsView(viewModel: viewModel)
+                    }
+
+                    Divider().opacity(0.35)
+
+                    DisclosureSection(
+                        title: "Symmetry",
+                        isExpanded: $symmetryExpanded,
+                        iconName: "circle.grid.cross",
+                        trailing: AnyView(
+                            Text(viewModel.symmetryMode.isOn ? viewModel.symmetryMode.displayName : "Off")
+                                .font(.system(size: 10, design: .monospaced))
+                                .foregroundColor(viewModel.symmetryMode.isOn
+                                    ? .accentColor
+                                    : Color(white: 0.55))
+                        )
+                    ) {
+                        SymmetryControlView(viewModel: viewModel)
                     }
 
                     Divider().opacity(0.35)

@@ -46,6 +46,10 @@
 		AF01B001AAAAAAAAAAAAAAAA /* AppPreferences.swift in Sources */ = {isa = PBXBuildFile; fileRef = AF01B002BBBBBBBBBBBBBBBB /* AppPreferences.swift */; };
 		AF02C001AAAAAAAAAAAAAAAA /* CustomColorPickerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AF02C002BBBBBBBBBBBBBBBB /* CustomColorPickerView.swift */; };
 		AF03D001AAAAAAAAAAAAAAAA /* BucketFill.swift in Sources */ = {isa = PBXBuildFile; fileRef = AF03D002BBBBBBBBBBBBBBBB /* BucketFill.swift */; };
+		AF04E001AAAAAAAAAAAAAAAA /* SymmetryMode.swift in Sources */ = {isa = PBXBuildFile; fileRef = AF04E002BBBBBBBBBBBBBBBB /* SymmetryMode.swift */; };
+		AF04E003AAAAAAAAAAAAAAAA /* SymmetryControlView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AF04E004BBBBBBBBBBBBBBBB /* SymmetryControlView.swift */; };
+		AF05F001AAAAAAAAAAAAAAAA /* TransformSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = AF05F002BBBBBBBBBBBBBBBB /* TransformSession.swift */; };
+		AF06A001AAAAAAAAAAAAAAAA /* ClipboardManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = AF06A002BBBBBBBBBBBBBBBB /* ClipboardManager.swift */; };
 		C63DD013D230567F0B5C135D /* UnsplashManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = D0124C2EB7D7F7E4BDF1541E /* UnsplashManager.swift */; };
 		CD8BB1C846223F20573100BC /* UndoManager+Canvas.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3771CA3A4B479853C392C68A /* UndoManager+Canvas.swift */; };
 		CE68FED3287DE2BB8EDCD055 /* Shaders.metal in Sources */ = {isa = PBXBuildFile; fileRef = 68B02EDF5AFB8295DE44872D /* Shaders.metal */; };
@@ -89,6 +93,10 @@
 		AF01B002BBBBBBBBBBBBBBBB /* AppPreferences.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppPreferences.swift; sourceTree = "<group>"; };
 		AF02C002BBBBBBBBBBBBBBBB /* CustomColorPickerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CustomColorPickerView.swift; sourceTree = "<group>"; };
 		AF03D002BBBBBBBBBBBBBBBB /* BucketFill.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BucketFill.swift; sourceTree = "<group>"; };
+		AF04E002BBBBBBBBBBBBBBBB /* SymmetryMode.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SymmetryMode.swift; sourceTree = "<group>"; };
+		AF04E004BBBBBBBBBBBBBBBB /* SymmetryControlView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SymmetryControlView.swift; sourceTree = "<group>"; };
+		AF05F002BBBBBBBBBBBBBBBB /* TransformSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TransformSession.swift; sourceTree = "<group>"; };
+		AF06A002BBBBBBBBBBBBBBBB /* ClipboardManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClipboardManager.swift; sourceTree = "<group>"; };
 		36AE7509E7E91DD8165A4E34 /* CondensedPanelView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CondensedPanelView.swift; sourceTree = "<group>"; };
 		3771CA3A4B479853C392C68A /* UndoManager+Canvas.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "UndoManager+Canvas.swift"; sourceTree = "<group>"; };
 		3E8961D5B335007FFFEF2303 /* SelectionMoveHandler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SelectionMoveHandler.swift; sourceTree = "<group>"; };
@@ -161,6 +169,8 @@
 				1BAE745B52E51B4C39233DC2 /* CanvasViewModel.swift */,
 				3E8961D5B335007FFFEF2303 /* SelectionMoveHandler.swift */,
 				F9D8011F75833D68C69FF415 /* SelectionOverlayView.swift */,
+				AF05F002BBBBBBBBBBBBBBBB /* TransformSession.swift */,
+				AF06A002BBBBBBBBBBBBBBBB /* ClipboardManager.swift */,
 			);
 			path = Canvas;
 			sourceTree = "<group>";
@@ -175,6 +185,7 @@
 				A5F99C119AED589ACA0D28D0 /* RightPanelView.swift */,
 				BD8E45F79CA68DA8870D2281 /* SettingsView.swift */,
 				2B515082F1EB90971F0B71A8 /* StatusBarView.swift */,
+				AF04E004BBBBBBBBBBBBBBBB /* SymmetryControlView.swift */,
 				4A78876D6B37CD12F5E38C89 /* ToolPaletteView.swift */,
 				9BB66B16CCCE0203E60E9A49 /* AIPanel */,
 				ACE5880AE63A8E10898D3826 /* UnsplashPanel */,
@@ -355,6 +366,7 @@
 				CABAD15A8043DE4840509F6F /* StrokeInterpolator.swift */,
 				4BAE3461ED09A5C4765BCEC9 /* StrokePoint.swift */,
 				49CF8EADC65864B304E57C66 /* StrokeSmoothing.swift */,
+				AF04E002BBBBBBBBBBBBBBBB /* SymmetryMode.swift */,
 				F44532810C60B86CBAA65204 /* TabletEventHandler.swift */,
 			);
 			path = Drawing;
@@ -501,6 +513,10 @@
 				AF01B001AAAAAAAAAAAAAAAA /* AppPreferences.swift in Sources */,
 				AF02C001AAAAAAAAAAAAAAAA /* CustomColorPickerView.swift in Sources */,
 				AF03D001AAAAAAAAAAAAAAAA /* BucketFill.swift in Sources */,
+				AF04E001AAAAAAAAAAAAAAAA /* SymmetryMode.swift in Sources */,
+				AF04E003AAAAAAAAAAAAAAAA /* SymmetryControlView.swift in Sources */,
+				AF05F001AAAAAAAAAAAAAAAA /* TransformSession.swift in Sources */,
+				AF06A001AAAAAAAAAAAAAAAA /* ClipboardManager.swift in Sources */,
 				B4D14A65F4D6EAB7131CDCE0 /* Layer.swift in Sources */,
 				46DC011A581BE663AA0A04DA /* LayerPanelView.swift in Sources */,
 				705C32BC3B4D541E303AF574 /* LayerStack.swift in Sources */,

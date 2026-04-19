@@ -554,10 +554,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         editMenu.addItem(withTitle: "Undo", action: #selector(handleUndo), keyEquivalent: "z")
         editMenu.addItem(withTitle: "Redo", action: #selector(handleRedo), keyEquivalent: "Z")
         editMenu.addItem(NSMenuItem.separator())
-        editMenu.addItem(withTitle: "Cut", action: #selector(NSText.cut(_:)), keyEquivalent: "x")
-        editMenu.addItem(withTitle: "Copy", action: #selector(NSText.copy(_:)), keyEquivalent: "c")
-        editMenu.addItem(withTitle: "Paste", action: #selector(NSText.paste(_:)), keyEquivalent: "v")
-        editMenu.addItem(withTitle: "Select All", action: #selector(NSText.selectAll(_:)), keyEquivalent: "a")
+        editMenu.addItem(withTitle: "Cut", action: #selector(handleCut), keyEquivalent: "x")
+        editMenu.addItem(withTitle: "Copy", action: #selector(handleCopy), keyEquivalent: "c")
+        editMenu.addItem(withTitle: "Paste", action: #selector(handlePaste), keyEquivalent: "v")
+        editMenu.addItem(withTitle: "Select All", action: #selector(handleSelectAll), keyEquivalent: "a")
+        let deselectItem = NSMenuItem(title: "Deselect", action: #selector(handleDeselect), keyEquivalent: "d")
+        editMenu.addItem(deselectItem)
         editMenuItem.submenu = editMenu
 
         // View menu
@@ -626,12 +628,38 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc private func handleUndo() {
         guard let store = activeStore else { return }
-        store.viewModel.performUndo(renderer: store.canvasView.renderer)
+        // Route through CanvasView so transform-session intra-session undo runs
+        // when a session is active.
+        store.canvasView.performUndoAction()
     }
 
     @objc private func handleRedo() {
         guard let store = activeStore else { return }
-        store.viewModel.performRedo(renderer: store.canvasView.renderer)
+        store.canvasView.performRedoAction()
+    }
+
+    @objc private func handleSelectAll() {
+        guard let store = activeStore else { return }
+        // Route through CanvasView so any pending transform auto-commits first
+        // and the snapshot captures the post-commit state correctly.
+        store.canvasView.performSelectAllAction()
+    }
+
+    @objc private func handleDeselect() {
+        guard let store = activeStore else { return }
+        store.canvasView.performDeselectAction()
+    }
+
+    @objc private func handleCut() {
+        activeStore?.canvasView.performCutAction()
+    }
+
+    @objc private func handleCopy() {
+        activeStore?.canvasView.performCopyAction()
+    }
+
+    @objc private func handlePaste() {
+        activeStore?.canvasView.performPasteAction()
     }
 
     @objc private func handleZoomToFit() {

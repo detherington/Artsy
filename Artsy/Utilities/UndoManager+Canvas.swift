@@ -71,6 +71,12 @@ final class CanvasUndoManager {
         redoStack.removeAll()
     }
 
+    /// Discard the most recent undo entry without restoring it. Used by tools that
+    /// save a snapshot speculatively (e.g. Transform) but then cancel with no net change.
+    func popLastSnapshot() {
+        _ = undoStack.popLast()
+    }
+
     // MARK: - Snapshot Capture & Restore
 
     private func captureStack(layerStack: LayerStack, selectionPath: CGPath?, context: MetalContext, description: String) -> StackSnapshot? {
@@ -140,6 +146,10 @@ final class CanvasUndoManager {
 
     // MARK: - GPU Texture Copy
 
+    /// Capture a GPU texture copy. Does NOT wait for the blit to finish — the
+    /// snapshot texture is only read when `undo`/`redo` restores it later,
+    /// by which point the GPU has long since drained. Skipping the wait
+    /// means `saveUndoSnapshot` doesn't block the main thread.
     private func copyTexture(_ source: MTLTexture, context: MetalContext) -> MTLTexture? {
         let desc = MTLTextureDescriptor.texture2DDescriptor(
             pixelFormat: source.pixelFormat,
@@ -165,11 +175,15 @@ final class CanvasUndoManager {
                   destinationOrigin: MTLOrigin(x: 0, y: 0, z: 0))
         blit.endEncoding()
         commandBuffer.commit()
-        commandBuffer.waitUntilCompleted()
+        // No waitUntilCompleted — GPU finishes asynchronously.
 
         return copy
     }
 
+    /// Restore a snapshot texture's contents into a live layer texture.
+    /// Also non-blocking: Metal serializes subsequent render passes against
+    /// this blit on the same command queue, so the restored content will be
+    /// visible by the next frame.
     private func blitCopy(from source: MTLTexture, to destination: MTLTexture, context: MetalContext) {
         guard let commandBuffer = context.commandQueue.makeCommandBuffer(),
               let blit = commandBuffer.makeBlitCommandEncoder() else { return }
@@ -183,6 +197,6 @@ final class CanvasUndoManager {
                   destinationOrigin: MTLOrigin(x: 0, y: 0, z: 0))
         blit.endEncoding()
         commandBuffer.commit()
-        commandBuffer.waitUntilCompleted()
+        // No waitUntilCompleted — next render frame picks up the new content.
     }
 }

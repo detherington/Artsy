@@ -82,34 +82,44 @@ final class CanvasRenderer: NSObject, MTKViewDelegate {
         if viewModel.isDrawing {
             let points = viewModel.currentInterpolatedPoints()
             if points.count != lastRenderedPointCount {
+                // Build the mirror set once. `strokes[0]` is the primary stroke.
+                let strokes = viewModel.currentInterpolatedStrokeSet()
+
                 if isErasing {
-                    // Eraser renders directly onto the layer texture (destination-out blending)
+                    // Eraser renders directly onto the layer texture (destination-out blending).
+                    // Render the NEW tail of each mirror stroke incrementally.
                     if let activeLayer = layerStack.activeLayer {
-                        // Only render the NEW points for eraser (incremental)
-                        let newPoints = lastRenderedPointCount > 0 && lastRenderedPointCount < points.count
-                            ? Array(points[max(0, lastRenderedPointCount - 1)...])
-                            : points
-                        strokeRenderer.render(
-                            points: newPoints,
-                            brush: viewModel.currentBrush,
-                            color: StrokeColor.white,
-                            targetTexture: activeLayer.texture,
-                            commandBuffer: commandBuffer,
-                            canvasSize: canvasSize,
-                            isEraser: true
-                        )
+                        for mirroredStroke in strokes {
+                            let newPoints: [InterpolatedPoint]
+                            if lastRenderedPointCount > 0 && lastRenderedPointCount < mirroredStroke.count {
+                                newPoints = Array(mirroredStroke[max(0, lastRenderedPointCount - 1)...])
+                            } else {
+                                newPoints = mirroredStroke
+                            }
+                            strokeRenderer.render(
+                                points: newPoints,
+                                brush: viewModel.currentBrush,
+                                color: StrokeColor.white,
+                                targetTexture: activeLayer.texture,
+                                commandBuffer: commandBuffer,
+                                canvasSize: canvasSize,
+                                isEraser: true
+                            )
+                        }
                     }
                 } else {
-                    // Normal brush renders to active stroke texture
+                    // Normal brush: redraw every mirror into the active stroke texture each frame.
                     textureManager.clearTexture(activeStrokeTexture, commandBuffer: commandBuffer)
-                    strokeRenderer.render(
-                        points: points,
-                        brush: viewModel.currentBrush,
-                        color: viewModel.currentColor,
-                        targetTexture: activeStrokeTexture,
-                        commandBuffer: commandBuffer,
-                        canvasSize: canvasSize
-                    )
+                    for mirroredStroke in strokes {
+                        strokeRenderer.render(
+                            points: mirroredStroke,
+                            brush: viewModel.currentBrush,
+                            color: viewModel.currentColor,
+                            targetTexture: activeStrokeTexture,
+                            commandBuffer: commandBuffer,
+                            canvasSize: canvasSize
+                        )
+                    }
                 }
                 lastRenderedPointCount = points.count
             }
@@ -148,6 +158,20 @@ final class CanvasRenderer: NSObject, MTKViewDelegate {
                         source: activeStrokeTexture,
                         onto: compositeTexture,
                         opacity: 1.0,
+                        commandBuffer: commandBuffer
+                    )
+                }
+
+                // Transform tool preview — composite the source snapshot warped by
+                // the session's current affine transform over its sourceBounds.
+                if let session = viewModel.transformSession, session.targetLayer.id == layer.id {
+                    compositor.compositeWithAffineTransform(
+                        source: session.sourceTexture,
+                        sourceRect: session.sourceBounds,
+                        onto: compositeTexture,
+                        canvasSize: canvasSize,
+                        transform: session.currentTransform,
+                        opacity: layer.opacity,
                         commandBuffer: commandBuffer
                     )
                 }

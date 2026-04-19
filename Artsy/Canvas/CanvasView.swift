@@ -1,4 +1,5 @@
 import AppKit
+import Combine
 import MetalKit
 
 class CanvasView: MTKView {
@@ -24,6 +25,12 @@ class CanvasView: MTKView {
     private var shapeAnchor: CGPoint?
     private var shapeFreeformPoints: [CGPoint] = []
 
+    // Transform drag state
+    private var transformHandle: TransformHandle = .none
+    private var transformDragStart: CGPoint?
+    private var transformStartTransform: CGAffineTransform = .identity
+    private var toolChangeObservation: AnyCancellable?
+
     override var acceptsFirstResponder: Bool { true }
 
     func configure(context: MetalContext, viewModel: CanvasViewModel) throws {
@@ -45,6 +52,23 @@ class CanvasView: MTKView {
         try canvasRenderer.setupLayerStack(for: viewModel)
         self.renderer = canvasRenderer
         self.delegate = canvasRenderer
+
+        // Handle tool transitions:
+        //   • switching TO .transform → start a session immediately so the
+        //     handles appear on the canvas without waiting for a mouse click
+        //   • switching AWAY from .transform → auto-commit any pending session
+        //     synchronously so a mouseDown in the next tool can't land mid-commit
+        toolChangeObservation = viewModel.$currentTool
+            .dropFirst()
+            .sink { [weak self] newTool in
+                guard let self = self else { return }
+                if newTool == .transform {
+                    self.ensureTransformSession()
+                    self.redrawOverlays()
+                } else if self.viewModel.transformSession != nil {
+                    self.commitTransformIfNeeded()
+                }
+            }
     }
 
     // MARK: - Mouse Down
@@ -110,6 +134,9 @@ class CanvasView: MTKView {
 
         case .fill:
             handleFillMouseDown(event)
+
+        case .transform:
+            handleTransformMouseDown(event)
         }
     }
 
@@ -148,6 +175,9 @@ class CanvasView: MTKView {
             let viewPoint = convert(event.locationInWindow, from: nil)
             let canvasPoint = viewModel.transform.viewToCanvas(viewPoint, viewSize: bounds.size)
             updateShapePreview(to: canvasPoint)
+
+        case .transform:
+            handleTransformMouseDragged(event)
 
         default:
             break
@@ -194,6 +224,9 @@ class CanvasView: MTKView {
 
         case .shape:
             commitShape()
+
+        case .transform:
+            handleTransformMouseUp(event)
 
         default:
             break
@@ -317,6 +350,407 @@ class CanvasView: MTKView {
 
         // Switch back to brush — common UX convention.
         viewModel.currentTool = .brush
+    }
+
+    // MARK: - Transform Tool
+
+    /// Ensure a TransformSession exists for the active layer. Starts one if
+    /// missing. If a selection is active, only its pixels get transformed;
+    /// otherwise the whole layer is transformed.
+    private func ensureTransformSession() {
+        guard let viewModel = viewModel, let renderer = renderer else { return }
+        if viewModel.transformSession != nil { return }
+        guard let layer = viewModel.layerStack?.activeLayer else { return }
+        if layer.isLocked { NSSound.beep(); return }
+
+        let selectionPath = viewModel.selectionPath
+        viewModel.saveUndoSnapshot(renderer: renderer, description: "Transform")
+
+        viewModel.transformSession = TransformSession.begin(
+            targetLayer: layer,
+            canvasSize: viewModel.canvasSize,
+            selectionPath: selectionPath,
+            context: renderer.context,
+            textureManager: renderer.textureManager
+        )
+
+        // Selection is consumed by the cut — the pixels are now floating in
+        // the session's source texture. Clear the marquee so marching ants
+        // don't visually duplicate the bounding box.
+        if selectionPath != nil {
+            viewModel.selectionPath = nil
+        }
+    }
+
+    private func handleTransformMouseDown(_ event: NSEvent) {
+        guard let viewModel = viewModel else { return }
+        ensureTransformSession()
+        guard let session = viewModel.transformSession else { return }
+
+        let viewPoint = convert(event.locationInWindow, from: nil)
+        let canvasPoint = viewModel.transform.viewToCanvas(viewPoint, viewSize: bounds.size)
+
+        transformHandle = hitTestTransformHandle(at: canvasPoint, session: session)
+        transformDragStart = canvasPoint
+        transformStartTransform = session.currentTransform
+    }
+
+    private func handleTransformMouseDragged(_ event: NSEvent) {
+        guard let viewModel = viewModel,
+              let session = viewModel.transformSession,
+              let start = transformDragStart,
+              transformHandle != .none else { return }
+
+        let viewPoint = convert(event.locationInWindow, from: nil)
+        let canvasPoint = viewModel.transform.viewToCanvas(viewPoint, viewSize: bounds.size)
+        let shiftHeld = event.modifierFlags.contains(.shift)
+
+        switch transformHandle {
+        case .translate:
+            let dx = canvasPoint.x - start.x
+            let dy = canvasPoint.y - start.y
+            session.currentTransform = transformStartTransform
+                .concatenating(CGAffineTransform(translationX: dx, y: dy))
+
+        case .scaleTL, .scaleTR, .scaleBR, .scaleBL:
+            // Scale around the opposite corner of the source-bounds rect
+            // so it stays fixed in canvas space.
+            let b = session.sourceBounds
+            let anchorCanvas: CGPoint = {
+                switch transformHandle {
+                case .scaleTL: return CGPoint(x: b.maxX, y: b.minY) // opposite = BR
+                case .scaleTR: return CGPoint(x: b.minX, y: b.minY) // opposite = BL
+                case .scaleBR: return CGPoint(x: b.minX, y: b.maxY) // opposite = TL
+                case .scaleBL: return CGPoint(x: b.maxX, y: b.maxY) // opposite = TR
+                default: return CGPoint(x: b.midX, y: b.midY)
+                }
+            }()
+            let anchorWorld = anchorCanvas.applying(transformStartTransform)
+            let startVec = CGPoint(x: start.x - anchorWorld.x, y: start.y - anchorWorld.y)
+            let currVec = CGPoint(x: canvasPoint.x - anchorWorld.x, y: canvasPoint.y - anchorWorld.y)
+            // Signed scale factors (negative = flip)
+            var sx = (abs(startVec.x) > 0.5) ? currVec.x / startVec.x : 1.0
+            var sy = (abs(startVec.y) > 0.5) ? currVec.y / startVec.y : 1.0
+            if shiftHeld {
+                // Uniform scale — use the larger magnitude
+                let s = abs(sx) >= abs(sy) ? sx : sy
+                sx = s
+                sy = s
+            }
+            // Compose: translate anchor to origin, scale, translate back, then apply start transform
+            let scaleAroundAnchor = CGAffineTransform(translationX: -anchorWorld.x, y: -anchorWorld.y)
+                .concatenating(CGAffineTransform(scaleX: sx, y: sy))
+                .concatenating(CGAffineTransform(translationX: anchorWorld.x, y: anchorWorld.y))
+            session.currentTransform = transformStartTransform.concatenating(scaleAroundAnchor)
+
+        case .rotate:
+            let centerWorld = CGPoint(x: session.sourceBounds.midX,
+                                      y: session.sourceBounds.midY)
+                .applying(transformStartTransform)
+            let a1 = atan2(start.y - centerWorld.y, start.x - centerWorld.x)
+            let a2 = atan2(canvasPoint.y - centerWorld.y, canvasPoint.x - centerWorld.x)
+            var delta = a2 - a1
+            if shiftHeld {
+                // Snap to 15° increments
+                let step = CGFloat.pi / 12
+                delta = (delta / step).rounded() * step
+            }
+            let rotate = CGAffineTransform(translationX: -centerWorld.x, y: -centerWorld.y)
+                .concatenating(CGAffineTransform(rotationAngle: delta))
+                .concatenating(CGAffineTransform(translationX: centerWorld.x, y: centerWorld.y))
+            session.currentTransform = transformStartTransform.concatenating(rotate)
+
+        case .none:
+            break
+        }
+
+        viewModel.objectWillChange.send()  // trigger redraw of overlay + composite
+    }
+
+    private func handleTransformMouseUp(_ event: NSEvent) {
+        // Record the pre-drag state so Cmd+Z inside the session can roll it back.
+        if transformHandle != .none,
+           let session = viewModel?.transformSession,
+           transformStartTransform != session.currentTransform {
+            session.pushHistoryState(transformStartTransform)
+        }
+        transformHandle = .none
+        transformDragStart = nil
+    }
+
+    /// Commit any pending transform back onto the layer.
+    private func commitTransformIfNeeded() {
+        guard let viewModel = viewModel, let renderer = renderer,
+              let session = viewModel.transformSession else { return }
+        session.commit(
+            context: renderer.context,
+            textureManager: renderer.textureManager,
+            compositor: renderer.compositor
+        )
+        viewModel.transformSession = nil
+        if let layer = viewModel.layerStack?.activeLayer {
+            renderer.updateThumbnail(for: layer)
+        }
+    }
+
+    // MARK: - Public undo/redo entry points (used by Edit menu + Cmd+Z)
+
+    /// Session-aware undo: during a transform session, steps back through
+    /// handle-drag history (cancelling the session on exhaustion). Otherwise
+    /// performs a normal canvas undo.
+    func performUndoAction() {
+        guard let viewModel = viewModel, let renderer = renderer else { return }
+        if let session = viewModel.transformSession {
+            if session.undoLastDrag() {
+                viewModel.objectWillChange.send()
+                redrawOverlays()
+            } else {
+                cancelTransformIfNeeded()
+            }
+            return
+        }
+        viewModel.performUndo(renderer: renderer)
+        redrawOverlays()
+    }
+
+    /// Session-aware redo.
+    func performRedoAction() {
+        guard let viewModel = viewModel, let renderer = renderer else { return }
+        if let session = viewModel.transformSession {
+            if session.redoLastDrag() {
+                viewModel.objectWillChange.send()
+                redrawOverlays()
+            }
+            return
+        }
+        viewModel.performRedo(renderer: renderer)
+        redrawOverlays()
+    }
+
+    /// Select all pixels on the canvas. Pushes a proper undo snapshot so
+    /// Cmd+Z reverts just the selection, not the previous action.
+    func performSelectAllAction() {
+        guard let viewModel = viewModel, let renderer = renderer else { return }
+        // Any pending transform auto-commits via the tool-change observer; if a
+        // session is somehow still active, flush it here too.
+        if viewModel.transformSession != nil {
+            commitTransformIfNeeded()
+        }
+        viewModel.saveUndoSnapshot(renderer: renderer, description: "Select All")
+        viewModel.selectAll()
+        redrawOverlays()
+    }
+
+    /// Clear the current selection. Pushes an undo snapshot.
+    func performDeselectAction() {
+        guard let viewModel = viewModel, let renderer = renderer else { return }
+        guard viewModel.selectionPath != nil else { return }
+        viewModel.saveUndoSnapshot(renderer: renderer, description: "Deselect")
+        viewModel.clearSelection()
+        redrawOverlays()
+    }
+
+    // MARK: - Cut / Copy / Paste
+
+    /// Copy pixels from the active layer to the system pasteboard, cropped
+    /// to the selection's bounding box if there is one. Async: returns
+    /// immediately; pasteboard is updated when the background encode
+    /// completes (~50–200 ms on a 2048² canvas).
+    func performCopyAction() {
+        guard let viewModel = viewModel, let renderer = renderer,
+              let layer = viewModel.layerStack?.activeLayer else { return }
+        if viewModel.transformSession != nil { commitTransformIfNeeded() }
+        ClipboardManager.copyAsync(
+            layer: layer,
+            canvasSize: viewModel.canvasSize,
+            selectionPath: viewModel.selectionPath,
+            renderer: renderer
+        )
+    }
+
+    /// Copy (async), then clear the source region. The clear runs
+    /// synchronously on the GPU (fast) so the user sees the effect
+    /// immediately; the pasteboard write completes in the background.
+    func performCutAction() {
+        guard let viewModel = viewModel, let renderer = renderer,
+              let layer = viewModel.layerStack?.activeLayer else { return }
+        if layer.isLocked { NSSound.beep(); return }
+        if viewModel.transformSession != nil { commitTransformIfNeeded() }
+
+        viewModel.saveUndoSnapshot(renderer: renderer, description: "Cut")
+
+        ClipboardManager.copyAsync(
+            layer: layer,
+            canvasSize: viewModel.canvasSize,
+            selectionPath: viewModel.selectionPath,
+            renderer: renderer
+        )
+
+        if let path = viewModel.selectionPath {
+            renderer.clearInsideSelection(path: path, layer: layer, context: renderer.context)
+        } else {
+            guard let cmdBuf = renderer.context.commandQueue.makeCommandBuffer() else { return }
+            renderer.textureManager.clearTexture(layer.texture, commandBuffer: cmdBuf)
+            cmdBuf.commit()
+            // Don't wait — the next frame picks up the cleared texture.
+        }
+        renderer.updateThumbnail(for: layer)
+    }
+
+    /// Paste the pasteboard image as a new layer centered on the canvas.
+    /// Synchronous main-thread work is minimal: undo snapshot + layer insert.
+    /// All image decoding, U8↔F16 conversion, and texture upload happen on a
+    /// background queue.
+    func performPasteAction() {
+        guard let viewModel = viewModel, let renderer = renderer,
+              let layerStack = viewModel.layerStack else { return }
+
+        // Cheap pasteboard-availability check (no decode).
+        let pb = NSPasteboard.general
+        let imageTypes: [NSPasteboard.PasteboardType] = [.png, .tiff, .fileURL]
+        guard pb.availableType(from: imageTypes) != nil else { return }
+
+        if viewModel.transformSession != nil { commitTransformIfNeeded() }
+
+        viewModel.saveUndoSnapshot(renderer: renderer, description: "Paste")
+
+        let W = Int(viewModel.canvasSize.width)
+        let H = Int(viewModel.canvasSize.height)
+
+        guard let texture = try? renderer.textureManager.makeCanvasTexture(
+            width: W, height: H, label: "Pasted"
+        ) else { return }
+
+        let pasted = Layer(name: "Pasted", texture: texture)
+        layerStack.layers.insert(pasted, at: layerStack.activeLayerIndex + 1)
+        layerStack.activeLayerIndex += 1
+
+        // Decode + rasterize + upload on background — no main-thread block.
+        let context = renderer.context
+        let canvasSize = viewModel.canvasSize
+        DispatchQueue.global(qos: .userInitiated).async { [weak renderer, weak pasted] in
+            guard let image = ClipboardManager.readImage() else { return }
+            guard let cgImage = Self.pasteboardImageCenteredInCanvas(image, canvasSize: canvasSize) else { return }
+            CanvasDocument.loadCGImageIntoTexture(
+                cgImage: cgImage,
+                texture: texture,
+                context: context
+            )
+            DispatchQueue.main.async { [weak renderer, weak pasted] in
+                guard let renderer = renderer, let pasted = pasted else { return }
+                renderer.updateThumbnail(for: pasted)
+            }
+        }
+    }
+
+    /// Render an NSImage at its native size, centered on a canvas-sized
+    /// RGBA8 CGImage. If the image is larger than the canvas, it's scaled
+    /// down to fit while preserving aspect ratio.
+    private static func pasteboardImageCenteredInCanvas(_ image: NSImage, canvasSize: CGSize) -> CGImage? {
+        let W = Int(canvasSize.width), H = Int(canvasSize.height)
+        guard let colorSpace = CGColorSpace(name: CGColorSpace.sRGB),
+              let ctx = CGContext(
+                data: nil, width: W, height: H,
+                bitsPerComponent: 8, bytesPerRow: W * 4,
+                space: colorSpace,
+                bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+              ) else { return nil }
+
+        // Derive a CGImage from the NSImage.
+        var imgRect = CGRect(x: 0, y: 0, width: image.size.width, height: image.size.height)
+        guard let srcCG = image.cgImage(forProposedRect: &imgRect, context: nil, hints: nil) else {
+            return nil
+        }
+
+        // Fit-to-canvas preserving aspect ratio (downscale only).
+        let srcAspect = imgRect.width / imgRect.height
+        let dstAspect = CGFloat(W) / CGFloat(H)
+        var drawW = imgRect.width
+        var drawH = imgRect.height
+        if drawW > CGFloat(W) || drawH > CGFloat(H) {
+            if srcAspect > dstAspect {
+                drawW = CGFloat(W)
+                drawH = drawW / srcAspect
+            } else {
+                drawH = CGFloat(H)
+                drawW = drawH * srcAspect
+            }
+        }
+        let drawX = (CGFloat(W) - drawW) / 2
+        let drawY = (CGFloat(H) - drawH) / 2
+        ctx.draw(srcCG, in: CGRect(x: drawX, y: drawY, width: drawW, height: drawH))
+        return ctx.makeImage()
+    }
+
+    /// Ask every sibling overlay view (selection marquee, transform handles) to
+    /// redraw immediately, instead of waiting for their internal animation timer.
+    private func redrawOverlays() {
+        superview?.subviews.forEach { $0.needsDisplay = true }
+    }
+
+    /// Abort any pending transform, restoring the original layer state and
+    /// popping the speculative "Transform" undo snapshot that was pushed when
+    /// the session began (there's nothing for undo to revert to now).
+    private func cancelTransformIfNeeded() {
+        guard let viewModel = viewModel, let renderer = renderer,
+              let session = viewModel.transformSession else { return }
+        session.cancel(
+            context: renderer.context,
+            textureManager: renderer.textureManager,
+            compositor: renderer.compositor
+        )
+        viewModel.transformSession = nil
+        viewModel.undoManager.popLastSnapshot()
+        if let layer = viewModel.layerStack?.activeLayer {
+            renderer.updateThumbnail(for: layer)
+        }
+    }
+
+    /// Return which handle (if any) the canvas-space point hits. Tolerance is
+    /// view-space pixels converted to canvas-space via the current zoom.
+    private func hitTestTransformHandle(at canvasPoint: CGPoint, session: TransformSession) -> TransformHandle {
+        let scale = viewModel.transform.scale
+        let hitRadiusView: CGFloat = 10          // view-space radius in pixels
+        let hitRadius = hitRadiusView / scale    // canvas-space radius
+
+        let corners = session.transformedCorners  // TL, TR, BR, BL
+        if distance(canvasPoint, corners[0]) < hitRadius { return .scaleTL }
+        if distance(canvasPoint, corners[1]) < hitRadius { return .scaleTR }
+        if distance(canvasPoint, corners[2]) < hitRadius { return .scaleBR }
+        if distance(canvasPoint, corners[3]) < hitRadius { return .scaleBL }
+
+        // Rotation handle — 28 view-px above the top-center along the rect's up direction
+        let topCenter = CGPoint(
+            x: (corners[0].x + corners[1].x) / 2,
+            y: (corners[0].y + corners[1].y) / 2
+        )
+        let center = session.transformedCenter
+        let dx = topCenter.x - center.x
+        let dy = topCenter.y - center.y
+        let len = max(sqrt(dx * dx + dy * dy), 0.001)
+        let extend: CGFloat = 28 / max(0.001, scale)
+        let rotHandle = CGPoint(
+            x: topCenter.x + (dx / len) * extend,
+            y: topCenter.y + (dy / len) * extend
+        )
+        if distance(canvasPoint, rotHandle) < hitRadius { return .rotate }
+
+        // Inside the transformed rect → translate
+        let path = CGMutablePath()
+        path.move(to: corners[0])
+        path.addLine(to: corners[1])
+        path.addLine(to: corners[2])
+        path.addLine(to: corners[3])
+        path.closeSubpath()
+        if path.contains(canvasPoint) { return .translate }
+
+        return .none
+    }
+
+    private func distance(_ a: CGPoint, _ b: CGPoint) -> CGFloat {
+        let dx = a.x - b.x
+        let dy = a.y - b.y
+        return sqrt(dx * dx + dy * dy)
     }
 
     // MARK: - Fill Tool
@@ -568,10 +1002,13 @@ class CanvasView: MTKView {
                 }
                 return
             case "z":
+                // The Edit menu binds Cmd+Z too and normally intercepts this before
+                // keyDown. Keeping a fallback here in case the responder chain
+                // ever lets it through.
                 if event.modifierFlags.contains(.shift) {
-                    viewModel.performRedo(renderer: renderer)
+                    performRedoAction()
                 } else {
-                    viewModel.performUndo(renderer: renderer)
+                    performUndoAction()
                 }
             case "a":
                 viewModel.saveUndoSnapshot(renderer: renderer, description: "Select All")
@@ -600,6 +1037,18 @@ class CanvasView: MTKView {
         if event.keyCode == 48 {
             viewModel.toggleRightPanel()
             return
+        }
+
+        // Transform tool: Return commits, Escape cancels
+        if viewModel.transformSession != nil {
+            if event.keyCode == 36 || event.keyCode == 76 { // Return / Enter
+                commitTransformIfNeeded()
+                return
+            }
+            if event.keyCode == 53 { // Escape
+                cancelTransformIfNeeded()
+                return
+            }
         }
 
         // Delete/Backspace key — clear inside selection
@@ -634,6 +1083,8 @@ class CanvasView: MTKView {
             viewModel.currentTool = .eyedropper
         case "g", "G":
             viewModel.currentTool = .fill
+        case "t", "T":
+            viewModel.currentTool = .transform
         case "[":
             viewModel.brushSize = max(1, viewModel.brushSize - 2)
         case "]":

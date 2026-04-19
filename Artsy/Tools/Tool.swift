@@ -39,6 +39,7 @@ enum ToolType: String, CaseIterable, Identifiable {
     case eyedropper = "Eyedropper"
     case selection = "Selection"
     case shape = "Shape"
+    case transform = "Transform"
     case pan = "Pan"
 
     var id: String { rawValue }
@@ -51,6 +52,7 @@ enum ToolType: String, CaseIterable, Identifiable {
         case .eyedropper: return "I"
         case .selection: return "S"
         case .shape: return "U"
+        case .transform: return "T"
         case .pan: return "H"
         }
     }
@@ -63,6 +65,7 @@ enum ToolType: String, CaseIterable, Identifiable {
         case .eyedropper: return "eyedropper"
         case .selection: return "rectangle.dashed"
         case .shape: return "square.on.circle"
+        case .transform: return "arrow.up.left.and.down.right.and.arrow.up.right.and.down.left"
         case .pan: return "hand.raised"
         }
     }

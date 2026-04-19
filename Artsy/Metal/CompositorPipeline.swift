@@ -118,6 +118,81 @@ final class CompositorPipeline {
         blit.endEncoding()
     }
 
+    /// Composite a source texture onto destination, warped by an affine transform
+    /// applied to `sourceRect` (in canvas coords). The source texture is assumed
+    /// canvas-sized; `sourceRect` tells us which portion holds the content we
+    /// want to render (e.g. a selection's bounding box). Used by the Transform
+    /// tool to preview rotations / scales / translations.
+    func compositeWithAffineTransform(
+        source: MTLTexture,
+        sourceRect: CGRect,
+        onto destination: MTLTexture,
+        canvasSize: CGSize,
+        transform: CGAffineTransform,
+        opacity: Float,
+        commandBuffer: MTLCommandBuffer
+    ) {
+        let W = Float(canvasSize.width)
+        let H = Float(canvasSize.height)
+
+        // Transform each corner of `sourceRect` (canvas-space, Y-up) to its
+        // destination position.
+        func pt(_ x: CGFloat, _ y: CGFloat) -> (Float, Float) {
+            let p = CGPoint(x: x, y: y).applying(transform)
+            return (Float(p.x), Float(p.y))
+        }
+        let (x00, y00) = pt(sourceRect.minX, sourceRect.minY)  // bottom-left (Y-up)
+        let (x10, y10) = pt(sourceRect.maxX, sourceRect.minY)  // bottom-right
+        let (x11, y11) = pt(sourceRect.maxX, sourceRect.maxY)  // top-right
+        let (x01, y01) = pt(sourceRect.minX, sourceRect.maxY)  // top-left
+
+        // UV coordinates into the canvas-sized source texture. Texture Y is
+        // Y-down (row 0 = top); canvas Y is Y-up — hence (1 - y/H).
+        let u0 = Float(sourceRect.minX) / W
+        let u1 = Float(sourceRect.maxX) / W
+        let v0 = 1.0 - Float(sourceRect.minY) / H   // canvas bottom → UV v = 1
+        let v1 = 1.0 - Float(sourceRect.maxY) / H   // canvas top → UV v = 0
+
+        let quad: [Float] = [
+            x00, y00, u0, v0,
+            x10, y10, u1, v0,
+            x11, y11, u1, v1,
+            x00, y00, u0, v0,
+            x11, y11, u1, v1,
+            x01, y01, u0, v1,
+        ]
+        guard let vbuf = context.device.makeBuffer(
+            bytes: quad,
+            length: quad.count * MemoryLayout<Float>.size,
+            options: .storageModeShared
+        ) else { return }
+
+        // Orthographic projection: canvas space [0..W, 0..H] → NDC [-1..1].
+        // Column-major float4x4.
+        var projection = float4x4(
+            SIMD4<Float>( 2.0 / W, 0, 0, 0),
+            SIMD4<Float>( 0, 2.0 / H, 0, 0),
+            SIMD4<Float>( 0, 0, 1, 0),
+            SIMD4<Float>(-1, -1, 0, 1)
+        )
+        var layerOpacity = opacity
+
+        let passDesc = MTLRenderPassDescriptor()
+        passDesc.colorAttachments[0].texture = destination
+        passDesc.colorAttachments[0].loadAction = .load
+        passDesc.colorAttachments[0].storeAction = .store
+
+        guard let encoder = commandBuffer.makeRenderCommandEncoder(descriptor: passDesc) else { return }
+        encoder.setRenderPipelineState(context.compositeNormalPipelineState)
+        encoder.setVertexBuffer(vbuf, offset: 0, index: 0)
+        encoder.setVertexBytes(&projection, length: MemoryLayout<float4x4>.size, index: 1)
+        encoder.setFragmentTexture(source, index: 0)
+        encoder.setFragmentSamplerState(context.linearSampler, index: 0)
+        encoder.setFragmentBytes(&layerOpacity, length: MemoryLayout<Float>.size, index: 0)
+        encoder.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: 6)
+        encoder.endEncoding()
+    }
+
     /// Render a texture to the screen drawable with the display shader (white background).
     func renderToScreen(
         composite: MTLTexture,

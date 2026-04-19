@@ -74,6 +74,13 @@ final class CanvasViewModel: ObservableObject {
     // Bucket fill tool — tolerance in 0-255 color distance units per channel.
     @Published var fillTolerance: Int = 16
 
+    // Symmetry — mirrors each stroke around the canvas center.
+    @Published var symmetryMode: SymmetryMode = .off
+
+    // Transform tool — non-nil while transforming a layer.
+    // Using objectWillChange publishing since TransformSession is a class.
+    @Published var transformSession: TransformSession? = nil
+
     // MARK: - Document state
     /// URL this canvas is saved to, if any. Set after save/load.
     @Published var fileURL: URL? = nil
@@ -148,6 +155,20 @@ final class CanvasViewModel: ObservableObject {
         isDrawing = false
 
         return stroke
+    }
+
+    /// Interpolated points for every symmetry mirror (first array = original).
+    /// When symmetryMode == .off this returns a single-element array.
+    func currentInterpolatedStrokeSet() -> [[InterpolatedPoint]] {
+        let primary = currentInterpolatedPoints()
+        guard symmetryMode.isOn, !primary.isEmpty else { return [primary] }
+        return SymmetryTransform.mirror(primary, mode: symmetryMode, canvasSize: canvasSize)
+    }
+
+    /// Raw stroke points mirrored — used for the eraser which renders raw points.
+    func currentStrokeSet() -> [[StrokePoint]] {
+        guard symmetryMode.isOn, !activeStrokePoints.isEmpty else { return [activeStrokePoints] }
+        return SymmetryTransform.mirror(activeStrokePoints, mode: symmetryMode, canvasSize: canvasSize)
     }
 
     func currentInterpolatedPoints() -> [InterpolatedPoint] {
