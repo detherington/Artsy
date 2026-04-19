@@ -557,6 +557,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         editMenu.addItem(withTitle: "Cut", action: #selector(handleCut), keyEquivalent: "x")
         editMenu.addItem(withTitle: "Copy", action: #selector(handleCopy), keyEquivalent: "c")
         editMenu.addItem(withTitle: "Paste", action: #selector(handlePaste), keyEquivalent: "v")
+        editMenu.addItem(withTitle: "Paste in Place", action: #selector(handlePasteInPlace), keyEquivalent: "V") // ⌘⇧V
         editMenu.addItem(withTitle: "Select All", action: #selector(handleSelectAll), keyEquivalent: "a")
         let deselectItem = NSMenuItem(title: "Deselect", action: #selector(handleDeselect), keyEquivalent: "d")
         editMenu.addItem(deselectItem)
@@ -660,6 +661,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc private func handlePaste() {
         activeStore?.canvasView.performPasteAction()
+    }
+
+    @objc private func handlePasteInPlace() {
+        activeStore?.canvasView.performPasteInPlaceAction()
     }
 
     @objc private func handleZoomToFit() {

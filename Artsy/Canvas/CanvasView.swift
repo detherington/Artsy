@@ -58,6 +58,11 @@ class CanvasView: MTKView {
         //     handles appear on the canvas without waiting for a mouse click
         //   • switching AWAY from .transform → auto-commit any pending session
         //     synchronously so a mouseDown in the next tool can't land mid-commit
+        //   • always: swap the cursor to match the new tool — both via
+        //     immediate .set() (works if cursor is already over canvas) AND
+        //     invalidateCursorRects() so macOS re-queries when the mouse
+        //     enters from outside the canvas (e.g. after clicking a sidebar
+        //     button).
         toolChangeObservation = viewModel.$currentTool
             .dropFirst()
             .sink { [weak self] newTool in
@@ -68,6 +73,8 @@ class CanvasView: MTKView {
                 } else if self.viewModel.transformSession != nil {
                     self.commitTransformIfNeeded()
                 }
+                ToolCursor.current(for: newTool).set()
+                self.window?.invalidateCursorRects(for: self)
             }
     }
 
@@ -393,6 +400,10 @@ class CanvasView: MTKView {
         transformHandle = hitTestTransformHandle(at: canvasPoint, session: session)
         transformDragStart = canvasPoint
         transformStartTransform = session.currentTransform
+
+        // Closed hand while actively dragging to translate; other handles keep
+        // their hover cursor throughout the drag.
+        TransformCursor.current(for: transformHandle, dragging: true).set()
     }
 
     private func handleTransformMouseDragged(_ event: NSEvent) {
@@ -476,6 +487,14 @@ class CanvasView: MTKView {
         }
         transformHandle = .none
         transformDragStart = nil
+
+        // Go back to the hover cursor under the mouse.
+        let viewPoint = convert(event.locationInWindow, from: nil)
+        if let viewModel = viewModel, let session = viewModel.transformSession {
+            let canvasPoint = viewModel.transform.viewToCanvas(viewPoint, viewSize: bounds.size)
+            let handle = hitTestTransformHandle(at: canvasPoint, session: session)
+            TransformCursor.current(for: handle, dragging: false).set()
+        }
     }
 
     /// Commit any pending transform back onto the layer.
@@ -597,11 +616,25 @@ class CanvasView: MTKView {
         renderer.updateThumbnail(for: layer)
     }
 
+    /// Paste at the exact canvas-space origin where the content was copied
+    /// from (if the pasteboard has Artsy's private origin metadata).
+    /// Falls back to centered paste for content from other apps.
+    func performPasteInPlaceAction() {
+        performPaste(inPlace: true)
+    }
+
     /// Paste the pasteboard image as a new layer centered on the canvas.
     /// Synchronous main-thread work is minimal: undo snapshot + layer insert.
     /// All image decoding, U8↔F16 conversion, and texture upload happen on a
     /// background queue.
     func performPasteAction() {
+        performPaste(inPlace: false)
+    }
+
+    /// Shared paste implementation. When `inPlace` is true, positions the
+    /// pasted image at the origin stored on the pasteboard (or centers if
+    /// none). When false, always centers.
+    private func performPaste(inPlace: Bool) {
         guard let viewModel = viewModel, let renderer = renderer,
               let layerStack = viewModel.layerStack else { return }
 
@@ -612,7 +645,15 @@ class CanvasView: MTKView {
 
         if viewModel.transformSession != nil { commitTransformIfNeeded() }
 
-        viewModel.saveUndoSnapshot(renderer: renderer, description: "Paste")
+        // Paste in place uses the origin stored on the pasteboard by a prior
+        // Artsy copy. For content from other apps (or whole-layer copies at
+        // origin (0,0)), falls back to centered placement.
+        let origin: CGPoint? = inPlace ? ClipboardManager.readOrigin() : nil
+
+        viewModel.saveUndoSnapshot(
+            renderer: renderer,
+            description: inPlace ? "Paste in Place" : "Paste"
+        )
 
         let W = Int(viewModel.canvasSize.width)
         let H = Int(viewModel.canvasSize.height)
@@ -625,16 +666,18 @@ class CanvasView: MTKView {
         layerStack.layers.insert(pasted, at: layerStack.activeLayerIndex + 1)
         layerStack.activeLayerIndex += 1
 
-        // Decode + rasterize + upload on background — no main-thread block.
         let context = renderer.context
         let canvasSize = viewModel.canvasSize
+        let textureManager = renderer.textureManager
         DispatchQueue.global(qos: .userInitiated).async { [weak renderer, weak pasted] in
             guard let image = ClipboardManager.readImage() else { return }
-            guard let cgImage = Self.pasteboardImageCenteredInCanvas(image, canvasSize: canvasSize) else { return }
-            CanvasDocument.loadCGImageIntoTexture(
-                cgImage: cgImage,
+            Self.uploadPastedImage(
+                image,
+                origin: origin,
+                canvasSize: canvasSize,
                 texture: texture,
-                context: context
+                context: context,
+                textureManager: textureManager
             )
             DispatchQueue.main.async { [weak renderer, weak pasted] in
                 guard let renderer = renderer, let pasted = pasted else { return }
@@ -643,9 +686,133 @@ class CanvasView: MTKView {
         }
     }
 
-    /// Render an NSImage at its native size, centered on a canvas-sized
-    /// RGBA8 CGImage. If the image is larger than the canvas, it's scaled
-    /// down to fit while preserving aspect ratio.
+    /// Fast paste upload — converts and writes ONLY the image's pixel area
+    /// into the correct subregion of the canvas-sized target texture, not
+    /// the whole canvas. For a 200×200 paste on a 2048² canvas that's
+    /// ~100× less work than the old full-canvas intermediate.
+    ///
+    /// - origin: canvas-space Y-up position of the image's bottom-left.
+    ///           nil means "center on canvas."
+    private static func uploadPastedImage(
+        _ image: NSImage,
+        origin: CGPoint?,
+        canvasSize: CGSize,
+        texture: MTLTexture,
+        context: MetalContext,
+        textureManager: TextureManager
+    ) {
+        var imgRect = CGRect(x: 0, y: 0, width: image.size.width, height: image.size.height)
+        guard let srcCG = image.cgImage(forProposedRect: &imgRect, context: nil, hints: nil) else {
+            return
+        }
+
+        let canvasW = CGFloat(canvasSize.width)
+        let canvasH = CGFloat(canvasSize.height)
+
+        // Scale image to fit canvas if it's larger (preserve aspect ratio).
+        var drawW = imgRect.width
+        var drawH = imgRect.height
+        if drawW > canvasW || drawH > canvasH {
+            let srcAspect = drawW / drawH
+            let dstAspect = canvasW / canvasH
+            if srcAspect > dstAspect {
+                drawW = canvasW
+                drawH = drawW / srcAspect
+            } else {
+                drawH = canvasH
+                drawW = drawH * srcAspect
+            }
+        }
+
+        let placementOrigin: CGPoint
+        if let origin = origin {
+            placementOrigin = origin
+        } else {
+            placementOrigin = CGPoint(
+                x: (canvasW - drawW) / 2,
+                y: (canvasH - drawH) / 2
+            )
+        }
+
+        let regionW = Int(drawW.rounded())
+        let regionH = Int(drawH.rounded())
+        guard regionW > 0, regionH > 0 else { return }
+
+        // Canvas Y-up → texture Y-down
+        let texX = Int(placementOrigin.x.rounded())
+        let texY = Int((canvasH - placementOrigin.y - drawH).rounded())
+        // Clip region to texture bounds
+        let clippedX = max(0, texX)
+        let clippedY = max(0, texY)
+        let clippedW = min(regionW, texture.width - clippedX)
+        let clippedH = min(regionH, texture.height - clippedY)
+        guard clippedW > 0, clippedH > 0 else { return }
+
+        // 1. Draw the image into a region-sized RGBA8 context.
+        guard let colorSpace = CGColorSpace(name: CGColorSpace.sRGB),
+              let ctx = CGContext(
+                data: nil, width: regionW, height: regionH,
+                bitsPerComponent: 8, bytesPerRow: regionW * 4,
+                space: colorSpace,
+                bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+              ) else { return }
+        ctx.draw(srcCG, in: CGRect(x: 0, y: 0, width: regionW, height: regionH))
+        guard let dataPtr = ctx.data else { return }
+        let rgba8 = dataPtr.assumingMemoryBound(to: UInt8.self)
+
+        // 2. Convert region to F16 via LUT (unsafe pointer loop).
+        let pixelCount = regionW * regionH
+        var f16 = [UInt16](repeating: 0, count: pixelCount * 4)
+        let lut = CanvasDocument.u8ToF16LUTPublic
+        f16.withUnsafeMutableBufferPointer { dst in
+            let dstPtr = dst.baseAddress!
+            let total = pixelCount * 4
+            var i = 0
+            while i < total {
+                dstPtr[i]     = lut[Int(rgba8[i])]
+                dstPtr[i + 1] = lut[Int(rgba8[i + 1])]
+                dstPtr[i + 2] = lut[Int(rgba8[i + 2])]
+                dstPtr[i + 3] = lut[Int(rgba8[i + 3])]
+                i += 4
+            }
+        }
+
+        // 3. Upload to a region-sized shared texture, then blit into the
+        //    target canvas texture at the correct offset.
+        guard let staging = try? textureManager.makeSharedTexture(
+            width: regionW, height: regionH, label: "PasteStaging"
+        ) else { return }
+
+        f16.withUnsafeBytes { raw in
+            staging.replace(
+                region: MTLRegion(
+                    origin: MTLOrigin(x: 0, y: 0, z: 0),
+                    size: MTLSize(width: regionW, height: regionH, depth: 1)
+                ),
+                mipmapLevel: 0,
+                withBytes: raw.baseAddress!,
+                bytesPerRow: regionW * 8
+            )
+        }
+
+        guard let cmdBuf = context.commandQueue.makeCommandBuffer(),
+              let blit = cmdBuf.makeBlitCommandEncoder() else { return }
+        blit.copy(
+            from: staging,
+            sourceSlice: 0, sourceLevel: 0,
+            sourceOrigin: MTLOrigin(x: max(0, clippedX - texX), y: max(0, clippedY - texY), z: 0),
+            sourceSize: MTLSize(width: clippedW, height: clippedH, depth: 1),
+            to: texture,
+            destinationSlice: 0, destinationLevel: 0,
+            destinationOrigin: MTLOrigin(x: clippedX, y: clippedY, z: 0)
+        )
+        blit.endEncoding()
+        cmdBuf.commit()
+    }
+
+    // (Legacy paste helpers kept below only because other files may still
+    // reference them; the fast path now goes through `uploadPastedImage`.)
+
     private static func pasteboardImageCenteredInCanvas(_ image: NSImage, canvasSize: CGSize) -> CGImage? {
         let W = Int(canvasSize.width), H = Int(canvasSize.height)
         guard let colorSpace = CGColorSpace(name: CGColorSpace.sRGB),
@@ -656,7 +823,6 @@ class CanvasView: MTKView {
                 bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
               ) else { return nil }
 
-        // Derive a CGImage from the NSImage.
         var imgRect = CGRect(x: 0, y: 0, width: image.size.width, height: image.size.height)
         guard let srcCG = image.cgImage(forProposedRect: &imgRect, context: nil, hints: nil) else {
             return nil
@@ -911,19 +1077,41 @@ class CanvasView: MTKView {
         }
     }
 
+    // MARK: - Cursor registration
+
+    /// Register the current tool's cursor for the entire canvas view so the
+    /// correct cursor shows the instant the mouse crosses the canvas boundary.
+    override func resetCursorRects() {
+        super.resetCursorRects()
+        guard let viewModel = viewModel else { return }
+        discardCursorRects()
+        addCursorRect(bounds, cursor: ToolCursor.current(for: viewModel.currentTool))
+    }
+
+    // Cursor-rect system handles tool cursor + revert-on-exit automatically
+    // via resetCursorRects(). No tracking area or mouseEntered/Exited needed.
+
     // MARK: - Mouse Moved (cursor feedback)
 
     override func mouseMoved(with event: NSEvent) {
         guard let viewModel = viewModel else { return }
 
-        if viewModel.currentTool == .selection, let path = viewModel.selectionPath {
-            let viewPoint = convert(event.locationInWindow, from: nil)
+        // IMPORTANT: mouseMoved fires on the first-responder view regardless
+        // of whether the pointer is actually inside self.bounds (since the
+        // window has acceptsMouseMovedEvents = true). Bail early if the
+        // mouse isn't over the canvas — otherwise we'd override the cursor
+        // while the user hovers the sidebar, which is exactly the bug that
+        // haunted the previous iteration.
+        let viewPoint = convert(event.locationInWindow, from: nil)
+        guard bounds.contains(viewPoint) else { return }
+
+        // Only the transform tool needs per-position dynamic cursors.
+        // Every other tool gets its static cursor via `resetCursorRects`,
+        // which macOS also reverts automatically on exit.
+        if viewModel.currentTool == .transform, let session = viewModel.transformSession {
             let canvasPoint = viewModel.transform.viewToCanvas(viewPoint, viewSize: bounds.size)
-            if path.contains(canvasPoint) {
-                NSCursor.openHand.set()
-            } else {
-                NSCursor.crosshair.set()
-            }
+            let handle = hitTestTransformHandle(at: canvasPoint, session: session)
+            TransformCursor.current(for: handle, dragging: false).set()
         }
     }
 

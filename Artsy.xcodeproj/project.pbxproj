@@ -50,6 +50,8 @@
 		AF04E003AAAAAAAAAAAAAAAA /* SymmetryControlView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AF04E004BBBBBBBBBBBBBBBB /* SymmetryControlView.swift */; };
 		AF05F001AAAAAAAAAAAAAAAA /* TransformSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = AF05F002BBBBBBBBBBBBBBBB /* TransformSession.swift */; };
 		AF06A001AAAAAAAAAAAAAAAA /* ClipboardManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = AF06A002BBBBBBBBBBBBBBBB /* ClipboardManager.swift */; };
+		AF07B001AAAAAAAAAAAAAAAA /* TransformCursor.swift in Sources */ = {isa = PBXBuildFile; fileRef = AF07B002BBBBBBBBBBBBBBBB /* TransformCursor.swift */; };
+		AF08C001AAAAAAAAAAAAAAAA /* ToolCursor.swift in Sources */ = {isa = PBXBuildFile; fileRef = AF08C002BBBBBBBBBBBBBBBB /* ToolCursor.swift */; };
 		C63DD013D230567F0B5C135D /* UnsplashManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = D0124C2EB7D7F7E4BDF1541E /* UnsplashManager.swift */; };
 		CD8BB1C846223F20573100BC /* UndoManager+Canvas.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3771CA3A4B479853C392C68A /* UndoManager+Canvas.swift */; };
 		CE68FED3287DE2BB8EDCD055 /* Shaders.metal in Sources */ = {isa = PBXBuildFile; fileRef = 68B02EDF5AFB8295DE44872D /* Shaders.metal */; };
@@ -97,6 +99,8 @@
 		AF04E004BBBBBBBBBBBBBBBB /* SymmetryControlView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SymmetryControlView.swift; sourceTree = "<group>"; };
 		AF05F002BBBBBBBBBBBBBBBB /* TransformSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TransformSession.swift; sourceTree = "<group>"; };
 		AF06A002BBBBBBBBBBBBBBBB /* ClipboardManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClipboardManager.swift; sourceTree = "<group>"; };
+		AF07B002BBBBBBBBBBBBBBBB /* TransformCursor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TransformCursor.swift; sourceTree = "<group>"; };
+		AF08C002BBBBBBBBBBBBBBBB /* ToolCursor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ToolCursor.swift; sourceTree = "<group>"; };
 		36AE7509E7E91DD8165A4E34 /* CondensedPanelView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CondensedPanelView.swift; sourceTree = "<group>"; };
 		3771CA3A4B479853C392C68A /* UndoManager+Canvas.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "UndoManager+Canvas.swift"; sourceTree = "<group>"; };
 		3E8961D5B335007FFFEF2303 /* SelectionMoveHandler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SelectionMoveHandler.swift; sourceTree = "<group>"; };
@@ -171,6 +175,8 @@
 				F9D8011F75833D68C69FF415 /* SelectionOverlayView.swift */,
 				AF05F002BBBBBBBBBBBBBBBB /* TransformSession.swift */,
 				AF06A002BBBBBBBBBBBBBBBB /* ClipboardManager.swift */,
+				AF07B002BBBBBBBBBBBBBBBB /* TransformCursor.swift */,
+				AF08C002BBBBBBBBBBBBBBBB /* ToolCursor.swift */,
 			);
 			path = Canvas;
 			sourceTree = "<group>";
@@ -517,6 +523,8 @@
 				AF04E003AAAAAAAAAAAAAAAA /* SymmetryControlView.swift in Sources */,
 				AF05F001AAAAAAAAAAAAAAAA /* TransformSession.swift in Sources */,
 				AF06A001AAAAAAAAAAAAAAAA /* ClipboardManager.swift in Sources */,
+				AF07B001AAAAAAAAAAAAAAAA /* TransformCursor.swift in Sources */,
+				AF08C001AAAAAAAAAAAAAAAA /* ToolCursor.swift in Sources */,
 				B4D14A65F4D6EAB7131CDCE0 /* Layer.swift in Sources */,
 				46DC011A581BE663AA0A04DA /* LayerPanelView.swift in Sources */,
 				705C32BC3B4D541E303AF574 /* LayerStack.swift in Sources */,

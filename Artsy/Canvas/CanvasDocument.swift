@@ -529,6 +529,10 @@ final class CanvasDocument {
     /// Used by loadCGImageIntoTexture to avoid per-pixel float conversion.
     private static let u8ToF16LUT: [UInt16] = (0...255).map { floatToFloat16(Float($0) / 255.0) }
 
+    /// Public alias so other callers (e.g. CanvasView's paste fast path) can
+    /// share the same precomputed table.
+    static let u8ToF16LUTPublic: [UInt16] = u8ToF16LUT
+
     private static func float16ToFloat(_ h: UInt16) -> Float {
         let sign = (h >> 15) & 0x1
         let exp = (h >> 10) & 0x1F
