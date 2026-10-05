@@ -46,13 +46,14 @@ final class LayerStack: ObservableObject {
         return insertIndex
     }
 
-    func removeLayer(at index: Int) -> (Layer, [Stroke])? {
+    @discardableResult
+    func removeLayer(at index: Int) -> Layer? {
         guard layers.count > 1, index >= 0, index < layers.count else { return nil }
         let layer = layers.remove(at: index)
         if activeLayerIndex >= layers.count {
             activeLayerIndex = layers.count - 1
         }
-        return (layer, []) // strokes tracked separately in viewModel
+        return layer
     }
 
     func moveLayer(from: Int, to: Int) {

@@ -26,14 +26,11 @@ vertex StrokeVertexOut strokeVertex(
     return out;
 }
 
-fragment float4 strokeFragment(
-    StrokeVertexOut in [[stage_in]],
-    texture2d<float> brushTip [[texture(0)]],
-    sampler s [[sampler(0)]],
-    constant float4 &brushColor [[buffer(0)]]
-) {
-    float tipAlpha = brushTip.sample(s, in.texCoord).a;
-    return float4(brushColor.rgb, brushColor.a * tipAlpha * in.opacity);
+// Canvas textures hold premultiplied alpha: the compositor blends with (one, 1 - srcAlpha),
+// so every stroke shader has to return colour already scaled by its coverage.
+static inline float4 premultiplied(float3 rgb, float alpha) {
+    alpha = saturate(alpha);
+    return float4(rgb * alpha, alpha);
 }
 
 // Round tip: uses 2D radial distance from the center of the quad.
@@ -52,7 +49,7 @@ fragment float4 strokeRadialFragment(
         float inner = hardness;
         alpha = 1.0 - smoothstep(inner, 1.0, dist);
     }
-    return float4(brushColor.rgb, brushColor.a * alpha * in.opacity);
+    return premultiplied(brushColor.rgb, brushColor.a * alpha * in.opacity);
 }
 
 // Round tip with pencil texture (for caps on pencil strokes).
@@ -68,7 +65,7 @@ fragment float4 strokeRadialPencilFragment(
     float noise = fract(sin(dot(floor(p), float2(12.9898, 78.233))) * 43758.5453);
     float grain = mix(0.4, 1.0, noise);
     float alpha = shape * grain;
-    return float4(brushColor.rgb, brushColor.a * alpha * in.opacity);
+    return premultiplied(brushColor.rgb, brushColor.a * alpha * in.opacity);
 }
 
 // Round tip for watercolor (cap version of watercolor brush)
@@ -88,7 +85,7 @@ fragment float4 strokeRadialWatercolorFragment(
 
     float alpha = shape * edgeBoost * paperTexture * in.opacity;
     float3 color = brushColor.rgb * mix(1.0, 0.75, wetEdge);
-    return float4(color, brushColor.a * alpha);
+    return premultiplied(color, brushColor.a * alpha);
 }
 
 // Round tip for oil paint — impasto, bristle streaks, more textured than acrylic
@@ -110,7 +107,7 @@ fragment float4 strokeRadialOilFragment(
     float3 color = clamp(brushColor.rgb * impasto, 0.0, 1.0);
 
     float alpha = shape * canvasTexture * in.opacity;
-    return float4(color, brushColor.a * alpha);
+    return premultiplied(color, brushColor.a * alpha);
 }
 
 // Round tip for acrylic (cap version of acrylic brush)
@@ -126,7 +123,7 @@ fragment float4 strokeRadialAcrylicFragment(
     float canvas = fract(sin(dot(floor(p * 0.2), float2(12.9898, 78.233))) * 43758.5453);
     float canvasTexture = mix(0.92, 1.0, canvas);
     float alpha = shape * canvasTexture * in.opacity;
-    return float4(brushColor.rgb, brushColor.a * alpha);
+    return premultiplied(brushColor.rgb, brushColor.a * alpha);
 }
 
 // Procedural brush: uses texCoord.x as cross-stroke distance (0=left edge, 1=right edge)
@@ -147,7 +144,7 @@ fragment float4 strokeProceduralFragment(
         alpha = 1.0 - smoothstep(inner, 1.0, dist);
     }
 
-    return float4(brushColor.rgb, brushColor.a * alpha * in.opacity);
+    return premultiplied(brushColor.rgb, brushColor.a * alpha * in.opacity);
 }
 
 // Procedural pencil: noise-textured, uses cross-stroke distance
@@ -165,7 +162,7 @@ fragment float4 strokePencilFragment(
     float grain = mix(0.4, 1.0, noise);
 
     float alpha = shape * grain;
-    return float4(brushColor.rgb, brushColor.a * alpha * in.opacity);
+    return premultiplied(brushColor.rgb, brushColor.a * alpha * in.opacity);
 }
 
 // Watercolor: very soft edges with wet-edge darkening effect
@@ -196,7 +193,7 @@ fragment float4 strokeWatercolorFragment(
     // Slightly shift color toward darker at edges for pigment pooling
     float3 color = brushColor.rgb * mix(1.0, 0.75, wetEdge);
 
-    return float4(color, brushColor.a * alpha);
+    return premultiplied(color, brushColor.a * alpha);
 }
 
 // Acrylic: thick, opaque paint with subtle canvas/bristle texture
@@ -231,7 +228,7 @@ fragment float4 strokeOilFragment(
     float3 color = clamp(brushColor.rgb * thickness, 0.0, 1.0);
 
     float alpha = shape * bristleAlpha * canvasTexture * in.opacity;
-    return float4(color, brushColor.a * alpha);
+    return premultiplied(color, brushColor.a * alpha);
 }
 
 fragment float4 strokeAcrylicFragment(
@@ -261,7 +258,7 @@ fragment float4 strokeAcrylicFragment(
     float thickness = mix(0.95, 1.05, bristle * 0.5 + grain * 0.5);
     float3 color = clamp(brushColor.rgb * thickness, 0.0, 1.0);
 
-    return float4(color, brushColor.a * alpha);
+    return premultiplied(color, brushColor.a * alpha);
 }
 
 // --- Compositing ---
@@ -292,14 +289,13 @@ fragment float4 compositeNormal(
     sampler s [[sampler(0)]],
     constant float &layerOpacity [[buffer(0)]]
 ) {
-    float4 src = layer.sample(s, in.texCoord);
-    src.a *= layerOpacity;
-    return src;
+    // Premultiplied source: opacity scales colour and alpha together.
+    return layer.sample(s, in.texCoord) * layerOpacity;
 }
 
 // Generic blend shader — mode: 0=normal, 1=multiply, 2=screen, 3=overlay, 4=darken, 5=lighten
-// Source is already premultiplied (from stroke rendering). For blend modes we un-premultiply
-// the src color, compute the blend with dst (also un-premultiplied), then re-premultiply.
+// Both textures are premultiplied. For blend modes we un-premultiply the src and dst colours,
+// compute the blend, then re-premultiply.
 fragment float4 compositeBlend(
     CompositeVertexOut in [[stage_in]],
     texture2d<float> srcTex [[texture(0)]],
@@ -308,13 +304,11 @@ fragment float4 compositeBlend(
     constant float &layerOpacity [[buffer(0)]],
     constant int &mode [[buffer(1)]]
 ) {
-    float4 src = srcTex.sample(s, in.texCoord);
+    float4 src = srcTex.sample(s, in.texCoord) * layerOpacity;
     float4 dst = dstTex.sample(s, in.texCoord);
-    src.a *= layerOpacity;
 
-    // Un-premultiply source for blend math (assume src came in premultiplied)
-    float3 srcRGB = src.a > 0.001 ? src.rgb / src.a : src.rgb;
-    float3 dstRGB = dst.a > 0.001 ? dst.rgb / dst.a : dst.rgb;
+    float3 srcRGB = src.a > 0.0001 ? src.rgb / src.a : float3(0.0);
+    float3 dstRGB = dst.a > 0.0001 ? dst.rgb / dst.a : float3(0.0);
 
     float3 blended;
     if (mode == 1) {
@@ -343,9 +337,13 @@ fragment float4 compositeBlend(
         blended = srcRGB;
     }
 
-    // Standard Porter-Duff "source over" compositing using the blended color
+    // The blend only applies where there is a backdrop to blend with; over transparent
+    // pixels the source shows through unchanged.
+    blended = mix(srcRGB, blended, dst.a);
+
+    // Porter-Duff "source over" with the blended colour, premultiplied result
     float outA = src.a + dst.a * (1.0 - src.a);
-    float3 outRGB = (blended * src.a + dstRGB * dst.a * (1.0 - src.a));
+    float3 outRGB = blended * src.a + dst.rgb * (1.0 - src.a);
     return float4(outRGB, outA);
 }
 
@@ -362,8 +360,8 @@ fragment float4 displayFragment(
     float check = fmod(checker.x + checker.y, 2.0);
     float3 bg = mix(float3(0.8), float3(0.9), check);
 
-    // Alpha composite over checkerboard
-    float3 result = color.rgb * color.a + bg * (1.0 - color.a);
+    // Alpha composite (premultiplied) over checkerboard
+    float3 result = color.rgb + bg * (1.0 - color.a);
     return float4(result, 1.0);
 }
 
@@ -411,6 +409,7 @@ fragment float4 displayWhiteFragment(
     sampler s [[sampler(0)]]
 ) {
     float4 color = composite.sample(s, in.texCoord);
-    float3 result = color.rgb * color.a + float3(1.0) * (1.0 - color.a);
+    // The composite is premultiplied
+    float3 result = color.rgb + float3(1.0) * (1.0 - color.a);
     return float4(result, 1.0);
 }

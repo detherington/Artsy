@@ -37,6 +37,9 @@ Package.pins
 # Local Claude / IDE state
 .claude/
 
+# Golden-image test failures (rendered image + difference map)
+/ArtsyTests/Golden/failures/
+
 # Scratch
 *.tmp
 *.log

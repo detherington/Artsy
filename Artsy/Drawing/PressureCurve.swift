@@ -79,20 +79,15 @@ struct PressureDynamics: Codable, Equatable {
     let sizeMax: Float
     let opacityMin: Float
     let opacityMax: Float
-    let flowMin: Float
-    let flowMax: Float
 
     var sizeRange: ClosedRange<Float> { sizeMin...sizeMax }
     var opacityRange: ClosedRange<Float> { opacityMin...opacityMax }
-    var flowRange: ClosedRange<Float> { flowMin...flowMax }
 
-    init(sizeRange: ClosedRange<Float>, opacityRange: ClosedRange<Float>, flowRange: ClosedRange<Float>) {
+    init(sizeRange: ClosedRange<Float>, opacityRange: ClosedRange<Float>) {
         self.sizeMin = sizeRange.lowerBound
         self.sizeMax = sizeRange.upperBound
         self.opacityMin = opacityRange.lowerBound
         self.opacityMax = opacityRange.upperBound
-        self.flowMin = flowRange.lowerBound
-        self.flowMax = flowRange.upperBound
     }
 
     func size(for pressure: Float) -> Float {
@@ -101,9 +96,5 @@ struct PressureDynamics: Codable, Equatable {
 
     func opacity(for pressure: Float) -> Float {
         opacityMin + pressure * (opacityMax - opacityMin)
-    }
-
-    func flow(for pressure: Float) -> Float {
-        flowMin + pressure * (flowMax - flowMin)
     }
 }

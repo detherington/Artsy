@@ -85,7 +85,6 @@ final class StrokeRenderer {
         switch brush.shaderType {
         case .procedural: return context.strokeProceduralPipelineState
         case .pencil: return context.strokePencilPipelineState
-        case .textured: return context.strokeTexturedPipelineState
         case .watercolor: return context.strokeWatercolorPipelineState
         case .acrylic: return context.strokeAcrylicPipelineState
         case .oil: return context.strokeOilPipelineState
@@ -99,7 +98,7 @@ final class StrokeRenderer {
         case .watercolor: return context.strokeRadialWatercolorPipelineState
         case .acrylic: return context.strokeRadialAcrylicPipelineState
         case .oil: return context.strokeRadialOilPipelineState
-        case .procedural, .textured: return context.strokeRadialPipelineState
+        case .procedural: return context.strokeRadialPipelineState
         }
     }
 

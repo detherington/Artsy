@@ -21,7 +21,16 @@ final class CanvasViewModel: ObservableObject {
     @Published var transform = CanvasTransform()
 
     // Drawing state
-    @Published var currentBrush: BrushDescriptor = .hardRound
+    @Published var currentBrush: BrushDescriptor = .hardRound {
+        didSet {
+            // Each brush keeps its own size: remember the outgoing brush's, restore the
+            // incoming brush's (or start it at its base size the first time it's picked).
+            guard currentBrush.id != oldValue.id else { return }
+            sizeByBrush[oldValue.id] = brushSize
+            brushSize = sizeByBrush[currentBrush.id] ?? currentBrush.baseSize
+        }
+    }
+    private var sizeByBrush: [UUID: Float] = [:]
     @Published var currentColor: StrokeColor = .black
     @Published var pressureCurve: PressureCurve = .linear
     @Published var brushSize: Float = 12
@@ -50,9 +59,6 @@ final class CanvasViewModel: ObservableObject {
     var activeStrokePoints: [StrokePoint] = []
     var isDrawing = false
 
-    // Stroke history per layer
-    var strokeHistory: [UUID: [Stroke]] = [:]
-
     // Layer stack (set up by renderer)
     var layerStack: LayerStack!
 
@@ -66,6 +72,9 @@ final class CanvasViewModel: ObservableObject {
     let smoother = StrokeSmoother()
     @Published var smoothingMode: SmoothingMode = .none
     @Published var smoothingStrength: Float = 0.5
+
+    /// Captures raw input for replay in tests; nil unless the `recordStrokes` default is on.
+    var recorder: StrokeRecorder?
 
     // Swap colors
     @Published var foregroundColor: StrokeColor = .black
@@ -101,13 +110,13 @@ final class CanvasViewModel: ObservableObject {
         let prefs = AppPreferences.shared
         self.currentBrush = prefs.defaultBrush
         self.brushSize = Float(prefs.defaultBrushSize)
-    }
-
-    var activeLayerID: UUID {
-        layerStack?.activeLayer?.id ?? UUID()
+        if StrokeRecorder.isEnabledInDefaults {
+            self.recorder = StrokeRecorder(canvasSize: canvasSize, fileURL: StrokeRecorder.newFileURL())
+        }
     }
 
     func beginStroke(point: StrokePoint) {
+        recorder?.beginStroke(settingsFrom: self, firstPoint: point)
         smoother.mode = smoothingMode
         smoother.strength = smoothingStrength
         smoother.begin()
@@ -117,44 +126,17 @@ final class CanvasViewModel: ObservableObject {
     }
 
     func continueStroke(point: StrokePoint) {
+        recorder?.append(point)
         let smoothed = smoother.filter(point)
         activeStrokePoints.append(smoothed)
     }
 
-    func endStroke() -> Stroke? {
+    /// Call after the renderer has finalized the stroke — it still needs the points.
+    func endStroke() {
         smoother.end()
-        guard !activeStrokePoints.isEmpty else {
-            isDrawing = false
-            return nil
-        }
-
-        let layerID = activeLayerID
-
-        var stroke = Stroke(
-            brushDescriptor: currentBrush,
-            color: currentColor,
-            rawPoints: activeStrokePoints,
-            layerID: layerID
-        )
-
-        let interpolated = interpolator.interpolate(
-            points: activeStrokePoints,
-            spacing: currentBrush.spacing,
-            brushSize: brushSize,
-            pressureCurve: pressureCurve,
-            dynamics: currentBrush.pressureDynamics
-        )
-        stroke.interpolatedPoints = interpolated
-
-        if strokeHistory[layerID] == nil {
-            strokeHistory[layerID] = []
-        }
-        strokeHistory[layerID]?.append(stroke)
-
+        recorder?.endStroke()
         activeStrokePoints = []
         isDrawing = false
-
-        return stroke
     }
 
     /// Interpolated points for every symmetry mirror (first array = original).
@@ -188,7 +170,6 @@ final class CanvasViewModel: ObservableObject {
 
         return interpolator.interpolate(
             points: activeStrokePoints,
-            spacing: currentBrush.spacing,
             brushSize: brushSize,
             pressureCurve: pressureCurve,
             dynamics: currentBrush.pressureDynamics

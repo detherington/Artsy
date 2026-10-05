@@ -21,7 +21,16 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         userDriverDelegate: nil
     )
 
+    /// True when the app was launched only to host the unit tests.
+    private static let isHostingTests = ProcessInfo.processInfo.environment.keys.contains { $0.hasPrefix("XCTest") }
+
     func applicationDidFinishLaunching(_ notification: Notification) {
+        if Self.isHostingTests {
+            // No windows, menus or update checks — the tests build what they need.
+            NSApp.setActivationPolicy(.accessory)
+            return
+        }
+
         NSApp.setActivationPolicy(.regular)
         buildMenuBar()
         _ = updaterController // instantiate → starts background update checks
@@ -252,6 +261,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private var isOpeningFile = false
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
+        if Self.isHostingTests { return false }
         if isOpeningFile { return false }
         if newCanvasPanel != nil { return false }
         if !pendingOpenURLs.isEmpty { return false }

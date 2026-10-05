@@ -5,7 +5,6 @@ final class StrokeInterpolator {
     /// Interpolate between raw stroke points using Catmull-Rom splines.
     func interpolate(
         points: [StrokePoint],
-        spacing: Float,
         brushSize: Float,
         pressureCurve: PressureCurve,
         dynamics: PressureDynamics

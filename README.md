@@ -35,6 +35,16 @@ Download the latest [DMG from Releases](https://github.com/detherington/Artsy/re
 xcodebuild -project Artsy.xcodeproj -scheme Artsy -configuration Release build
 ```
 
+## Tests
+
+```
+xcodebuild test -project Artsy.xcodeproj -scheme Artsy -destination 'platform=macOS'
+```
+
+The drawing engine is covered by golden-image and compositing tests that render through the
+real pipeline without a window. See [docs/drawing-engine-plan.md](docs/drawing-engine-plan.md#testing-the-engine)
+for re-recording goldens and replaying real pen input.
+
 ## Release pipeline
 
 Release script handles build + codesign + notarize + DMG + Sparkle appcast generation:

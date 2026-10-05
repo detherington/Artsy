@@ -39,3 +39,6 @@ targets:
     settings:
       base:
         SWIFT_VERSION: "5.9"
+        GENERATE_INFOPLIST_FILE: YES
+        # `@testable import Artsy` has to resolve the Sparkle module the app imports
+        FRAMEWORK_SEARCH_PATHS: ["$(inherited)", "$(SRCROOT)/Artsy/Frameworks"]

@@ -66,7 +66,7 @@ final class CanvasRenderer: NSObject, MTKViewDelegate {
 
     func draw(in view: MTKView) {
         guard let viewModel = viewModel,
-              let layerStack = viewModel.layerStack,
+              viewModel.layerStack != nil,
               let drawable = view.currentDrawable,
               let commandBuffer = context.commandQueue.makeCommandBuffer() else {
             return
@@ -77,55 +77,30 @@ final class CanvasRenderer: NSObject, MTKViewDelegate {
             hasInitializedTransform = true
         }
 
-        // 1. Render active stroke if drawing
+        encodeFrame(into: commandBuffer)
+
+        // Display
+        compositor.renderToScreen(
+            composite: compositeTexture,
+            drawable: drawable.texture,
+            transform: viewModel.transform,
+            viewSize: view.bounds.size,
+            backgroundColor: viewModel.canvasBackgroundColor,
+            commandBuffer: commandBuffer
+        )
+
+        commandBuffer.present(drawable)
+        commandBuffer.commit()
+    }
+
+    /// Encode everything up to `compositeTexture`: the in-progress stroke, then every layer.
+    /// Separate from `draw(in:)` so a frame can be rendered without a view (tests, stroke replay).
+    func encodeFrame(into commandBuffer: MTLCommandBuffer) {
+        guard let viewModel = viewModel, let layerStack = viewModel.layerStack else { return }
         let isErasing = viewModel.currentBrush.category == .utility
-        if viewModel.isDrawing {
-            let points = viewModel.currentInterpolatedPoints()
-            if points.count != lastRenderedPointCount {
-                // Build the mirror set once. `strokes[0]` is the primary stroke.
-                let strokes = viewModel.currentInterpolatedStrokeSet()
 
-                if isErasing {
-                    // Eraser renders directly onto the layer texture (destination-out blending).
-                    // Render the NEW tail of each mirror stroke incrementally.
-                    if let activeLayer = layerStack.activeLayer {
-                        for mirroredStroke in strokes {
-                            let newPoints: [InterpolatedPoint]
-                            if lastRenderedPointCount > 0 && lastRenderedPointCount < mirroredStroke.count {
-                                newPoints = Array(mirroredStroke[max(0, lastRenderedPointCount - 1)...])
-                            } else {
-                                newPoints = mirroredStroke
-                            }
-                            strokeRenderer.render(
-                                points: newPoints,
-                                brush: viewModel.currentBrush,
-                                color: StrokeColor.white,
-                                targetTexture: activeLayer.texture,
-                                commandBuffer: commandBuffer,
-                                canvasSize: canvasSize,
-                                isEraser: true
-                            )
-                        }
-                    }
-                } else {
-                    // Normal brush: redraw every mirror into the active stroke texture each frame.
-                    textureManager.clearTexture(activeStrokeTexture, commandBuffer: commandBuffer)
-                    for mirroredStroke in strokes {
-                        strokeRenderer.render(
-                            points: mirroredStroke,
-                            brush: viewModel.currentBrush,
-                            color: viewModel.currentColor,
-                            targetTexture: activeStrokeTexture,
-                            commandBuffer: commandBuffer,
-                            canvasSize: canvasSize
-                        )
-                    }
-                }
-                lastRenderedPointCount = points.count
-            }
-        }
+        encodeActiveStroke(into: commandBuffer)
 
-        // 2. Composite all layers
         textureManager.clearTexture(compositeTexture, commandBuffer: commandBuffer)
 
         for (i, layer) in layerStack.layers.enumerated() {
@@ -157,7 +132,7 @@ final class CanvasRenderer: NSObject, MTKViewDelegate {
                     compositor.compositeNormal(
                         source: activeStrokeTexture,
                         onto: compositeTexture,
-                        opacity: 1.0,
+                        opacity: viewModel.brushOpacity,
                         commandBuffer: commandBuffer
                     )
                 }
@@ -226,19 +201,58 @@ final class CanvasRenderer: NSObject, MTKViewDelegate {
                 }
             }
         }
+    }
 
-        // 3. Display
-        compositor.renderToScreen(
-            composite: compositeTexture,
-            drawable: drawable.texture,
-            transform: viewModel.transform,
-            viewSize: view.bounds.size,
-            backgroundColor: viewModel.canvasBackgroundColor,
-            commandBuffer: commandBuffer
-        )
+    /// Bring the in-progress stroke up to date with the points received so far.
+    private func encodeActiveStroke(into commandBuffer: MTLCommandBuffer) {
+        guard let viewModel = viewModel, let layerStack = viewModel.layerStack else { return }
 
-        commandBuffer.present(drawable)
-        commandBuffer.commit()
+        let isErasing = viewModel.currentBrush.category == .utility
+        if viewModel.isDrawing {
+            let points = viewModel.currentInterpolatedPoints()
+            if points.count != lastRenderedPointCount {
+                // Build the mirror set once. `strokes[0]` is the primary stroke.
+                let strokes = viewModel.currentInterpolatedStrokeSet()
+
+                if isErasing {
+                    // Eraser renders directly onto the layer texture (destination-out blending).
+                    // Render the NEW tail of each mirror stroke incrementally.
+                    if let activeLayer = layerStack.activeLayer {
+                        for mirroredStroke in strokes {
+                            let newPoints: [InterpolatedPoint]
+                            if lastRenderedPointCount > 0 && lastRenderedPointCount < mirroredStroke.count {
+                                newPoints = Array(mirroredStroke[max(0, lastRenderedPointCount - 1)...])
+                            } else {
+                                newPoints = mirroredStroke
+                            }
+                            strokeRenderer.render(
+                                points: newPoints,
+                                brush: viewModel.currentBrush,
+                                color: StrokeColor(red: 1, green: 1, blue: 1, alpha: viewModel.brushOpacity),
+                                targetTexture: activeLayer.texture,
+                                commandBuffer: commandBuffer,
+                                canvasSize: canvasSize,
+                                isEraser: true
+                            )
+                        }
+                    }
+                } else {
+                    // Normal brush: redraw every mirror into the active stroke texture each frame.
+                    textureManager.clearTexture(activeStrokeTexture, commandBuffer: commandBuffer)
+                    for mirroredStroke in strokes {
+                        strokeRenderer.render(
+                            points: mirroredStroke,
+                            brush: viewModel.currentBrush,
+                            color: viewModel.currentColor,
+                            targetTexture: activeStrokeTexture,
+                            commandBuffer: commandBuffer,
+                            canvasSize: canvasSize
+                        )
+                    }
+                }
+                lastRenderedPointCount = points.count
+            }
+        }
     }
 
     // MARK: - Move / Shift Content
@@ -661,12 +675,15 @@ final class CanvasRenderer: NSObject, MTKViewDelegate {
 
         guard let commandBuffer = context.commandQueue.makeCommandBuffer() else { return }
 
+        // Samples that arrived since the last displayed frame haven't been drawn yet.
+        encodeActiveStroke(into: commandBuffer)
+
         if !isErasing {
             // Normal brush: merge active stroke texture into layer
             compositor.compositeNormal(
                 source: activeStrokeTexture,
                 onto: activeLayer.texture,
-                opacity: 1.0,
+                opacity: viewModel.brushOpacity,
                 commandBuffer: commandBuffer
             )
         }
@@ -681,25 +698,5 @@ final class CanvasRenderer: NSObject, MTKViewDelegate {
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             self?.updateThumbnail(for: activeLayer)
         }
-    }
-
-    func rerenderLayer(strokes: [Stroke], layerTexture: MTLTexture) {
-        guard let commandBuffer = context.commandQueue.makeCommandBuffer() else { return }
-        textureManager.clearTexture(layerTexture, commandBuffer: commandBuffer)
-
-        for stroke in strokes {
-            if let points = stroke.interpolatedPoints, !points.isEmpty {
-                strokeRenderer.render(
-                    points: points,
-                    brush: stroke.brushDescriptor,
-                    color: stroke.color,
-                    targetTexture: layerTexture,
-                    commandBuffer: commandBuffer,
-                    canvasSize: canvasSize
-                )
-            }
-        }
-
-        commandBuffer.commit()
     }
 }
