@@ -9,7 +9,6 @@ final class MetalContext {
     // Pipeline states
     let strokeProceduralPipelineState: MTLRenderPipelineState
     let strokePencilPipelineState: MTLRenderPipelineState
-    let strokeTexturedPipelineState: MTLRenderPipelineState
     let strokeWatercolorPipelineState: MTLRenderPipelineState
     let strokeAcrylicPipelineState: MTLRenderPipelineState
     let strokeOilPipelineState: MTLRenderPipelineState
@@ -92,12 +91,6 @@ final class MetalContext {
         self.strokePencilPipelineState = try MetalContext.makeStrokePipeline(
             device: device, library: library, vertexDescriptor: strokeVD,
             fragmentFunction: "strokePencilFragment"
-        )
-
-        // Stroke textured
-        self.strokeTexturedPipelineState = try MetalContext.makeStrokePipeline(
-            device: device, library: library, vertexDescriptor: strokeVD,
-            fragmentFunction: "strokeFragment"
         )
 
         // Stroke watercolor

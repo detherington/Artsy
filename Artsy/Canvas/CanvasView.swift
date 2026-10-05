@@ -284,8 +284,9 @@ class CanvasView: MTKView {
     private func handleDrawingMouseUp(_ event: NSEvent) {
         guard let viewModel = viewModel, let renderer = renderer else { return }
 
-        let _ = viewModel.endStroke()
+        // Finalize first: the renderer still needs the stroke's points to draw its last samples.
         renderer.finalizeStroke()
+        viewModel.endStroke()
     }
 
     // MARK: - Eyedropper Tool
@@ -341,9 +342,12 @@ class CanvasView: MTKView {
             )
         }
 
-        let r = Float(Float16(bitPattern: f16[0]))
-        let g = Float(Float16(bitPattern: f16[1]))
-        let b = Float(Float16(bitPattern: f16[2]))
+        // The composite is premultiplied; pick the colour as displayed, i.e. over the white
+        // that shows through wherever the canvas isn't fully opaque.
+        let through = 1 - Float(Float16(bitPattern: f16[3]))
+        let r = Float(Float16(bitPattern: f16[0])) + through
+        let g = Float(Float16(bitPattern: f16[1])) + through
+        let b = Float(Float16(bitPattern: f16[2])) + through
         // Clamp alpha to 1 — picked color is meant to be applied opaquely.
         let a: Float = 1.0
         let picked = StrokeColor(

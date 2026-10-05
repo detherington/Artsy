@@ -1,6 +1,6 @@
 import Foundation
 
-enum SmoothingMode: String, CaseIterable, Identifiable {
+enum SmoothingMode: String, CaseIterable, Identifiable, Codable {
     case none = "None"
     case oneEuro = "Adaptive"
     case lazyBrush = "Lazy Brush"
