@@ -8,13 +8,15 @@ final class MetalContext {
 
     // Pipeline states
     let strokeProceduralPipelineState: MTLRenderPipelineState
-    let strokePencilPipelineState: MTLRenderPipelineState
     let strokeWatercolorPipelineState: MTLRenderPipelineState
     let strokeAcrylicPipelineState: MTLRenderPipelineState
     let strokeOilPipelineState: MTLRenderPipelineState
+    /// Dabs of a stamp brush, blended source-over into the stroke texture.
+    let stampPipelineState: MTLRenderPipelineState
+    /// Tips and paper grain for stamp brushes.
+    let brushTextures: BrushTextureLibrary
     // Radial-distance variants for stroke caps (rounded endpoints, Procreate-style)
     let strokeRadialPipelineState: MTLRenderPipelineState
-    let strokeRadialPencilPipelineState: MTLRenderPipelineState
     let strokeRadialWatercolorPipelineState: MTLRenderPipelineState
     let strokeRadialAcrylicPipelineState: MTLRenderPipelineState
     let strokeRadialOilPipelineState: MTLRenderPipelineState
@@ -40,6 +42,10 @@ final class MetalContext {
     // Samplers
     let linearSampler: MTLSamplerState
     let nearestSampler: MTLSamplerState
+    /// Trilinear, clamped to the edge: brush tips at any size.
+    let tipSampler: MTLSamplerState
+    /// Trilinear, repeating: the paper grain tiles across the canvas.
+    let grainSampler: MTLSamplerState
 
     init() throws {
         guard let device = MTLCreateSystemDefaultDevice() else {
@@ -94,12 +100,6 @@ final class MetalContext {
             fragmentFunction: "strokeProceduralFragment"
         )
 
-        // Stroke pencil
-        self.strokePencilPipelineState = try MetalContext.makeStrokePipeline(
-            device: device, library: library, vertexDescriptor: strokeVD,
-            fragmentFunction: "strokePencilFragment"
-        )
-
         // Stroke watercolor
         self.strokeWatercolorPipelineState = try MetalContext.makeStrokePipeline(
             device: device, library: library, vertexDescriptor: strokeVD,
@@ -118,14 +118,26 @@ final class MetalContext {
             fragmentFunction: "strokeOilFragment"
         )
 
+        // Stamp brushes: instanced dabs, premultiplied source-over
+        let stampDesc = MTLRenderPipelineDescriptor()
+        stampDesc.vertexFunction = library.makeFunction(name: "stampVertex")
+        stampDesc.fragmentFunction = library.makeFunction(name: "stampFragment")
+        stampDesc.colorAttachments[0].pixelFormat = .rgba16Float
+        let stampAttachment = stampDesc.colorAttachments[0]!
+        stampAttachment.isBlendingEnabled = true
+        stampAttachment.rgbBlendOperation = .add
+        stampAttachment.alphaBlendOperation = .add
+        stampAttachment.sourceRGBBlendFactor = .one
+        stampAttachment.destinationRGBBlendFactor = .oneMinusSourceAlpha
+        stampAttachment.sourceAlphaBlendFactor = .one
+        stampAttachment.destinationAlphaBlendFactor = .oneMinusSourceAlpha
+        self.stampPipelineState = try device.makeRenderPipelineState(descriptor: stampDesc)
+        self.brushTextures = BrushTextureLibrary(device: device)
+
         // Radial cap variants
         self.strokeRadialPipelineState = try MetalContext.makeStrokePipeline(
             device: device, library: library, vertexDescriptor: strokeVD,
             fragmentFunction: "strokeRadialFragment"
-        )
-        self.strokeRadialPencilPipelineState = try MetalContext.makeStrokePipeline(
-            device: device, library: library, vertexDescriptor: strokeVD,
-            fragmentFunction: "strokeRadialPencilFragment"
         )
         self.strokeRadialWatercolorPipelineState = try MetalContext.makeStrokePipeline(
             device: device, library: library, vertexDescriptor: strokeVD,
@@ -216,6 +228,25 @@ final class MetalContext {
             throw MetalError.samplerCreationFailed
         }
         self.nearestSampler = nearest
+
+        let tipDesc = MTLSamplerDescriptor()
+        tipDesc.minFilter = .linear
+        tipDesc.magFilter = .linear
+        tipDesc.mipFilter = .linear
+        tipDesc.sAddressMode = .clampToEdge
+        tipDesc.tAddressMode = .clampToEdge
+        let grainDesc = MTLSamplerDescriptor()
+        grainDesc.minFilter = .linear
+        grainDesc.magFilter = .linear
+        grainDesc.mipFilter = .linear
+        grainDesc.sAddressMode = .repeat
+        grainDesc.tAddressMode = .repeat
+        guard let tip = device.makeSamplerState(descriptor: tipDesc),
+              let grain = device.makeSamplerState(descriptor: grainDesc) else {
+            throw MetalError.samplerCreationFailed
+        }
+        self.tipSampler = tip
+        self.grainSampler = grain
     }
 
     // MARK: - Pipeline Helpers

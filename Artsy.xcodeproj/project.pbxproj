@@ -82,6 +82,9 @@
 		9BE4C7715D7DE2DB4FA554B3 /* UndoTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0AAF037C68F7B4EA643159D6 /* UndoTests.swift */; };
 		11AD04CA99B3741D8873D8B3 /* BrushCursor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6F7C5B97272A60F40BF41ED5 /* BrushCursor.swift */; };
 		C05A62DC94BA26B37872A2B6 /* StrokeSmoothingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FC0572507A83016E6DAAAF4E /* StrokeSmoothingTests.swift */; };
+		E5D281B9F71ED2C99383A93A /* DabPlacer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 72646CFD240043CF20A1222F /* DabPlacer.swift */; };
+		5315BF99627A7069E4D072A2 /* BrushTextureLibrary.swift in Sources */ = {isa = PBXBuildFile; fileRef = 63B590EB2937F982E7AD387D /* BrushTextureLibrary.swift */; };
+		4FCAE957E9C4989FA6EBF757 /* StampBrushTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2E6B0104D2D5FB98F6BB9B9E /* StampBrushTests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -174,6 +177,9 @@
 		0AAF037C68F7B4EA643159D6 /* UndoTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UndoTests.swift; sourceTree = "<group>"; };
 		6F7C5B97272A60F40BF41ED5 /* BrushCursor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrushCursor.swift; sourceTree = "<group>"; };
 		FC0572507A83016E6DAAAF4E /* StrokeSmoothingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StrokeSmoothingTests.swift; sourceTree = "<group>"; };
+		72646CFD240043CF20A1222F /* DabPlacer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DabPlacer.swift; sourceTree = "<group>"; };
+		63B590EB2937F982E7AD387D /* BrushTextureLibrary.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrushTextureLibrary.swift; sourceTree = "<group>"; };
+		2E6B0104D2D5FB98F6BB9B9E /* StampBrushTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StampBrushTests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXGroup section */
@@ -240,6 +246,7 @@
 			isa = PBXGroup;
 			children = (
 				9C62A909BCD9D532B7728EE0 /* BrushDescriptor.swift */,
+				72646CFD240043CF20A1222F /* DabPlacer.swift */,
 				2D8F7EDA762E3FA8B6C4FA45 /* BrushEngine.swift */,
 			);
 			path = Brushes;
@@ -316,6 +323,7 @@
 		B48AF066E85C8962CFFD499C /* ArtsyTests */ = {
 			isa = PBXGroup;
 			children = (
+				2E6B0104D2D5FB98F6BB9B9E /* StampBrushTests.swift */,
 				FC0572507A83016E6DAAAF4E /* StrokeSmoothingTests.swift */,
 				0AAF037C68F7B4EA643159D6 /* UndoTests.swift */,
 				0C6674A940D26CFE75F54F3A /* IncrementalRenderingTests.swift */,
@@ -378,6 +386,7 @@
 			isa = PBXGroup;
 			children = (
 				503F3A4D683A28C2D0F3CA61 /* CompositorPipeline.swift */,
+				63B590EB2937F982E7AD387D /* BrushTextureLibrary.swift */,
 				59797061B065607E467C8C83 /* MetalContext.swift */,
 				68B02EDF5AFB8295DE44872D /* Shaders.metal */,
 				BE58DE4CC964D524A0221361 /* StrokeRenderer.swift */,
@@ -531,6 +540,8 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				5315BF99627A7069E4D072A2 /* BrushTextureLibrary.swift in Sources */,
+				E5D281B9F71ED2C99383A93A /* DabPlacer.swift in Sources */,
 				11AD04CA99B3741D8873D8B3 /* BrushCursor.swift in Sources */,
 				2327A645D5D365350A805A1C /* StrokeRecording.swift in Sources */,
 				4D5B08BA130C75EDC7E2B082 /* AIConfiguration.swift in Sources */,
@@ -597,6 +608,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				4FCAE957E9C4989FA6EBF757 /* StampBrushTests.swift in Sources */,
 				C05A62DC94BA26B37872A2B6 /* StrokeSmoothingTests.swift in Sources */,
 				9BE4C7715D7DE2DB4FA554B3 /* UndoTests.swift in Sources */,
 				92948045B3372E73DC6E5222 /* IncrementalRenderingTests.swift in Sources */,

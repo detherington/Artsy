@@ -22,6 +22,8 @@ final class IncrementalRenderingTests: XCTestCase {
     func testResultDoesNotDependOnHowSamplesFallIntoFrames() throws {
         let cases: [(BrushDescriptor, SymmetryMode)] = [
             (.softRound, .off), (.inkBrush, .radial(5)), (.oil, .quad), (.calligraphy, .off), (.eraser, .horizontal),
+            // Stamp brushes: plain dabs, grain with jitter, a textured tip with scatter
+            (.airbrush, .quad), (.pencil, .off), (.chalk, .radial(3)),
         ]
         for (brush, symmetry) in cases {
             var results: [PixelGrid] = []
@@ -35,8 +37,11 @@ final class IncrementalRenderingTests: XCTestCase {
                              pointsPerFrame: pointsPerFrame)
                 results.append(harness.composite())
             }
+            // Where symmetry copies of a stamp stroke overlap, the order their dabs blend in
+            // depends on the framing; in a half-float texture that is worth a rounding step
+            // or two, hence 2/255 rather than 1/255.
             for other in results.dropFirst() {
-                XCTAssertLessThan(worstDifference(results[0], other), 0.004, "\(brush.name), \(symmetry.displayName)")
+                XCTAssertLessThan(worstDifference(results[0], other), 0.008, "\(brush.name), \(symmetry.displayName)")
             }
         }
     }
@@ -46,7 +51,7 @@ final class IncrementalRenderingTests: XCTestCase {
     /// semi-transparent ones, where compositing any pixel twice would show.
     func testPartialCompositeMatchesFullComposite() throws {
         for blended in [true, false] {
-            for brush in [BrushDescriptor.softRound, .eraser] {
+            for brush in [BrushDescriptor.inkBrush, .softRound, .chalk, .eraser] {
                 let harness = try EngineHarness(width: 256, height: 256)
                 harness.fill(harness.backgroundLayer, red: 0.9, green: 0.9, blue: 0.8, alpha: 0.7)
                 harness.fill(harness.drawingLayer, red: 0.2, green: 0.5, blue: 0.9, alpha: 0.8)
@@ -83,7 +88,7 @@ final class IncrementalRenderingTests: XCTestCase {
     /// The stroke is previewed inside its layer, so pen-up changes nothing on screen even
     /// when that layer has reduced opacity or a blend mode.
     func testPreviewMatchesTheMergedStrokeOnABlendedLayer() throws {
-        for brush in [BrushDescriptor.softRound, .marker, .eraser] {
+        for brush in [BrushDescriptor.softRound, .marker, .pencil, .airbrush, .eraser] {
             let harness = try EngineHarness(width: 256, height: 256)
             harness.fill(harness.backgroundLayer, red: 0.9, green: 0.85, blue: 0.6)
             harness.fill(harness.drawingLayer, red: 0.2, green: 0.5, blue: 0.9, alpha: 0.8)

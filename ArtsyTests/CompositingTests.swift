@@ -12,11 +12,11 @@ final class CompositingTests: XCTestCase {
     func testSoftLightBrushFadesOutOverDarkPaint() throws {
         let harness = try EngineHarness(width: 200, height: 120)
         harness.fill(harness.backgroundLayer, red: 0, green: 0, blue: 0)
-        harness.select(.softRound)
+        harness.select(.testSoftRibbon)
         harness.viewModel.brushSize = 60
         harness.viewModel.currentColor = .white
 
-        // Full pressure: Soft Round is then 60 px wide and fully opaque at its centre.
+        // Full pressure: the ribbon is then 60 px wide and fully opaque at its centre.
         harness.draw(StrokeFixtures.line(from: CGPoint(x: 20, y: 60), to: CGPoint(x: 180, y: 60), pressure: 1...1))
         let shown = harness.displayed()
 
@@ -36,7 +36,7 @@ final class CompositingTests: XCTestCase {
     /// Premultiplied colour never exceeds alpha, so nothing stored on a layer should pass 1.
     func testSoftStrokesKeepLayerValuesInRange() throws {
         let harness = try EngineHarness(width: 200, height: 120)
-        harness.select(.softRound)
+        harness.select(.testSoftRibbon)
         harness.viewModel.brushSize = 50
         harness.viewModel.currentColor = StrokeColor(red: 0.5, green: 0.5, blue: 0.5, alpha: 1)
         for y in [40, 60, 80] {
@@ -51,7 +51,7 @@ final class CompositingTests: XCTestCase {
     /// not only where its coverage passes 50%.
     func testSoftGreyBrushOverWhiteIsAlphaWeighted() throws {
         let harness = try EngineHarness(width: 200, height: 120)
-        harness.select(.softRound)
+        harness.select(.testSoftRibbon)
         harness.viewModel.brushSize = 60
         harness.viewModel.currentColor = StrokeColor(red: 0.5, green: 0.5, blue: 0.5, alpha: 1)
         harness.draw(StrokeFixtures.line(from: CGPoint(x: 20, y: 60), to: CGPoint(x: 180, y: 60), pressure: 1...1))
@@ -156,7 +156,7 @@ final class CompositingTests: XCTestCase {
     /// What is on screen while the pen is down must match what lands on the layer.
     func testStrokeLooksTheSameBeforeAndAfterPenUp() throws {
         let harness = try EngineHarness(width: 200, height: 120)
-        harness.select(.softRound)
+        harness.select(.testSoftRibbon)
         harness.viewModel.brushSize = 40
         harness.viewModel.brushOpacity = 0.6
         harness.viewModel.currentColor = StrokeColor(red: 0.8, green: 0.2, blue: 0.1, alpha: 1)

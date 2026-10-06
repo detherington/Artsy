@@ -23,6 +23,7 @@ struct InterpolatedPoint {
     let width: Float             // After pressure curve mapping
     let opacity: Float           // After pressure curve mapping
     let angle: Float             // Stroke direction in radians
+    let distance: CGFloat        // Path length from the start of the stroke
 }
 
 struct StrokeColor: Codable, Equatable {

@@ -289,3 +289,19 @@ enum Golden {
         }
     }
 }
+
+extension BrushDescriptor {
+    /// A soft-edged ribbon brush with a known falloff, for tests that are about compositing
+    /// rather than about how any built-in brush looks.
+    static let testSoftRibbon = BrushDescriptor(
+        id: UUID(uuidString: "00000000-0000-0000-0000-0000000000F1")!,
+        name: "Test Soft Ribbon",
+        category: .painting,
+        hardness: 0.0,
+        baseSize: 24,
+        pressureDynamics: PressureDynamics(sizeRange: 0.5...1.0, opacityRange: 0.2...1.0),
+        opacity: 1.0,
+        smoothing: 0,
+        fixedNibAngle: nil
+    )
+}

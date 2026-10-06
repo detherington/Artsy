@@ -52,22 +52,6 @@ fragment float4 strokeRadialFragment(
     return premultiplied(brushColor.rgb, brushColor.a * alpha * in.opacity);
 }
 
-// Round tip with pencil texture (for caps on pencil strokes).
-fragment float4 strokeRadialPencilFragment(
-    StrokeVertexOut in [[stage_in]],
-    constant float4 &brushColor [[buffer(0)]],
-    constant float &hardness [[buffer(1)]]
-) {
-    float dist = distance(in.texCoord, float2(0.5, 0.5)) * 2.0;
-    float shape = 1.0 - smoothstep(hardness, 1.0, dist);
-
-    float2 p = in.position.xy * 0.5;
-    float noise = fract(sin(dot(floor(p), float2(12.9898, 78.233))) * 43758.5453);
-    float grain = mix(0.4, 1.0, noise);
-    float alpha = shape * grain;
-    return premultiplied(brushColor.rgb, brushColor.a * alpha * in.opacity);
-}
-
 // Round tip for watercolor (cap version of watercolor brush)
 fragment float4 strokeRadialWatercolorFragment(
     StrokeVertexOut in [[stage_in]],
@@ -144,24 +128,6 @@ fragment float4 strokeProceduralFragment(
         alpha = 1.0 - smoothstep(inner, 1.0, dist);
     }
 
-    return premultiplied(brushColor.rgb, brushColor.a * alpha * in.opacity);
-}
-
-// Procedural pencil: noise-textured, uses cross-stroke distance
-fragment float4 strokePencilFragment(
-    StrokeVertexOut in [[stage_in]],
-    constant float4 &brushColor [[buffer(0)]],
-    constant float &hardness [[buffer(1)]]
-) {
-    float dist = abs(in.texCoord.x - 0.5) * 2.0;
-    float shape = 1.0 - smoothstep(hardness, 1.0, dist);
-
-    // Use position for noise so it's consistent regardless of strip topology
-    float2 p = in.position.xy * 0.5;
-    float noise = fract(sin(dot(floor(p), float2(12.9898, 78.233))) * 43758.5453);
-    float grain = mix(0.4, 1.0, noise);
-
-    float alpha = shape * grain;
     return premultiplied(brushColor.rgb, brushColor.a * alpha * in.opacity);
 }
 
@@ -261,6 +227,107 @@ fragment float4 strokeAcrylicFragment(
     return premultiplied(color, brushColor.a * alpha);
 }
 
+// --- Stamp (dab) rendering ---
+//
+// A stamp brush draws many copies of its tip along the stroke. Each dab is one instance:
+// a quad placed, sized and turned in the vertex shader. Dabs blend source-over into the
+// stroke texture, so they add up the way flow does in any paint program.
+
+struct StampInstance {
+    packed_float2 center;   // canvas pixels
+    float size;             // diameter in canvas pixels
+    float angle;            // radians
+    float opacity;
+    float seed;             // 0..<1, different for every dab
+    float reach;            // 0..1: how firmly the dab is pressed into the paper's tooth
+};
+
+struct StampVertexOut {
+    float4 position [[position]];
+    float2 uv;          // 0..1 across the dab
+    float2 canvas;      // canvas pixels
+    float  opacity;
+    float  seed;
+    float  reach;
+};
+
+struct StampParams {
+    float4 color;
+    float  hardness;
+    int    tipIsTexture;
+    int    grainMode;     // 0 = none, 1 = multiply, 2 = height
+    float  grainScale;    // paper texture pixels per canvas pixel
+    float  grainDepth;
+};
+
+vertex StampVertexOut stampVertex(
+    uint vertexID [[vertex_id]],
+    uint instanceID [[instance_id]],
+    const device StampInstance *dabs [[buffer(0)]],
+    constant float4x4 &transform [[buffer(1)]]
+) {
+    const float2 corners[6] = {
+        float2(-0.5, -0.5), float2(0.5, -0.5), float2(0.5, 0.5),
+        float2(-0.5, -0.5), float2(0.5, 0.5), float2(-0.5, 0.5),
+    };
+    StampInstance dab = dabs[instanceID];
+    float2 corner = corners[vertexID];
+    float c = cos(dab.angle), sn = sin(dab.angle);
+    float2 offset = float2(corner.x * c - corner.y * sn, corner.x * sn + corner.y * c) * dab.size;
+    float2 canvas = float2(dab.center) + offset;
+
+    StampVertexOut out;
+    out.position = transform * float4(canvas, 0.0, 1.0);
+    out.uv = corner + 0.5;
+    out.canvas = canvas;
+    out.opacity = dab.opacity;
+    out.seed = dab.seed;
+    out.reach = dab.reach;
+    return out;
+}
+
+fragment float4 stampFragment(
+    StampVertexOut in [[stage_in]],
+    texture2d<float> tip [[texture(0)]],
+    texture2d<float> grain [[texture(1)]],
+    sampler tipSampler [[sampler(0)]],
+    sampler grainSampler [[sampler(1)]],
+    constant StampParams &params [[buffer(0)]]
+) {
+    float coverage;
+    if (params.tipIsTexture != 0) {
+        coverage = tip.sample(tipSampler, in.uv).r;
+    } else {
+        float dist = distance(in.uv, float2(0.5)) * 2.0;
+        if (params.hardness >= 0.99) {
+            // One pixel of antialiasing on a hard edge
+            float edge = fwidth(dist);
+            coverage = 1.0 - smoothstep(1.0 - edge, 1.0, dist);
+        } else {
+            coverage = 1.0 - smoothstep(params.hardness, 1.0, dist);
+        }
+    }
+
+    float alpha = coverage * in.opacity;
+
+    if (params.grainMode != 0) {
+        // The paper is fixed to the canvas, so every stroke meets the same tooth.
+        float height = grain.sample(grainSampler, in.canvas * params.grainScale / float(grain.get_width())).r;
+        if (params.grainMode == 1) {
+            alpha *= mix(1.0, height, params.grainDepth);
+        } else {
+            // Pigment lands on the paper's peaks first and only reaches the valleys as the
+            // pen presses harder. `grainDepth` is how much pressure the deepest valley
+            // takes to reach; the ramp below it keeps the edge of each fleck soft. Pressure
+            // falls off towards a soft tip's edge, so the edge stays on the peaks longer.
+            float press = in.reach * mix(1.0, coverage, 0.5);
+            alpha *= saturate((press - (1.0 - height) * params.grainDepth) / 0.3);
+        }
+    }
+
+    return premultiplied(params.color.rgb, params.color.a * alpha);
+}
+
 // --- Compositing ---
 
 struct CompositeVertexIn {
@@ -316,17 +383,21 @@ fragment float4 clearFragment(CompositeVertexOut in [[stage_in]]) {
 // --- In-progress stroke ---
 //
 // While the pen is down the stroke lives in two textures: `committed` holds the part that
-// will not change again, `tail` the newest part, which is redrawn every frame. Their
-// maximum is the stroke. It is merged into the active layer's colour *before* that layer's
-// opacity and blend mode apply, exactly as it will be once the pen lifts.
+// will not change again, `tail` the newest part, which is redrawn every frame. The
+// two together are the stroke. It is merged into the active layer's colour *before* that
+// layer's opacity and blend mode apply, exactly as it will be once the pen lifts.
 
 struct StrokeMergeParams {
-    float opacity;   // the Opacity slider: caps the whole stroke
-    int   erase;     // 0 = paint over the layer, 1 = erase from it
+    float opacity;      // caps the whole stroke
+    int   erase;        // 0 = paint over the layer, 1 = erase from it
+    int   accumulates;  // 0 = ribbon (the textures' maximum), 1 = dabs (tail over committed)
 };
 
 static inline float4 layerWithStroke(float4 layer, float4 committed, float4 tail, StrokeMergeParams params) {
-    float4 stroke = max(committed, tail) * params.opacity;
+    // A ribbon's two halves are the same coverage drawn twice where they meet, so take the
+    // maximum. Dabs in the tail were laid after the committed ones and sit on top of them.
+    float4 combined = params.accumulates != 0 ? tail + committed * (1.0 - tail.a) : max(committed, tail);
+    float4 stroke = combined * params.opacity;
     return params.erase != 0 ? layer * (1.0 - stroke.a)
                              : stroke + layer * (1.0 - stroke.a);
 }

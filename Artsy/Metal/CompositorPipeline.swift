@@ -35,15 +35,19 @@ final class CompositorPipeline {
         let committed: MTLTexture
         /// The newest part, redrawn every frame.
         let tail: MTLTexture
-        /// The Opacity slider.
+        /// Caps the whole stroke.
         let opacity: Float
         let erase: Bool
+        /// True for dabs, which layer (tail over committed); false for a ribbon, whose two
+        /// halves are combined by taking their maximum.
+        let accumulates: Bool
     }
 
     /// Mirrors `StrokeMergeParams` in Shaders.metal.
     private struct StrokeMergeParams {
         var opacity: Float
         var erase: Int32
+        var accumulates: Int32
     }
 
     /// Draw the full-canvas quad once, or once per scissor rect when `regions` is given.
@@ -91,7 +95,8 @@ final class CompositorPipeline {
 
         var layerOpacity = opacity
         var identity = float4x4(diagonal: SIMD4<Float>(1, 1, 1, 1))
-        var strokeParams = StrokeMergeParams(opacity: stroke?.opacity ?? 0, erase: stroke?.erase == true ? 1 : 0)
+        var strokeParams = StrokeMergeParams(opacity: stroke?.opacity ?? 0, erase: stroke?.erase == true ? 1 : 0,
+                                             accumulates: stroke?.accumulates == true ? 1 : 0)
 
         func bindCommon(_ encoder: MTLRenderCommandEncoder) {
             encoder.setVertexBuffer(quadVertexBuffer, offset: 0, index: 0)
