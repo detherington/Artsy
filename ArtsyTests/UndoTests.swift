@@ -207,4 +207,92 @@ final class UndoTests: XCTestCase {
         XCTAssertEqual(composite.at(x: 30, y: 64).x, 1, accuracy: 0.01, "and the picture is current: white paper where the stroke was cleared")
         XCTAssertLessThan(composite.at(x: 100, y: 64).x, 0.6, "the stroke (on the layer at 50%) still there beyond the clearing")
     }
+
+    /// A layer deleted and brought back from a copy gets a new texture, and every undo
+    /// since goes into that one. An older step that referenced the old texture must not
+    /// swap it back in: it still holds the stroke those undos took away.
+    func testUndoingPastARecreatedLayerDoesNotBringBackAnUndoneStroke() throws {
+        let harness = try EngineHarness(width: 128, height: 128)
+        let viewModel = harness.viewModel, renderer = harness.renderer
+        func ink() -> Float { harness.pixels(of: harness.layerStack.layers[1].texture).at(x: 64, y: 64).w }
+
+        viewModel.saveUndoSnapshot(renderer: renderer, description: "Select", changing: .nothing)   // references the layer
+        harness.draw(StrokeFixtures.line(from: CGPoint(x: 10, y: 64), to: CGPoint(x: 118, y: 64)))
+        XCTAssertGreaterThan(ink(), 0.9)
+        viewModel.saveUndoSnapshot(renderer: renderer, description: "Delete Layer", changing: .everything)   // copies it
+        harness.layerStack.removeLayer(at: 1)
+
+        viewModel.performUndo(renderer: renderer)   // back from the copy, with a new texture
+        XCTAssertEqual(harness.layerStack.layers.count, 2)
+        XCTAssertGreaterThan(ink(), 0.9, "the stroke came back with the layer")
+        viewModel.performUndo(renderer: renderer)   // the stroke
+        XCTAssertEqual(ink(), 0, accuracy: 0.001)
+        viewModel.performUndo(renderer: renderer)   // the selection
+        XCTAssertEqual(ink(), 0, accuracy: 0.001, "undoing a selection must not bring the stroke back")
+    }
+
+    /// A tool that saves a step speculatively takes back that step and no other.
+    func testACancelledToolTakesBackOnlyItsOwnStep() throws {
+        let harness = try EngineHarness(width: 64, height: 64)
+        let viewModel = harness.viewModel, renderer = harness.renderer, undo = viewModel.undoManager
+        viewModel.saveUndoSnapshot(renderer: renderer, description: "Transform", changing: .layer(harness.drawingLayer))
+        let transform = undo.lastStepToken
+        XCTAssertTrue(undo.holds(transform))
+        viewModel.saveUndoSnapshot(renderer: renderer, description: "Delete Layer", changing: .nothing)
+        undo.popLastSnapshot(if: transform)
+        XCTAssertEqual(undo.undoCount, 2, "another step came after it: both stay")
+        undo.popLastSnapshot(if: undo.lastStepToken)
+        XCTAssertEqual(undo.undoCount, 1)
+        undo.popLastSnapshot(if: transform)
+        XCTAssertEqual(undo.undoCount, 0, "now it is the last one")
+        XCTAssertFalse(undo.holds(transform))
+
+        viewModel.saveUndoSnapshot(renderer: renderer, description: "Fill", changing: .layer(harness.drawingLayer))
+        let fill = undo.lastStepToken
+        XCTAssertTrue(undo.holds(fill))
+        viewModel.performUndo(renderer: renderer)
+        XCTAssertFalse(undo.holds(fill), "undone")
+        viewModel.performRedo(renderer: renderer)
+        XCTAssertFalse(undo.holds(fill), "redone is a new step")
+    }
+
+    /// A fill runs in the background. What is painted on the layer meanwhile stays, and a
+    /// fill whose step was undone before it finished never lands.
+    func testAFillLandsOnlyWhereItFilledAndOnlyIfItsStepStillStands() throws {
+        let harness = try EngineHarness(width: 128, height: 128)
+        let viewModel = harness.viewModel, renderer = harness.renderer, layer = harness.drawingLayer
+        let red = StrokeColor(red: 1, green: 0, blue: 0, alpha: 1), green = StrokeColor(red: 0, green: 1, blue: 0, alpha: 1)
+        let blue = StrokeColor(red: 0, green: 0, blue: 1, alpha: 1), yellow = StrokeColor(red: 1, green: 1, blue: 0, alpha: 1)
+        func pixel(_ x: Int, _ y: Int) -> SIMD4<Float> { harness.pixels(of: layer.texture).at(x: x, y: y) }
+
+        // A box in the middle of an empty layer: a fill from a corner reaches everything but it
+        renderer.drawShape(path: CGPath(rect: CGRect(x: 40, y: 40, width: 48, height: 48), transform: nil),
+                           strokeColor: nil, fillColor: red, strokeWidth: 0, layer: layer, context: harness.context)
+        viewModel.saveUndoSnapshot(renderer: renderer, description: "Fill", changing: .layer(layer))
+        let step = viewModel.undoManager.lastStepToken
+        let landed = expectation(description: "filled")
+        BucketFill.fillAsync(renderer: renderer, layer: layer, canvasPoint: CGPoint(x: 5, y: 5), canvasSize: viewModel.canvasSize,
+                             fillColor: blue, tolerance: 0, selectionPath: nil,
+                             shouldApply: { viewModel.undoManager.holds(step) }) { landed.fulfill() }
+        // Painted while the fill is still working out where to go
+        renderer.drawShape(path: CGPath(rect: CGRect(x: 60, y: 60, width: 8, height: 8), transform: nil),
+                           strokeColor: nil, fillColor: green, strokeWidth: 0, layer: layer, context: harness.context)
+        wait(for: [landed], timeout: 20)
+        XCTAssertEqual(pixel(5, 5).z, 1, accuracy: 0.01, "filled from the corner")
+        XCTAssertEqual(pixel(120, 120).z, 1, accuracy: 0.01, "all the way round")
+        XCTAssertEqual(pixel(44, 44).x, 1, accuracy: 0.01, "the box is not filled")
+        XCTAssertEqual(pixel(64, 64).y, 1, accuracy: 0.01, "what was painted meanwhile stays")
+
+        // Undone before it finished: it never lands
+        viewModel.saveUndoSnapshot(renderer: renderer, description: "Fill", changing: .layer(layer))
+        let second = viewModel.undoManager.lastStepToken
+        let skipped = expectation(description: "second fill")
+        BucketFill.fillAsync(renderer: renderer, layer: layer, canvasPoint: CGPoint(x: 5, y: 5), canvasSize: viewModel.canvasSize,
+                             fillColor: yellow, tolerance: 0, selectionPath: nil,
+                             shouldApply: { viewModel.undoManager.holds(second) }) { skipped.fulfill() }
+        viewModel.performUndo(renderer: renderer)
+        wait(for: [skipped], timeout: 20)
+        XCTAssertEqual(pixel(5, 5).z, 1, accuracy: 0.01, "still blue: the undone fill never landed")
+        XCTAssertEqual(pixel(5, 5).x, 0, accuracy: 0.01)
+    }
 }

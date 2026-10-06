@@ -167,4 +167,26 @@ final class IncrementalRenderingTests: XCTestCase {
             }
         }
     }
+
+    /// While the pen is down only the stroke's rectangles are rebuilt — unless a tool wrote
+    /// pixels meanwhile (a fill finishing in the background), which must show at once.
+    func testPixelsAToolWritesMidStrokeShowBeforeThePenLifts() throws {
+        let harness = try EngineHarness(width: 128, height: 128)
+        let viewModel = harness.viewModel, renderer = harness.renderer
+        let points = StrokeFixtures.line(from: CGPoint(x: 10, y: 20), to: CGPoint(x: 118, y: 20))
+        renderer.beginStroke()
+        viewModel.beginStroke(point: points[0])
+        for point in points.dropFirst().prefix(10) { viewModel.continueStroke(point: point) }
+        harness.renderFrameAsTheAppWould()
+        harness.renderFrameAsTheAppWould()   // stroke-only frames from here on
+        XCTAssertEqual(harness.composite().at(x: 64, y: 100).x, 1, accuracy: 0.01, "white paper away from the stroke")
+
+        harness.fill(harness.backgroundLayer, red: 0, green: 0, blue: 1)
+        viewModel.noteContentChanged()
+        harness.renderFrameAsTheAppWould()
+        XCTAssertEqual(harness.composite().at(x: 64, y: 100).z, 1, accuracy: 0.01, "shown before pen-up")
+        XCTAssertEqual(harness.composite().at(x: 64, y: 100).x, 0, accuracy: 0.01)
+        renderer.finalizeStroke()
+        viewModel.endStroke()
+    }
 }

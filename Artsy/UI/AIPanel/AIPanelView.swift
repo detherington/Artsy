@@ -275,19 +275,26 @@ struct AIPanelView: View {
               let nsImage = NSImage(data: result.imageData),
               let cgImage = nsImage.cgImage(forProposedRect: nil, context: nil, hints: nil) else { return }
 
+        let renderer = store.canvasView.renderer!
+        store.canvasView.commitPendingEdits()
+        // Adding a layer is a step to undo, like a stock image; nothing already there changes
+        store.viewModel.saveUndoSnapshot(renderer: renderer, description: "Add AI Image", changing: .nothing)
+        let step = store.viewModel.undoManager.lastStepToken
         do {
             let idx = try layerStack.addLayer(above: layerStack.activeLayerIndex, name: "AI: \(result.model)")
             let layer = layerStack.layers[idx]
 
             // Load the image into the layer texture
-            let renderer = store.canvasView.renderer!
             CanvasDocument.loadCGImageIntoTexture(
                 cgImage: cgImage,
                 texture: layer.texture,
                 context: renderer.context
             )
+            renderer.viewModel?.noteContentChanged()
+            renderer.updateThumbnail(for: layer)
         } catch {
-            // Layer limit reached or other error
+            // Layer limit reached or other error: nothing happened, so nothing to undo
+            store.viewModel.undoManager.popLastSnapshot(if: step)
         }
     }
 }

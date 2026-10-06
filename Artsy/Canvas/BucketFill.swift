@@ -6,14 +6,24 @@ import os.log
 
 /// CPU scanline flood fill for a layer's rgba16Float texture.
 ///
-/// Operates directly on the native F16 texture bytes — no intermediate U8 conversion
-/// — and reuses a single shared staging texture for both the read and write blits.
+/// Operates directly on the native F16 texture bytes — no intermediate U8 conversion.
 /// Main thread stays fully responsive; all heavy work runs on a background queue
-/// triggered by the GPU's `addCompletedHandler`.
+/// triggered by the GPU's `addCompletedHandler`. The fill lands through a mask of the
+/// pixels it reached, so whatever was painted elsewhere on the layer while it ran stays.
 enum BucketFill {
 
     private static let log = OSLog(subsystem: "com.artsy.app", category: "BucketFill")
 
+    /// What a fill found: the pixels it reached, as a mask the size of their bounding box.
+    struct Result {
+        let origin: (x: Int, y: Int)
+        let width: Int, height: Int
+        let mask: [UInt8]
+    }
+
+    /// - Parameter shouldApply: asked on the main thread when the fill is ready to land,
+    ///   seconds later on a big canvas; false if the undo step it was given has been undone
+    ///   meanwhile, or its layer is gone.
     static func fillAsync(
         renderer: CanvasRenderer,
         layer: Layer,
@@ -22,6 +32,7 @@ enum BucketFill {
         fillColor: StrokeColor,
         tolerance: Int,
         selectionPath: CGPath?,
+        shouldApply: @escaping () -> Bool = { true },
         onComplete: @escaping () -> Void
     ) {
         let width = layer.texture.width
@@ -51,36 +62,64 @@ enum BucketFill {
 
         cmdBuf.addCompletedHandler { _ in
             DispatchQueue.global(qos: .userInitiated).async {
-                performFill(
+                let result = performFill(
                     staging: staging,
-                    targetTexture: targetTexture,
                     startX: sx, startY: sy,
                     width: width, height: height,
-                    canvasSize: canvasSize,
                     fillColor: fillColor,
                     tolerance: tolerance,
-                    selectionPath: selectionPath,
-                    context: context
+                    selectionPath: selectionPath
                 )
-                DispatchQueue.main.async(execute: onComplete)
+                DispatchQueue.main.async {
+                    if let result, shouldApply() {
+                        apply(result, color: fillColor, to: targetTexture, context: context)
+                    }
+                    onComplete()
+                }
             }
         }
         cmdBuf.commit()
     }
 
+    /// Write the fill's colour where its mask says, and nowhere else.
+    static func apply(_ result: Result, color: StrokeColor, to target: MTLTexture, context: MetalContext) {
+        let desc = MTLTextureDescriptor.texture2DDescriptor(pixelFormat: .r8Unorm, width: result.width,
+                                                            height: result.height, mipmapped: false)
+        desc.usage = .shaderRead
+        desc.storageMode = .shared
+        guard let mask = context.device.makeTexture(descriptor: desc),
+              let commandBuffer = context.commandQueue.makeCommandBuffer(),
+              let encoder = commandBuffer.makeComputeCommandEncoder() else { return }
+        result.mask.withUnsafeBytes {
+            mask.replace(region: MTLRegion(origin: MTLOrigin(x: 0, y: 0, z: 0),
+                                           size: MTLSize(width: result.width, height: result.height, depth: 1)),
+                         mipmapLevel: 0, withBytes: $0.baseAddress!, bytesPerRow: result.width)
+        }
+        var colour = SIMD4<Float>(color.red, color.green, color.blue, color.alpha)
+        var origin = SIMD2<UInt32>(UInt32(result.origin.x), UInt32(result.origin.y))
+        encoder.setComputePipelineState(context.maskedFillPipelineState)
+        encoder.setTexture(target, index: 0)
+        encoder.setTexture(mask, index: 1)
+        encoder.setBytes(&colour, length: MemoryLayout<SIMD4<Float>>.size, index: 0)
+        encoder.setBytes(&origin, length: MemoryLayout<SIMD2<UInt32>>.size, index: 1)
+        let group = MTLSize(width: 16, height: 16, depth: 1)
+        encoder.dispatchThreadgroups(MTLSize(width: (result.width + 15) / 16, height: (result.height + 15) / 16, depth: 1),
+                                     threadsPerThreadgroup: group)
+        encoder.endEncoding()
+        commandBuffer.commit()
+    }
+
     // MARK: - Background pipeline
 
+    /// The pixels the fill reaches from the seed, as a mask; nil when there is nothing to fill.
     private static func performFill(
         staging: MTLTexture,
-        targetTexture: MTLTexture,
         startX sx: Int, startY sy: Int,
         width: Int, height: Int,
-        canvasSize: CGSize,
         fillColor: StrokeColor,
         tolerance: Int,
-        selectionPath: CGPath?,
-        context: MetalContext
-    ) {
+        selectionPath: CGPath?
+    ) -> Result? {
         let pixelCount = width * height
         let bytesPerRow = width * 8
         let signpostRead = OSSignpostID(log: log)
@@ -117,7 +156,7 @@ enum BucketFill {
         // Already same color at seed → nothing to do.
         if pixels[targetIdx + 0] == newR && pixels[targetIdx + 1] == newG &&
            pixels[targetIdx + 2] == newB && pixels[targetIdx + 3] == newA {
-            return
+            return nil
         }
 
         // Tolerance scaled from 0-100 int to normalized color distance squared.
@@ -129,8 +168,12 @@ enum BucketFill {
         var selMask: [UInt8]? = nil
         if let path = selectionPath {
             selMask = rasterizeMask(path: path, width: width, height: height)
-            if selMask![sy * width + sx] == 0 { return }
+            if selMask![sy * width + sx] == 0 { return nil }
         }
+
+        // The pixels reached, and the box around them
+        var filled = [UInt8](repeating: 0, count: pixelCount)
+        var minX = width, maxX = -1, minY = height, maxY = -1
 
         // 4. Scanline flood fill, unsafe pointers all the way down.
         let signpostFill = OSSignpostID(log: log)
@@ -165,6 +208,7 @@ enum BucketFill {
             func setPixelF16(_ x: Int, _ y: Int) {
                 let i = (y * width + x) * 4
                 p[i] = newR; p[i + 1] = newG; p[i + 2] = newB; p[i + 3] = newA
+                filled[y * width + x] = 255
             }
 
             var stack: [Int32] = [Int32(sx), Int32(sy)]  // flat (x, y) pairs
@@ -182,6 +226,8 @@ enum BucketFill {
 
                 // Fill span
                 for xi in lx...rx { setPixelF16(xi, seedY) }
+                minX = min(minX, lx); maxX = max(maxX, rx)
+                minY = min(minY, seedY); maxY = max(maxY, seedY)
 
                 // Scan neighbor rows for new seeds
                 if seedY > 0 {
@@ -204,32 +250,16 @@ enum BucketFill {
         }
 
         os_signpost(.end, log: log, name: "scanlineFill", signpostID: signpostFill)
+        guard maxX >= minX, maxY >= minY else { return nil }
 
-        // 5. Upload modified pixels back into staging, blit to target.
-        let signpostWrite = OSSignpostID(log: log)
-        os_signpost(.begin, log: log, name: "uploadAndBlit", signpostID: signpostWrite)
-
-        pixels.withUnsafeBytes { raw in
-            staging.replace(
-                region: MTLRegion(
-                    origin: MTLOrigin(x: 0, y: 0, z: 0),
-                    size: MTLSize(width: width, height: height, depth: 1)
-                ),
-                mipmapLevel: 0,
-                withBytes: raw.baseAddress!,
-                bytesPerRow: bytesPerRow
-            )
+        // 5. The mask of what was reached, cropped to its box.
+        let boxW = maxX - minX + 1, boxH = maxY - minY + 1
+        var mask = [UInt8](repeating: 0, count: boxW * boxH)
+        for y in 0..<boxH {
+            let row = (minY + y) * width + minX
+            mask.replaceSubrange(y * boxW ..< (y + 1) * boxW, with: filled[row ..< row + boxW])
         }
-
-        if let cmdBuf = context.commandQueue.makeCommandBuffer(),
-           let blit = cmdBuf.makeBlitCommandEncoder() {
-            blit.copy(from: staging, to: targetTexture)
-            blit.endEncoding()
-            cmdBuf.commit()
-            cmdBuf.waitUntilCompleted()
-        }
-
-        os_signpost(.end, log: log, name: "uploadAndBlit", signpostID: signpostWrite)
+        return Result(origin: (minX, minY), width: boxW, height: boxH, mask: mask)
     }
 
     /// Rasterize a CGPath (canvas coords, Y-up) into an 8-bit mask buffer.

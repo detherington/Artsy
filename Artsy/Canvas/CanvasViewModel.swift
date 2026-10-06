@@ -181,6 +181,11 @@ final class CanvasViewModel: ObservableObject {
 
     /// - Parameter hasPressure: false for a mouse or trackpad, whose "pressure" is a constant.
     func beginStroke(point rawPoint: StrokePoint, hasPressure: Bool = true) {
+        guard rawPoint.isFinite else { return }   // a tablet glitch, not a stroke
+        // A shape the last stroke was left snapped to has nothing to do with this one
+        snappedPath = nil
+        snappedShapeName = nil
+        snapAnchor = nil
         strokeHasPressure = hasPressure
         recorder?.beginStroke(settingsFrom: self, firstPoint: rawPoint)
         let point = snappedToGuides(rawPoint)
@@ -238,6 +243,7 @@ final class CanvasViewModel: ObservableObject {
     }
 
     func continueStroke(point rawPoint: StrokePoint) {
+        guard rawPoint.isFinite else { return }
         recorder?.append(rawPoint)
         guard isDrawing else { return }
         let point = snappedToGuides(rawPoint)
@@ -249,8 +255,9 @@ final class CanvasViewModel: ObservableObject {
     /// Snap the stroke to a shape once the pen has held still long enough at its end; snap
     /// back to the stroke as drawn once the pen moves on, and keep drawing it.
     private func checkShapeSnap() {
+        // A brush that sprays while the pen rests is held still on purpose
         guard snapsShapesOnHold, currentBrush.smudgeSettings == nil, let path = activePath,
-              let end = path.samples.last?.position else { return }
+              !path.style.spraysWhileResting, let end = path.samples.last?.position else { return }
         if snappedPath != nil {
             if let anchor = snapAnchor, hypot(end.x - anchor.x, end.y - anchor.y) > 6 {
                 snappedPath = nil
@@ -262,15 +269,24 @@ final class CanvasViewModel: ObservableObject {
         guard path.holdDuration >= Self.shapeSnapHold, path.samples.count >= 8,
               let shape = ShapeRecognizer.recognize(path.samples.map(\.position)) else { return }
 
-        // The shape at the stroke's usual pressure, drawn as a stroke itself
-        let pressures = path.samples.map(\.pressure).sorted()
-        let pressure = pressures[pressures.count / 2]
+        // The shape drawn as a stroke itself, at the stroke's usual pressure, tilt and pace,
+        // so a brush that answers to any of them draws it the way it drew the stroke
+        func median(_ values: [Float]) -> Float {
+            let sorted = values.sorted()
+            return sorted[sorted.count / 2]
+        }
+        let samples = path.samples
+        let pressure = median(samples.map(\.pressure))
+        let tiltX = median(samples.map(\.tiltX)), tiltY = median(samples.map(\.tiltY))
+        let rotation = median(samples.map(\.rotation))
+        let drawingTime = max(samples[samples.count - 1].timestamp - samples[0].timestamp - path.holdDuration, 0.05)
+        let speed = max(Double(path.points[path.points.count - 1].distance) / drawingTime, 1)   // px per second
         var style = path.style
         style.easeLength = 0
         let snapped = StrokePath(style: style)
         for (index, position) in shape.points(spacing: 2).enumerated() {
-            snapped.append(StrokePoint(position: position, pressure: pressure, tiltX: 0, tiltY: 0, rotation: 0,
-                                       timestamp: Double(index) * 0.002))
+            snapped.append(StrokePoint(position: position, pressure: pressure, tiltX: tiltX, tiltY: tiltY,
+                                       rotation: rotation, timestamp: Double(index) * 2 / speed))
         }
         snappedPath = snapped
         snappedShapeName = shape.name
@@ -311,18 +327,14 @@ final class CanvasViewModel: ObservableObject {
         guard let layerStack = layerStack else { return }
         undoManager.undo(layerStack: layerStack, viewModel: self, context: renderer.context)
         markDirty()
-        DispatchQueue.global(qos: .userInitiated).async {
-            renderer.updateAllThumbnails(in: layerStack)
-        }
+        renderer.updateAllThumbnails(in: layerStack)
     }
 
     func performRedo(renderer: CanvasRenderer) {
         guard let layerStack = layerStack else { return }
         undoManager.redo(layerStack: layerStack, viewModel: self, context: renderer.context)
         markDirty()
-        DispatchQueue.global(qos: .userInitiated).async {
-            renderer.updateAllThumbnails(in: layerStack)
-        }
+        renderer.updateAllThumbnails(in: layerStack)
     }
 
     // MARK: - Color

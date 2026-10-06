@@ -285,4 +285,76 @@ final class CanvasViewTests: XCTestCase {
         view.draw()
         XCTAssertEqual(composite().at(x: 128, y: 128).x, 1, accuracy: 0.01, "undo should restore blank paper")
     }
+
+    private func key(_ character: String, code: UInt16) -> NSEvent {
+        NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: [], timestamp: 0, windowNumber: window.windowNumber,
+                         context: nil, characters: character, charactersIgnoringModifiers: character, isARepeat: false,
+                         keyCode: code)!
+    }
+
+    /// The renderer reads the tool, brush and colours every frame; they wait for the pen to lift.
+    func testKeysAndUndoWaitForThePenToLift() throws {
+        view.mouseDown(with: mouse(.leftMouseDown, atCanvas: CGPoint(x: 40, y: 128), time: 0))
+        for step in 1...10 {
+            view.mouseDragged(with: mouse(.leftMouseDragged, atCanvas: CGPoint(x: 40 + CGFloat(step) * 8, y: 128),
+                                          time: Double(step) * 0.008))
+        }
+        view.keyDown(with: key("e", code: 14))
+        XCTAssertEqual(viewModel.currentTool, .brush, "a tool key waits for the pen to lift")
+        XCTAssertEqual(viewModel.currentBrush.name, BrushDescriptor.hardRound.name)
+        view.performUndoAction()
+        XCTAssertTrue(viewModel.isDrawing, "so does undo")
+
+        view.mouseUp(with: mouse(.leftMouseUp, atCanvas: CGPoint(x: 120, y: 128), time: 0.1))
+        view.draw()
+        XCTAssertLessThan(composite().at(x: 80, y: 128).x, 0.05, "the stroke was finished")
+        XCTAssertEqual(viewModel.undoManager.undoCount, 1)
+        view.keyDown(with: key("e", code: 14))
+        XCTAssertEqual(viewModel.currentTool, .eraser, "and keys work again")
+    }
+
+    /// Cancelling a transform takes back the step it saved, and only that one.
+    func testCancellingATransformTakesBackOnlyItsOwnStep() throws {
+        XCTAssertEqual(viewModel.undoManager.undoCount, 0)
+        viewModel.currentTool = .transform   // starts a session, which saves a step
+        XCTAssertNotNil(viewModel.transformSession)
+        XCTAssertEqual(viewModel.undoManager.undoCount, 1)
+        view.keyDown(with: key("\u{1B}", code: 53))   // Escape
+        XCTAssertNil(viewModel.transformSession)
+        XCTAssertEqual(viewModel.undoManager.undoCount, 0, "the step it saved is taken back")
+
+        viewModel.currentTool = .brush
+        viewModel.currentTool = .transform
+        viewModel.saveUndoSnapshot(renderer: view.renderer, description: "Something else", changing: .nothing)
+        view.keyDown(with: key("\u{1B}", code: 53))
+        XCTAssertNil(viewModel.transformSession)
+        XCTAssertEqual(viewModel.undoManager.undoCount, 2, "a step saved since is not the session's to take back")
+    }
+
+    /// A locked layer takes no shapes and no deletions, as it takes no strokes.
+    func testALockedLayerTakesNoShapesOrDeletions() throws {
+        view.mouseDown(with: mouse(.leftMouseDown, atCanvas: CGPoint(x: 40, y: 128), time: 0))
+        view.mouseDragged(with: mouse(.leftMouseDragged, atCanvas: CGPoint(x: 120, y: 128), time: 0.05))
+        view.mouseUp(with: mouse(.leftMouseUp, atCanvas: CGPoint(x: 120, y: 128), time: 0.1))
+        view.draw()
+        XCTAssertLessThan(composite().at(x: 80, y: 128).x, 0.05, "a stroke")
+        let steps = viewModel.undoManager.undoCount
+
+        viewModel.layerStack.activeLayer?.isLocked = true
+        viewModel.selectionPath = CGPath(rect: CGRect(x: 0, y: 0, width: 256, height: 256), transform: nil)
+        view.keyDown(with: key("\u{7F}", code: 51))   // Delete
+        view.draw()
+        XCTAssertLessThan(composite().at(x: 80, y: 128).x, 0.05, "the stroke stays")
+
+        viewModel.selectionPath = nil
+        viewModel.currentTool = .shape
+        viewModel.currentShape = .rectangle
+        viewModel.shapeStrokeEnabled = true
+        view.mouseDown(with: mouse(.leftMouseDown, atCanvas: CGPoint(x: 40, y: 40), time: 0.2))
+        view.mouseDragged(with: mouse(.leftMouseDragged, atCanvas: CGPoint(x: 200, y: 100), time: 0.25))
+        view.mouseUp(with: mouse(.leftMouseUp, atCanvas: CGPoint(x: 200, y: 100), time: 0.3))
+        view.draw()
+        XCTAssertEqual(composite().at(x: 120, y: 40).x, 1, accuracy: 0.01, "no rectangle on a locked layer")
+        XCTAssertEqual(viewModel.undoManager.undoCount, steps, "and no steps for what did not happen")
+    }
 }

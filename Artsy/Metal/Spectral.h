@@ -208,7 +208,7 @@ static inline float3 encode(float3 c) {
 /// `mixLinearSRGB` for the canvas's Display P3 colours, which are gamma-encoded.
 static inline float3 mixP3(float3 a, float3 b, float t) {
     float3 mixed = mixLinearSRGB(p3ToSRGB(decode(saturate(a))), p3ToSRGB(decode(saturate(b))), t);
-    return encode(max(sRGBToP3(mixed), 0.0));
+    return encode(saturate(sRGBToP3(mixed)));
 }
 
 } // namespace spectral

@@ -405,6 +405,73 @@ Three suites run the whole engine rather than one feature at a time:
   — rendered through the display against a golden, then saved, loaded and rendered again
   within 8-bit-on-disk tolerance.
 
+## Review pass
+
+With the steps done, the engine was read through in five parts — undo and snapshots, the
+renderer and compositing, the shaders and what feeds them, stroke input and geometry, and
+the document format with the tools — looking for defects rather than style, and every
+finding traced in the code before it was acted on. What that turned up, fixed, in rough
+order of harm:
+
+- **Opening a document lost its thickness and guides.** The app's File ▸ Open had its own
+  loader, older than `CanvasDocument.load`, which the tests exercise. Impasto relief and
+  guides survived a save and load in the tests and vanished in the app. There is one
+  loader now.
+- **Saving could lose or misattach pixels.** Saving during a transform wrote the layer
+  without the pixels the tool was holding; a save after a layer lost its thickness, or was
+  deleted, left the old height file in place for whichever layer took that index next
+  time; a save was written in place, so a failure part way left a mixed document. Tools
+  commit before a save or export; a save now writes a fresh bundle on the document's
+  volume and swaps it in whole, or leaves the old one untouched.
+- **Undo could resurrect an undone stroke.** When a referenced layer's texture object
+  differed from the live one (a layer deleted and brought back from a copy), restoring
+  swapped the old object back in — which no later undo had written to. A referenced
+  layer that exists is left alone; references only rebuild layers that are gone.
+- **Tools that race.** A bucket fill read the layer, worked on a background thread and
+  wrote the whole texture back, so a stroke made meanwhile was overwritten and an undo
+  meanwhile was inverted. It now lands through a mask of the pixels it reached, and only
+  if its own undo step is still there to take it back. Cancelling a transform popped
+  whatever undo step was on top, not necessarily its own; a step saved since (a layer
+  deleted mid-transform) was lost and the layer orphaned. Steps are named now. Keyboard
+  shortcuts and undo were live while the pen was down — a tool key orphaned the stroke, a
+  brush key changed it halfway, an undo mid-stroke corrupted a smudge's or thick paint's
+  undo step — and wait for pen-up.
+- **Layer settings and the layer list.** Visibility, blend mode and opacity edits were
+  not undo steps, yet an unrelated undo reverted them; reordering saved its step after
+  the reorder, so undo did nothing; the AI image import saved no step and was dropped by
+  the next unrelated undo; layer locks were ignored by Move Selection, Delete Selection
+  and Shape; cut of a whole layer kept its thickness; new layers were never cleared and
+  could show whatever a freed texture had held; merge and flatten ignored blend modes;
+  a device reporting no memory budget got two layers.
+- **Colour.** Layer files, thumbnails, the clipboard and pastes were tagged sRGB while
+  holding Display P3 components, so images from and to other apps were shifted — and an
+  opened image was converted into P3 and then back. Everything is P3 now; a layer file
+  from an older document is read as the components it holds, whatever its profile says.
+- **Shaders and brushes.** A smudge brush whose image tip was missing sampled the paper
+  as its tip; an eraser with wet settings previewed as a wash; thick paint laid full
+  thickness at any opacity (Oil at 95% now lays 5% less, hence two re-recorded goldens);
+  the pigment mix could exceed white by ~1%; a calligraphy nib was not mirrored under
+  symmetry; a snapped shape was drawn at a fixed 1000 px/s so velocity brushes drew it
+  thin; an airbrush held still snapped instead of spraying; a transform preview dropped
+  the content's relief; a tool writing pixels mid-stroke (a fill finishing) was not shown
+  until pen-up; thumbnails were made on the main thread behind the frame in flight.
+- **Untrusted files.** A damaged `.abr` looped forever; a `.brush` ZIP could claim
+  gigabytes; a brush file could say spacing 0 and trap on a tap; sampled tips between
+  4096 and 8192 px imported but never loaded; a document could say any canvas size.
+
+Each fix has a test beside the ones already there (`DocumentTests` is new); 205 in all.
+
+Left as they are, noted:
+
+- Saving reads every layer back at once, so at the 8192² × 12 limit it wants 6 GB of
+  shared textures beside the layers. A per-layer readback would halve the peak.
+- A smudge dab much larger than its 256-texel carry under-samples the layer, which can
+  shimmer along a wide smear.
+- Stroke recordings do not capture guides or the shape-snap preference, so a replay with
+  either set differently renders differently; the tests set both.
+- The remaining review items are UI-level and were fixed without end-to-end tests: the
+  layer panel's undo steps, the AI and stock-image imports' steps.
+
 ## Measurements
 
 M4 Pro, optimised build, 2048² canvas, Soft Round at 24 px. From `StrokeBenchmarkTests`,

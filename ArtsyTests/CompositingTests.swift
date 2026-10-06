@@ -201,4 +201,35 @@ final class CompositingTests: XCTestCase {
         XCTAssertEqual(layer.at(x: 100, y: 60).w, 0.5, accuracy: 0.02)
         XCTAssertEqual(layer.at(x: 100, y: 110).w, 1, accuracy: 0.001, "outside the eraser's path")
     }
+
+    /// A texture holds whatever its memory held before; a new layer must not.
+    func testANewLayerIsEmpty() throws {
+        let harness = try EngineHarness(width: 64, height: 64)
+        // Churn: textures filled and freed, whose memory a new one may be given
+        for _ in 0..<4 {
+            harness.fill(try harness.addLayer(), red: 1, green: 0, blue: 0)
+            harness.layerStack.removeLayer(at: harness.layerStack.layers.count - 1)
+        }
+        let index = try harness.layerStack.addLayer(above: 1)   // not the harness's addLayer, which clears
+        let pixels = harness.pixels(of: harness.layerStack.layers[index].texture)
+        XCTAssertEqual(pixels.values.max() ?? 1, 0, "nothing in it")
+    }
+
+    /// Merging a layer down keeps its blend mode: the result is what the canvas showed.
+    func testMergingDownKeepsTheBlendMode() throws {
+        let harness = try EngineHarness(width: 64, height: 64)
+        harness.fill(harness.drawingLayer, red: 0.8, green: 0.8, blue: 0.2)
+        let upper = try harness.addLayer(blendMode: .multiply)
+        harness.fill(upper, red: 0.2, green: 0.9, blue: 0.9)
+        harness.renderFrame()
+        let before = harness.composite()
+        XCTAssertEqual(before.at(x: 32, y: 32).x, 0.16, accuracy: 0.01, "multiplied")
+
+        XCTAssertTrue(harness.layerStack.mergeDown(at: 2, renderer: harness.renderer))
+        harness.renderFrame()
+        let after = harness.composite()
+        var worst: Float = 0
+        for i in before.values.indices { worst = max(worst, abs(before.values[i] - after.values[i])) }
+        XCTAssertEqual(worst, 0, accuracy: 0.01, "merged as it was shown")
+    }
 }

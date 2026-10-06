@@ -144,6 +144,7 @@ final class BrushLibrary: ObservableObject {
 
     /// Write 8-bit coverage as a PNG whose alpha channel is the shape, named after `basedOn`.
     private func saveTexture(coverage: [UInt8], width: Int, height: Int, basedOn: String) throws -> String {
+        let (coverage, width, height) = Self.fitted(coverage, width: width, height: height)
         var rgba = [UInt8](repeating: 0, count: width * height * 4)
         for i in 0..<(width * height) { rgba[i * 4 + 3] = coverage[i] }
         return try saveTexturePNG(rgba: rgba, width: width, height: height, alpha: true, basedOn: basedOn)
@@ -151,11 +152,33 @@ final class BrushLibrary: ObservableObject {
 
     /// Write 8-bit height as a flat grey PNG (brightness is height), named after `basedOn`.
     private func saveTexture(height pixels: [UInt8], width: Int, height: Int, basedOn: String) throws -> String {
+        let (pixels, width, height) = Self.fitted(pixels, width: width, height: height)
         var rgba = [UInt8](repeating: 255, count: width * height * 4)
         for i in 0..<(width * height) {
             rgba[i * 4] = pixels[i]; rgba[i * 4 + 1] = pixels[i]; rgba[i * 4 + 2] = pixels[i]
         }
         return try saveTexturePNG(rgba: rgba, width: width, height: height, alpha: false, basedOn: basedOn)
+    }
+
+    /// An 8-bit image halved until the texture library will load it (a sampled Photoshop
+    /// tip can be 8192 px across).
+    static func fitted(_ pixels: [UInt8], width: Int, height: Int) -> ([UInt8], Int, Int) {
+        var pixels = pixels, width = width, height = height
+        while width > BrushTextureLibrary.maxImageSide || height > BrushTextureLibrary.maxImageSide {
+            let w = max(1, width / 2), h = max(1, height / 2)
+            var out = [UInt8](repeating: 0, count: w * h)
+            for y in 0..<h {
+                let y0 = y * 2, y1 = min(y * 2 + 1, height - 1)
+                for x in 0..<w {
+                    let x0 = x * 2, x1 = min(x * 2 + 1, width - 1)
+                    let sum = Int(pixels[y0 * width + x0]) + Int(pixels[y0 * width + x1])
+                            + Int(pixels[y1 * width + x0]) + Int(pixels[y1 * width + x1])
+                    out[y * w + x] = UInt8((sum + 2) / 4)
+                }
+            }
+            pixels = out; width = w; height = h
+        }
+        return (pixels, width, height)
     }
 
     private func saveTexturePNG(rgba: [UInt8], width: Int, height: Int, alpha: Bool, basedOn: String) throws -> String {

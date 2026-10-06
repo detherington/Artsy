@@ -87,8 +87,10 @@ final class SmudgeRenderer {
             }
         }
 
-        let tipTexture = context.brushTextures.tipTexture(for: settings.tip) ?? paper
-        let tipIsTexture: Int32 = settings.tip == .round ? 0 : 1
+        // A tip whose image is missing is round, as in StrokeRenderer
+        let tip = context.brushTextures.tipTexture(for: settings.tip)
+        let tipTexture = tip ?? paper
+        let tipIsTexture: Int32 = tip == nil ? 0 : 1
         var transform = StrokeRenderer.orthographicProjection(
             left: 0, right: Float(canvasSize.width),
             bottom: 0, top: Float(canvasSize.height),

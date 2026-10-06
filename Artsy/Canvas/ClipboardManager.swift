@@ -149,7 +149,7 @@ enum ClipboardManager {
             )
         }
 
-        guard let colorSpace = CGColorSpace(name: CGColorSpace.sRGB),
+        guard let colorSpace = CGColorSpace(name: CGColorSpace.displayP3),
               let provider = CGDataProvider(data: srcData as CFData) else { return nil }
 
         let f16Bitmap: UInt32 =
@@ -211,7 +211,7 @@ enum ClipboardManager {
         let outW = Int(bounds.width.rounded())
         let outH = Int(bounds.height.rounded())
 
-        guard let colorSpace = CGColorSpace(name: CGColorSpace.sRGB),
+        guard let colorSpace = CGColorSpace(name: CGColorSpace.displayP3),
               let ctx = CGContext(
                 data: nil,
                 width: outW, height: outH,

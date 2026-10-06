@@ -32,7 +32,7 @@ final class Layer: Identifiable, ObservableObject {
     @Published var opacity: Float = 1.0
     @Published var blendMode: LayerBlendMode = .normal
 
-    var texture: MTLTexture
+    let texture: MTLTexture
     /// Paint thickness per pixel (impasto), the same size as `texture`. Nil until a brush
     /// that lays thick paint has been used on the layer; whoever creates it clears it.
     var heightTexture: MTLTexture?

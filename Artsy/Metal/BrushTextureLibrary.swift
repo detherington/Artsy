@@ -9,6 +9,9 @@ import ImageIO
 /// The built-in ones are generated here rather than shipped as image files, from fixed
 /// seeds, so every launch (and every test run) gets the same pixels.
 final class BrushTextureLibrary {
+    /// The largest tip or grain image that is loaded, per side.
+    static let maxImageSide = 4096
+
     private let device: MTLDevice
     private var tips: [StampSettings.Tip: MTLTexture] = [:]
     private var grains: [StampSettings.Grain.Texture: MTLTexture] = [:]
@@ -82,7 +85,7 @@ final class BrushTextureLibrary {
               let source = CGImageSourceCreateWithURL(directory.appendingPathComponent(name) as CFURL, nil),
               let image = CGImageSourceCreateImageAtIndex(source, 0, nil) else { return nil }
         let width = image.width, height = image.height
-        guard width > 0, height > 0, width <= 4096, height <= 4096 else { return nil }
+        guard width > 0, height > 0, width <= Self.maxImageSide, height <= Self.maxImageSide else { return nil }
 
         var rgba = [UInt8](repeating: 0, count: width * height * 4)
         let drawn = rgba.withUnsafeMutableBytes { raw -> Bool in

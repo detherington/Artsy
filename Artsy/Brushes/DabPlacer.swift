@@ -51,7 +51,7 @@ struct DabPlacer {
         // is nearly invisible. Put down as many as cover any one spot in the middle of a
         // stroke, so a tap leaves a dot as dense as the stroke would be.
         let isTap = points[points.count - 1].distance <= 0
-        let copies = isTap ? max(1, Int((0.5 / settings.spacing).rounded())) : 1
+        let copies = isTap ? max(1, Int((0.5 / max(settings.spacing, 0.01)).rounded())) : 1
 
         while nextDistance <= limit {
             // The segment of the path that contains nextDistance
