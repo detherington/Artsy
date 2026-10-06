@@ -1,4 +1,5 @@
 import XCTest
+import AppKit
 @testable import Artsy
 
 /// Alpha handling from stroke shader to composite. Canvas textures are premultiplied;
@@ -105,6 +106,30 @@ final class CompositingTests: XCTestCase {
         XCTAssertEqual(pixel.x, 0.375, accuracy: 0.01)
         XCTAssertEqual(pixel.y, 0.5, accuracy: 0.01)
         XCTAssertEqual(pixel.z, 0.25, accuracy: 0.01)
+    }
+
+    // MARK: - Thumbnails
+
+    /// Layer thumbnails are shrunk on the GPU; they still have to show the layer.
+    func testLayerThumbnailShowsTheLayer() throws {
+        let harness = try EngineHarness(width: 1024, height: 512)
+        harness.fill(harness.drawingLayer, red: 1, green: 1, blue: 1)
+        harness.viewModel.brushSize = 200
+        // A black band down the left quarter of the canvas
+        harness.draw(StrokeFixtures.line(from: CGPoint(x: 128, y: -50), to: CGPoint(x: 128, y: 562), pressure: 1...1))
+
+        let thumbnail = try XCTUnwrap(harness.renderer.generateThumbnail(for: harness.drawingLayer))
+        XCTAssertEqual(thumbnail.size, NSSize(width: 64, height: 32))
+        let bitmap = NSBitmapImageRep(cgImage: try XCTUnwrap(thumbnail.cgImage(forProposedRect: nil, context: nil, hints: nil)))
+        func brightness(_ x: Int, _ y: Int) -> CGFloat { bitmap.colorAt(x: x, y: y)?.redComponent ?? -1 }
+        XCTAssertLessThan(brightness(8, 16), 0.1, "the band")
+        XCTAssertGreaterThan(brightness(40, 16), 0.9, "bare layer")
+        XCTAssertGreaterThan(brightness(60, 4), 0.9)
+
+        // A canvas too small to need shrinking still gets one.
+        let small = try EngineHarness(width: 100, height: 200)
+        small.fill(small.drawingLayer, red: 0, green: 0, blue: 1)
+        XCTAssertEqual(try XCTUnwrap(small.renderer.generateThumbnail(for: small.drawingLayer)).size, NSSize(width: 32, height: 64))
     }
 
     // MARK: - Opacity slider

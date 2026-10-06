@@ -41,6 +41,7 @@ final class EngineHarness {
         viewModel.pressureCurve = .linear
         viewModel.smoothingMode = .none
         viewModel.symmetryMode = .off
+        viewModel.easesStrokesWithoutPressure = true
     }
 
     // MARK: - Setup
@@ -84,10 +85,12 @@ final class EngineHarness {
 
     /// Replay one stroke the way the app sees it: pen down, samples arriving with frames
     /// rendered in between, pen up.
-    func draw(_ points: [StrokePoint], pointsPerFrame: Int = 3) {
+    /// - Parameter hasPressure: false to draw as a mouse would (the samples' pressure is
+    ///   then a constant the engine may ease in and out).
+    func draw(_ points: [StrokePoint], pointsPerFrame: Int = 3, hasPressure: Bool = true) {
         guard let first = points.first else { return }
         renderer.beginStroke()
-        viewModel.beginStroke(point: first)
+        viewModel.beginStroke(point: first, hasPressure: hasPressure)
         for (index, point) in points.dropFirst().enumerated() {
             viewModel.continueStroke(point: point)
             if (index + 1) % pointsPerFrame == 0 { renderFrame() }
@@ -101,7 +104,7 @@ final class EngineHarness {
             XCTFail("Unknown brush \"\(stroke.brushName)\" in recorded stroke", file: file, line: line)
             return
         }
-        draw(stroke.points.map(\.strokePoint))
+        draw(stroke.points.map(\.strokePoint), hasPressure: stroke.hasPressure ?? true)
     }
 
     // MARK: - Readback

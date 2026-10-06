@@ -293,6 +293,21 @@ fragment float4 compositeNormal(
     return layer.sample(s, in.texCoord) * layerOpacity;
 }
 
+// Shrinks a texture to a quarter of its size: four bilinear taps, each averaging a 2x2
+// block, together a 4x4 box filter. Used to make thumbnails without reading a full layer back.
+fragment float4 downsampleFragment(
+    CompositeVertexOut in [[stage_in]],
+    texture2d<float> source [[texture(0)]],
+    sampler s [[sampler(0)]]
+) {
+    float2 texel = 1.0 / float2(source.get_width(), source.get_height());
+    float4 sum = source.sample(s, in.texCoord + texel * float2(-1.0, -1.0))
+               + source.sample(s, in.texCoord + texel * float2( 1.0, -1.0))
+               + source.sample(s, in.texCoord + texel * float2(-1.0,  1.0))
+               + source.sample(s, in.texCoord + texel * float2( 1.0,  1.0));
+    return sum * 0.25;
+}
+
 // Writes transparent black; drawn under a scissor rect to clear part of a texture.
 fragment float4 clearFragment(CompositeVertexOut in [[stage_in]]) {
     return float4(0.0);

@@ -23,6 +23,8 @@ struct RecordedStroke: Codable, Equatable {
     var smoothingStrength: Float
     /// "off", "horizontal", "vertical", "quad" or "radial:N"
     var symmetry: String
+    /// False for a mouse or trackpad. Absent in older recordings, which were all treated as pens.
+    var hasPressure: Bool?
     var points: [RecordedPoint]
 
     /// Snapshot the view model's current drawing settings; points are added as they arrive.
@@ -35,6 +37,7 @@ struct RecordedStroke: Codable, Equatable {
         self.smoothingMode = viewModel.smoothingMode
         self.smoothingStrength = viewModel.smoothingStrength
         self.symmetry = viewModel.symmetryMode.recordingKey
+        self.hasPressure = viewModel.strokeHasPressure
         self.points = points
     }
 

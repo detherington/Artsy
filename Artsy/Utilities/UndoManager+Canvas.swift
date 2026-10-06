@@ -16,7 +16,14 @@ final class CanvasUndoManager {
 
     private var undoStack: [Entry] = []
     private var redoStack: [Entry] = []
-    let maxUndoLevels: Int = 25
+
+    /// Most steps kept, however little memory they take.
+    let maxUndoLevels: Int = 200
+    /// Whole-stack snapshots are large, so memory is the real limit: history may use what
+    /// this many of them would. Strokes store a small rectangle each and so go much deeper.
+    let wholeStackSnapshotsInBudget = 25
+    /// Size of one whole-stack snapshot of the canvas, as last seen.
+    private var stackBytes = 0
 
     struct LayerSnapshot {
         let id: UUID
@@ -51,27 +58,39 @@ final class CanvasUndoManager {
     /// Save the full layer stack state BEFORE performing an action.
     func saveSnapshot(layerStack: LayerStack, selectionPath: CGPath?, context: MetalContext, description: String) {
         guard let snapshot = captureStack(layerStack: layerStack, selectionPath: selectionPath, context: context, description: description) else { return }
+        noteStackSize(layerStack)
         push(.stack(snapshot))
     }
 
     /// Save one rectangle of a layer BEFORE a stroke is merged into it.
     /// The copy is encoded into `commandBuffer`, so it runs ahead of whatever that buffer
     /// does to the layer next.
-    func saveRegion(of layer: Layer, region: MTLScissorRect, context: MetalContext,
+    func saveRegion(of layer: Layer, in layerStack: LayerStack, region: MTLScissorRect, context: MetalContext,
                     description: String, commandBuffer: MTLCommandBuffer) {
         guard let snapshot = captureRegion(of: layer, region: region, context: context,
                                            description: description, commandBuffer: commandBuffer) else { return }
+        noteStackSize(layerStack)
         push(.region(snapshot))
+    }
+
+    private func noteStackSize(_ layerStack: LayerStack) {
+        stackBytes = layerStack.layers.reduce(0) { $0 + $1.texture.width * $1.texture.height * 8 }
     }
 
     private func push(_ entry: Entry) {
         undoStack.append(entry)
         redoStack.removeAll()
 
-        while undoStack.count > maxUndoLevels {
-            undoStack.removeFirst()
+        // Drop the oldest steps once there are too many or they hold too much memory.
+        let budget = stackBytes * wholeStackSnapshotsInBudget
+        var used = undoStack.reduce(0) { $0 + Self.bytes(of: $1) }
+        while undoStack.count > 1, undoStack.count > maxUndoLevels || used > budget {
+            used -= Self.bytes(of: undoStack.removeFirst())
         }
     }
+
+    /// Number of steps that can be undone.
+    var undoCount: Int { undoStack.count }
 
     /// Undo: restore the previous snapshot.
     func undo(layerStack: LayerStack, viewModel: CanvasViewModel, context: MetalContext) {
@@ -131,13 +150,15 @@ final class CanvasUndoManager {
 
     /// Bytes of texture memory held by the undo and redo stacks.
     var textureBytes: Int {
-        (undoStack + redoStack).reduce(0) { total, entry in
-            switch entry {
-            case .stack(let snapshot):
-                return total + snapshot.layers.reduce(0) { $0 + $1.texture.width * $1.texture.height * 8 }
-            case .region(let snapshot):
-                return total + snapshot.texture.width * snapshot.texture.height * 8
-            }
+        (undoStack + redoStack).reduce(0) { $0 + Self.bytes(of: $1) }
+    }
+
+    private static func bytes(of entry: Entry) -> Int {
+        switch entry {
+        case .stack(let snapshot):
+            return snapshot.layers.reduce(0) { $0 + $1.texture.width * $1.texture.height * 8 }
+        case .region(let snapshot):
+            return snapshot.texture.width * snapshot.texture.height * 8
         }
     }
 

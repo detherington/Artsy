@@ -295,7 +295,7 @@ class CanvasView: MTKView {
         NSEvent.isMouseCoalescingEnabled = false
 
         renderer.beginStroke()
-        viewModel.beginStroke(point: canvasPoint)
+        viewModel.beginStroke(point: canvasPoint, hasPressure: TabletEventHandler.isTabletEvent(event))
     }
 
     private func handleDrawingMouseDragged(_ event: NSEvent) {

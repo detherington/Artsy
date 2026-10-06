@@ -27,6 +27,8 @@ final class MetalContext {
     let compositeErasePipelineState: MTLRenderPipelineState
     /// Writes transparent black; used under a scissor rect to clear part of a texture.
     let clearPipelineState: MTLRenderPipelineState
+    /// Shrinks a texture to a quarter of its size with a box filter.
+    let downsamplePipelineState: MTLRenderPipelineState
     let displayPipelineState: MTLRenderPipelineState
     let maskedCutPipelineState: MTLComputePipelineState
     let maskedClearPipelineState: MTLComputePipelineState
@@ -166,6 +168,10 @@ final class MetalContext {
         self.clearPipelineState = try MetalContext.makeCompositePipeline(
             device: device, library: library, vertexDescriptor: compVD,
             fragmentFunction: "clearFragment", blending: .replace
+        )
+        self.downsamplePipelineState = try MetalContext.makeCompositePipeline(
+            device: device, library: library, vertexDescriptor: compVD,
+            fragmentFunction: "downsampleFragment", blending: .replace
         )
 
         // Display

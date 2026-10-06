@@ -192,6 +192,25 @@ final class CompositorPipeline {
         encoder.endEncoding()
     }
 
+    /// Fill `destination` with `source` shrunk to fit it. Meant for a destination a quarter
+    /// the size of the source; chain calls for more.
+    func downsample(_ source: MTLTexture, into destination: MTLTexture, commandBuffer: MTLCommandBuffer) {
+        var identity = float4x4(diagonal: SIMD4<Float>(1, 1, 1, 1))
+        let passDesc = MTLRenderPassDescriptor()
+        passDesc.colorAttachments[0].texture = destination
+        passDesc.colorAttachments[0].loadAction = .dontCare
+        passDesc.colorAttachments[0].storeAction = .store
+
+        guard let encoder = commandBuffer.makeRenderCommandEncoder(descriptor: passDesc) else { return }
+        encoder.setRenderPipelineState(context.downsamplePipelineState)
+        encoder.setVertexBuffer(quadVertexBuffer, offset: 0, index: 0)
+        encoder.setVertexBytes(&identity, length: MemoryLayout<float4x4>.size, index: 1)
+        encoder.setFragmentTexture(source, index: 0)
+        encoder.setFragmentSamplerState(context.linearSampler, index: 0)
+        encoder.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: 6)
+        encoder.endEncoding()
+    }
+
     /// Clear rectangles of a texture to transparent.
     func clear(_ texture: MTLTexture, regions: [MTLScissorRect], commandBuffer: MTLCommandBuffer) {
         guard !regions.isEmpty else { return }

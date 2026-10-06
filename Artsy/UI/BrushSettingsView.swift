@@ -141,7 +141,14 @@ struct BrushSettingsContent: View {
                     .foregroundColor(.gray)
                     .frame(width: 52, alignment: .leading)
 
-                Picker("", selection: $viewModel.smoothingMode) {
+                Picker("", selection: Binding(
+                    get: { viewModel.smoothingMode },
+                    set: {
+                        viewModel.smoothingMode = $0
+                        // Remembered across launches; the amount below belongs to the brush.
+                        AppPreferences.shared.smoothingMode = $0
+                    }
+                )) {
                     ForEach(SmoothingMode.allCases) { mode in
                         Text(mode.rawValue).tag(mode)
                     }

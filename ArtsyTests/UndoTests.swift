@@ -82,6 +82,34 @@ final class UndoTests: XCTestCase {
         XCTAssertLessThan(harness.viewModel.undoManager.textureBytes, wholeLayer / 50)
     }
 
+    /// Strokes are cheap to keep, so history goes well past the old 25 steps.
+    func testManyStrokesCanBeUndone() throws {
+        let harness = try EngineHarness(width: 256, height: 256)
+        for index in 0..<60 {
+            let y = CGFloat(10 + index * 4)
+            harness.draw(StrokeFixtures.line(from: CGPoint(x: 20, y: y), to: CGPoint(x: 230, y: y)), pointsPerFrame: .max)
+        }
+        XCTAssertEqual(harness.viewModel.undoManager.undoCount, 60)
+        for _ in 0..<60 { harness.viewModel.performUndo(renderer: harness.renderer) }
+        XCTAssertFalse(harness.viewModel.undoManager.canUndo)
+        XCTAssertEqual(harness.pixels(of: harness.drawingLayer.texture).values.max(), 0, "back to an empty layer")
+    }
+
+    /// Whole-stack snapshots are what memory is budgeted in: 25 of them fit, as before.
+    func testWholeStackSnapshotsAreLimitedByMemory() throws {
+        let harness = try EngineHarness(width: 256, height: 256)
+        let undo = harness.viewModel.undoManager
+        for index in 0..<10 {
+            harness.draw(StrokeFixtures.line(from: CGPoint(x: 20, y: CGFloat(20 + index * 8)), to: CGPoint(x: 230, y: 100)),
+                         pointsPerFrame: .max)
+        }
+        for _ in 0..<40 {
+            harness.viewModel.saveUndoSnapshot(renderer: harness.renderer, description: "Layer change")
+        }
+        XCTAssertEqual(undo.undoCount, undo.wholeStackSnapshotsInBudget, "the oldest steps were dropped to stay in budget")
+        XCTAssertLessThanOrEqual(undo.textureBytes, 2 * 256 * 256 * 8 * undo.wholeStackSnapshotsInBudget)
+    }
+
     func testAStrokeThatDrawsNothingAddsNoUndoStep() throws {
         let harness = try EngineHarness(width: 128, height: 128)
         // Entirely off the canvas

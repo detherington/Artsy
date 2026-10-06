@@ -17,6 +17,9 @@ struct BrushDescriptor: Codable, Identifiable, Equatable {
     // Opacity
     let opacity: Float
 
+    // Stroke
+    let smoothing: Float      // Smoothing amount this brush starts with (0.0-1.0)
+
     // Optional: fixed nib angle in radians for calligraphy-style brushes.
     // When set, the ribbon uses this fixed perpendicular direction instead of the
     // stroke-direction-based one, producing the classic thick/thin calligraphy effect.
@@ -64,6 +67,7 @@ extension BrushDescriptor {
             opacityRange: 1.0...1.0
         ),
         opacity: 1.0,
+        smoothing: 0.3,
         fixedNibAngle: nil
     )
 
@@ -78,6 +82,7 @@ extension BrushDescriptor {
             opacityRange: 0.2...1.0
         ),
         opacity: 1.0,
+        smoothing: 0.4,
         fixedNibAngle: nil
     )
 
@@ -92,6 +97,7 @@ extension BrushDescriptor {
             opacityRange: 0.3...0.9
         ),
         opacity: 0.9,
+        smoothing: 0.2,
         fixedNibAngle: nil
     )
 
@@ -106,6 +112,7 @@ extension BrushDescriptor {
             opacityRange: 0.5...1.0
         ),
         opacity: 1.0,
+        smoothing: 0.5,
         fixedNibAngle: nil
     )
 
@@ -120,6 +127,7 @@ extension BrushDescriptor {
             opacityRange: 0.6...0.9
         ),
         opacity: 0.7,
+        smoothing: 0.3,
         fixedNibAngle: nil
     )
 
@@ -134,6 +142,7 @@ extension BrushDescriptor {
             opacityRange: 0.3...0.8
         ),
         opacity: 0.7,
+        smoothing: 0.4,
         fixedNibAngle: nil
     )
 
@@ -148,6 +157,7 @@ extension BrushDescriptor {
             opacityRange: 0.6...1.0   // Heavy coverage
         ),
         opacity: 0.9,
+        smoothing: 0.3,
         fixedNibAngle: nil
     )
 
@@ -162,6 +172,7 @@ extension BrushDescriptor {
             opacityRange: 1.0...1.0
         ),
         opacity: 1.0,
+        smoothing: 0.5,
         fixedNibAngle: nil
     )
 
@@ -176,6 +187,7 @@ extension BrushDescriptor {
             opacityRange: 0.55...1.0   // pressure drives opacity, not size
         ),
         opacity: 0.95,
+        smoothing: 0.4,
         fixedNibAngle: nil
     )
 
@@ -190,6 +202,7 @@ extension BrushDescriptor {
             opacityRange: 0.85...1.0
         ),
         opacity: 1.0,
+        smoothing: 0.45,
         fixedNibAngle: nil
     )
 
@@ -204,6 +217,7 @@ extension BrushDescriptor {
             opacityRange: 0.85...1.0
         ),
         opacity: 1.0,
+        smoothing: 0.35,
         fixedNibAngle: nil
     )
 
@@ -218,6 +232,7 @@ extension BrushDescriptor {
             opacityRange: 0.35...0.85
         ),
         opacity: 0.85,
+        smoothing: 0.25,
         fixedNibAngle: nil
     )
 
@@ -232,6 +247,7 @@ extension BrushDescriptor {
             opacityRange: 0.55...1.0   // darker base than pencil
         ),
         opacity: 0.95,
+        smoothing: 0.2,
         fixedNibAngle: nil
     )
 
@@ -246,6 +262,7 @@ extension BrushDescriptor {
             opacityRange: 0.7...1.0   // rich, heavy coverage
         ),
         opacity: 0.95,
+        smoothing: 0.3,
         fixedNibAngle: nil
     )
 
@@ -260,6 +277,7 @@ extension BrushDescriptor {
             opacityRange: 0.08...0.5   // faint per stroke; layer strokes to build up
         ),
         opacity: 0.5,
+        smoothing: 0.3,
         fixedNibAngle: nil
     )
 
@@ -274,6 +292,7 @@ extension BrushDescriptor {
             opacityRange: 0.35...0.85
         ),
         opacity: 0.8,
+        smoothing: 0.2,
         fixedNibAngle: nil
     )
 
@@ -288,6 +307,7 @@ extension BrushDescriptor {
             opacityRange: 0.25...0.7
         ),
         opacity: 0.7,
+        smoothing: 0.25,
         fixedNibAngle: nil
     )
 
@@ -302,6 +322,7 @@ extension BrushDescriptor {
             opacityRange: 0.35...1.0
         ),
         opacity: 1.0,
+        smoothing: 0.6,
         fixedNibAngle: nil
     )
 
@@ -316,6 +337,7 @@ extension BrushDescriptor {
             opacityRange: 1.0...1.0
         ),
         opacity: 1.0,
+        smoothing: 0.4,
         fixedNibAngle: Float.pi / 4   // 45° nib — classic italic angle
     )
 
@@ -332,6 +354,7 @@ extension BrushDescriptor {
             opacityRange: 1.0...1.0
         ),
         opacity: 1.0,
+        smoothing: 0.3,
         fixedNibAngle: nil
     )
 

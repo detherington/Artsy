@@ -145,6 +145,8 @@ struct SettingsView: View {
                     .padding(4)
                 }
 
+                PressurelessInputSettings()
+
                 Spacer()
             }
             .padding(20)
@@ -179,6 +181,25 @@ struct SettingsView: View {
 }
 
 // MARK: - General Settings
+
+/// Settings for drawing with a device that reports no pressure.
+struct PressurelessInputSettings: View {
+    @ObservedObject private var prefs = AppPreferences.shared
+
+    var body: some View {
+        GroupBox("Mouse and trackpad") {
+            VStack(alignment: .leading, spacing: 8) {
+                Toggle("Ease strokes in and out", isOn: $prefs.easeStrokesWithoutPressure)
+
+                Text("A mouse has no pressure, so strokes start and end at full width. With this on they taper as if a pen were touching down and lifting off. Pen strokes are not affected.")
+                    .font(.system(size: 11))
+                    .foregroundColor(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .padding(4)
+        }
+    }
+}
 
 struct GeneralSettingsView: View {
     @ObservedObject private var prefs = AppPreferences.shared

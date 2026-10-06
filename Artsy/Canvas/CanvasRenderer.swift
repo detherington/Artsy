@@ -416,9 +416,9 @@ final class CanvasRenderer: NSObject, MTKViewDelegate {
 
     /// Generate a thumbnail NSImage from a layer's texture. Max size 64px.
     func generateThumbnail(for layer: Layer, maxSize: Int = 64) -> NSImage? {
-        let srcW = layer.texture.width
-        let srcH = layer.texture.height
-        let aspect = CGFloat(srcW) / CGFloat(srcH)
+        let layerW = layer.texture.width
+        let layerH = layer.texture.height
+        let aspect = CGFloat(layerW) / CGFloat(layerH)
 
         let thumbW: Int
         let thumbH: Int
@@ -430,14 +430,41 @@ final class CanvasRenderer: NSObject, MTKViewDelegate {
             thumbW = Int(CGFloat(maxSize) * aspect)
         }
 
-        // Copy layer texture to a shared texture for CPU readback
-        guard let readable = try? textureManager.makeSharedTexture(width: srcW, height: srcH, label: "ThumbRead"),
-              let cb = context.commandQueue.makeCommandBuffer(),
-              let blit = cb.makeBlitCommandEncoder() else { return nil }
-        blit.copy(from: layer.texture, to: readable)
-        blit.endEncoding()
+        // Shrink the layer on the GPU in 4x steps until it is small, and read back only
+        // that. Reading the whole layer to the CPU for a 64 px image costs tens of
+        // megabytes and milliseconds after every stroke.
+        guard let cb = context.commandQueue.makeCommandBuffer() else { return nil }
+        var source = layer.texture
+        var levels: [(width: Int, height: Int)] = []
+        var levelW = layerW, levelH = layerH
+        while max(levelW, levelH) > 256 {
+            levelW = max(1, (levelW + 3) / 4)
+            levelH = max(1, (levelH + 3) / 4)
+            levels.append((levelW, levelH))
+        }
+        for (index, level) in levels.enumerated() {
+            let isLast = index == levels.count - 1
+            guard let smaller = try? (isLast
+                ? textureManager.makeSharedTexture(width: level.width, height: level.height, label: "ThumbRead")
+                : textureManager.makeCanvasTexture(width: level.width, height: level.height, label: "ThumbStep"))
+            else { return nil }
+            compositor.downsample(source, into: smaller, commandBuffer: cb)
+            source = smaller
+        }
+        if levels.isEmpty {
+            // Already small: copy it as it is.
+            guard let readable = try? textureManager.makeSharedTexture(width: layerW, height: layerH, label: "ThumbRead"),
+                  let blit = cb.makeBlitCommandEncoder() else { return nil }
+            blit.copy(from: layer.texture, to: readable)
+            blit.endEncoding()
+            source = readable
+        }
         cb.commit()
         cb.waitUntilCompleted()
+
+        let readable = source
+        let srcW = readable.width
+        let srcH = readable.height
 
         // Read float16 pixels
         let bytesPerPixel = 8
@@ -794,12 +821,13 @@ final class CanvasRenderer: NSObject, MTKViewDelegate {
         guard let commandBuffer = context.commandQueue.makeCommandBuffer() else { return }
 
         // Draw the samples that arrived since the last displayed frame, and settle the tail.
+        viewModel.settleStroke()
         encodeActiveStroke(into: commandBuffer, finishing: true)
 
         if let strokeRegion {
             // Undo only needs the pixels this stroke is about to change.
             viewModel.undoManager.saveRegion(
-                of: activeLayer, region: strokeRegion, context: context,
+                of: activeLayer, in: layerStack, region: strokeRegion, context: context,
                 description: isErasing ? "Erase" : viewModel.currentBrush.name,
                 commandBuffer: commandBuffer
             )
