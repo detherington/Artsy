@@ -17,6 +17,7 @@ final class AppPreferences: ObservableObject {
         static let defaultCanvasBackground = "defaultCanvasBackground" // hex string
         static let recentColors = "recentColors" // [hex string]
         static let smoothingMode = "smoothingMode" // SmoothingMode raw value
+        static let pressureCurves = "pressureCurves" // JSON: [pen key: PressureCurve]
         static let easeStrokesWithoutPressure = "easeStrokesWithoutPressure"
     }
 
@@ -62,6 +63,20 @@ final class AppPreferences: ObservableObject {
         didSet { defaults.set(easeStrokesWithoutPressure, forKey: Key.easeStrokesWithoutPressure) }
     }
 
+    /// Pressure curves by pen (see `TabletEventHandler.currentPenKey`). A pen that has none
+    /// saved uses the linear curve.
+    @Published var pressureCurves: [String: PressureCurve] {
+        didSet {
+            if let data = try? JSONEncoder().encode(pressureCurves) {
+                defaults.set(data, forKey: Key.pressureCurves)
+            }
+        }
+    }
+
+    func pressureCurve(forPen key: String) -> PressureCurve {
+        pressureCurves[key] ?? .linear
+    }
+
     // MARK: - Init
 
     private init() {
@@ -82,6 +97,8 @@ final class AppPreferences: ObservableObject {
 
         self.smoothingMode = defaults.string(forKey: Key.smoothingMode).flatMap(SmoothingMode.init(rawValue:)) ?? .oneEuro
         self.easeStrokesWithoutPressure = (defaults.object(forKey: Key.easeStrokesWithoutPressure) as? Bool) ?? true
+        self.pressureCurves = defaults.data(forKey: Key.pressureCurves)
+            .flatMap { try? JSONDecoder().decode([String: PressureCurve].self, from: $0) } ?? [:]
     }
 
     func pushRecentColor(_ hex: String) {

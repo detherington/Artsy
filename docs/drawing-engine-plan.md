@@ -185,9 +185,14 @@ Done:
   copy and switches to it. It covers shape (ribbon or dabs, tip, spacing, flow,
   accumulation, resting spray), grain, jitter, pressure, tilt, speed and stroke settings.
 
+- **Pressure curve editor.** The brush panel's pressure control is a thumbnail of the curve;
+  it opens an editor with two draggable handles and the Linear/Soft/Firm presets.
+- **Per-pen curves.** A proximity event names the pen (`NSEvent.uniqueID`); the curve you
+  set is saved for that pen and comes back whenever it is picked up. Without a pen the
+  "default" curve applies. Tested with synthesized proximity events only.
+
 Still to do:
 
-- A pressure-curve editor; per-pen settings keyed on `NSEvent.uniqueID`.
 - Photoshop `.abr` and Procreate `.brush` imports (shape and grain only).
 - A dual tip, once the editor can expose it.
 

@@ -120,6 +120,7 @@ final class CanvasViewModel: ObservableObject {
         self.brushSize = Float(prefs.defaultBrushSize)
         self.smoothingMode = prefs.smoothingMode
         self.smoothingStrength = prefs.defaultBrush.smoothing
+        self.pressureCurve = prefs.pressureCurve(forPen: TabletEventHandler.currentPenKey)
         if StrokeRecorder.isEnabledInDefaults {
             self.recorder = StrokeRecorder(canvasSize: canvasSize, fileURL: StrokeRecorder.newFileURL())
         }

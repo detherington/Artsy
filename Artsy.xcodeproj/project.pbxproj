@@ -93,6 +93,7 @@
 		27B838236931D2C9FFFDD2C8 /* BrushStudioModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8703FC1608A50633266AE490 /* BrushStudioModel.swift */; };
 		6CBC1FE714F59954B6879D8D /* BrushStudioView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 32665618ECA2DBF35451A0FC /* BrushStudioView.swift */; };
 		438094AC1208B8BD1689406A /* BrushStudioTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5DE7886E38559B2215F3216 /* BrushStudioTests.swift */; };
+		3C165CBDCF4ADE8017E1F83D /* PressureCurveEditor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 43F3C08AB19C323D1E720B44 /* PressureCurveEditor.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -196,6 +197,7 @@
 		8703FC1608A50633266AE490 /* BrushStudioModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrushStudioModel.swift; sourceTree = "<group>"; };
 		32665618ECA2DBF35451A0FC /* BrushStudioView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrushStudioView.swift; sourceTree = "<group>"; };
 		B5DE7886E38559B2215F3216 /* BrushStudioTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrushStudioTests.swift; sourceTree = "<group>"; };
+		43F3C08AB19C323D1E720B44 /* PressureCurveEditor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PressureCurveEditor.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXGroup section */
@@ -231,6 +233,7 @@
 		30F8CBE1AC0CF03D0DA0FDA3 /* UI */ = {
 			isa = PBXGroup;
 			children = (
+				43F3C08AB19C323D1E720B44 /* PressureCurveEditor.swift */,
 				DB157DCFAA0D25C78F80DBE7 /* BrushSettingsView.swift */,
 				36AE7509E7E91DD8165A4E34 /* CondensedPanelView.swift */,
 				49CD9D8A37644262890FEB83 /* LayerPanelView.swift */,
@@ -572,6 +575,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				3C165CBDCF4ADE8017E1F83D /* PressureCurveEditor.swift in Sources */,
 				6CBC1FE714F59954B6879D8D /* BrushStudioView.swift in Sources */,
 				27B838236931D2C9FFFDD2C8 /* BrushStudioModel.swift in Sources */,
 				F41CD98FFD330398B2EFA239 /* BrushPreview.swift in Sources */,
