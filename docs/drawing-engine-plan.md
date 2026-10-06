@@ -390,7 +390,7 @@ Two changes made the difference:
   changes, and every frame rebuilt the composite from all the layers. Now the renderer
   keeps the composite when the scene (layer list and settings), the view model's
   content version (bumped by `markDirty` and by every tool that writes pixels) and the
-  stroke state are unchanged — and rebuilds it at least every 0.25 s regardless, in
+  stroke state are unchanged — and rebuilds it at least every second regardless, in
   case a change went unnoted. The display pass still runs every frame.
 - **Undo snapshots copy only what the action will change.** `saveUndoSnapshot` takes a
   scope: `.nothing` for a selection or a change to the layer list, `.layer(x)` for a
@@ -602,6 +602,27 @@ generated on the CPU then; they are made at launch now). The frame log now says 
 its slowest frame was and whether a stroke was on, to pin what is left. Hours of idle
 time in the background show 10–90 ms frames at a few frames a second — App Nap, not
 drawing.
+
+The third session ran 0.7.1 on an 8192² canvas: twenty strokes with Hard Round,
+Graphite Stick, Pencil, Conté, Ink Brush, Sumi-e, Calligraphy and Acrylic, the Soft
+pressure curve from the tenth stroke on, saved in 3.7 s. The replay here matches the
+saved layer to 103 pixels in 67 million, now that every stroke carries its zoom.
+
+- **0.7.1's repeat filter never matched.** The recording still had 18% repeats. The
+  filter compared positions and pressure exactly, and a copy differs from its original
+  by rounding (the two kinds of event convert their positions separately). It takes a
+  tolerance now, catches copies that come as mouse drags as well as tablet events, and
+  the stroke line in the log counts the repeats it dropped, so the next session shows it
+  working or not. The lesson taken: the test that covered it had passed without proving
+  anything, since the stroke path absorbs repeats anyway; it asserts on the count now.
+- **35–50 frames a second on 8192², idle as well as drawing**, where 2048² ran at 60.
+  The display pass alone measures 3 ms fitted here (M4 Pro; relief 3.0, flat 2.5, 1:1
+  0.3), so that is not it. The fallback recomposite ran four times a second, at 8192² a
+  20–40 ms job each time that holds the next frames behind it; it runs once a second
+  now. The frame log carries each frame's GPU time from the command buffers themselves
+  from here on, so the next session says what the rest is.
+- Pressure reached 0.97, and the Soft curve is on for that pen. The first thick stroke
+  logged its height map being made (8192², no slow frame with it).
 
 ## Risks to check early
 

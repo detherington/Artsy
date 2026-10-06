@@ -259,8 +259,10 @@ final class BrushGoldenTests: XCTestCase {
 
         for zoom in zooms {
             let replay = try EngineHarness(width: recording.canvasWidth, height: recording.canvasHeight)
-            replay.viewModel.transform.scale = zoom   // each stroke brings its own smoothing mode
-            for stroke in recordings.flatMap(\.strokes) { replay.draw(stroke) }
+            replay.viewModel.transform.scale = zoom   // each stroke brings its own smoothing mode and zoom
+            // One frame per stroke: the result does not depend on how samples fall into
+            // frames (EveryBrushTests), and a big canvas would take hours at a frame per three
+            for stroke in recordings.flatMap(\.strokes) { replay.draw(stroke, pointsPerFrame: .max) }
             let drawn = replay.pixels(of: replay.drawingLayer.texture)
 
             // Alpha is what a drawing layer differs in; colour follows it

@@ -108,12 +108,12 @@ final class EngineHarness {
         viewModel.endStroke()
     }
 
-    func draw(_ stroke: RecordedStroke, file: StaticString = #filePath, line: UInt = #line) {
+    func draw(_ stroke: RecordedStroke, pointsPerFrame: Int = 3, file: StaticString = #filePath, line: UInt = #line) {
         guard stroke.applySettings(to: viewModel) else {
             XCTFail("Unknown brush \"\(stroke.brushName)\" in recorded stroke", file: file, line: line)
             return
         }
-        draw(stroke.points.map(\.strokePoint), hasPressure: stroke.hasPressure ?? true)
+        draw(stroke.points.map(\.strokePoint), pointsPerFrame: pointsPerFrame, hasPressure: stroke.hasPressure ?? true)
     }
 
     // MARK: - Readback

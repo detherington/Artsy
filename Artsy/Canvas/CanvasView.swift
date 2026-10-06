@@ -325,6 +325,7 @@ class CanvasView: MTKView {
 
         let point = TabletEventHandler.strokePoint(from: event, in: self)
         lastRawViewPoint = point.position
+        repeatsDroppedInStroke = 0
         let canvasPoint = viewToCanvasPoint(point)
 
         // A tablet reports several times per display frame. AppKit merges those reports by
@@ -335,10 +336,25 @@ class CanvasView: MTKView {
         viewModel.beginStroke(point: canvasPoint, hasPressure: TabletEventHandler.isTabletEvent(event))
     }
 
+    /// Every few pen samples, AppKit delivers a second copy — as a tablet event or as
+    /// another mouse drag — repeating the position and pressure with a timestamp from when
+    /// it was delivered, a frame or so late (an XP-Pen on macOS 27: a fifth of all samples).
+    /// Taken as a sample, a copy stands the pen still for a frame and then runs the clock
+    /// backwards for the next real one, which throws the smoother. An exact repeat of the
+    /// last sample is dropped; a pen resting gets its rests from frame time, not from
+    /// events, and pressing harder without moving changes the pressure, so neither is lost.
     private func handleDrawingMouseDragged(_ event: NSEvent) {
         guard let viewModel = viewModel else { return }
 
         let point = TabletEventHandler.strokePoint(from: event, in: self)
+        // A copy can differ from its original by rounding (the two kinds of event convert
+        // their positions separately; pressure comes in 8-bit steps of 0.004)
+        if let last = viewModel.lastRawInput, let lastView = lastRawViewPoint,
+           abs(lastView.x - point.position.x) < 0.01, abs(lastView.y - point.position.y) < 0.01,
+           abs(last.pressure - point.pressure) < 0.002 {
+            repeatsDroppedInStroke += 1
+            return
+        }
         lastRawViewPoint = point.position
         let canvasPoint = viewToCanvasPoint(point)
         viewModel.continueStroke(point: canvasPoint)
@@ -348,7 +364,8 @@ class CanvasView: MTKView {
         guard let viewModel = viewModel, let renderer = renderer else { return }
 
         if let summary = viewModel.strokeSummary() {
-            DiagnosticsLog.shared.note(.stroke, summary + (TabletEventHandler.isTabletEvent(event) ? ", tablet" : ", mouse"))
+            DiagnosticsLog.shared.note(.stroke, summary + (TabletEventHandler.isTabletEvent(event) ? ", tablet" : ", mouse")
+                                       + (repeatsDroppedInStroke > 0 ? ", \(repeatsDroppedInStroke) repeats dropped" : ""))
         }
         // Finalize first: the renderer still needs the stroke's points to draw its last samples.
         renderer.finalizeStroke()
@@ -1228,24 +1245,15 @@ class CanvasView: MTKView {
 
     /// Pen samples normally arrive as mouse events. When only the pressure changes — the
     /// pen is pressed harder without moving — AppKit sends a tablet event here instead.
-    ///
-    /// It also sends one here for every few samples that already came as mouse events,
-    /// repeating their position and pressure with a timestamp from when it was delivered,
-    /// a frame or so late (seen with an XP-Pen on macOS 27: a fifth of all samples). Taken
-    /// as samples, those stand the pen still for a frame and then run the clock backwards,
-    /// which throws velocity dynamics and smoothing. A repeat is dropped.
     override func tabletPoint(with event: NSEvent) {
         guard let viewModel = viewModel, viewModel.isDrawing else { return }
-        let point = TabletEventHandler.strokePoint(from: event, in: self)
-        if let last = viewModel.lastRawInput, let lastView = lastRawViewPoint,
-           lastView == point.position, last.pressure == point.pressure {
-            return
-        }
         handleDrawingMouseDragged(event)
     }
 
     /// Where the last pen sample was in the view, for telling a repeat from a new sample.
     private var lastRawViewPoint: CGPoint?
+    /// Repeats dropped since pen-down, for the diagnostics log.
+    private(set) var repeatsDroppedInStroke = 0
 
     override func tabletProximity(with event: NSEvent) {
         // Handled by app-level event monitor

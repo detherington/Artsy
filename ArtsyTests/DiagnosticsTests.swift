@@ -39,9 +39,12 @@ final class DiagnosticsTests: XCTestCase {
                        "3 frames in 1.2 s, 1 recomposited, encode p50 2.00 ms p95 3.00 ms max 3.00 ms")
         XCTAssertNil(timings.frame(encodeMilliseconds: 4, recomposited: true, drawing: false, at: 101.5), "a new interval begins")
         XCTAssertNil(timings.frame(encodeMilliseconds: 40, recomposited: true, drawing: true, at: 101.9))
+        timings.gpu(milliseconds: 3)
+        timings.gpu(milliseconds: 12)
         XCTAssertEqual(timings.frame(encodeMilliseconds: 5, recomposited: false, drawing: false, at: 102.3),
-                       "3 frames in 1.1 s, 2 recomposited, encode p50 5.00 ms p95 40.00 ms max 40.00 ms (at +0.7 s, while drawing)",
-                       "a slow frame says when it was and what was going on")
+                       "3 frames in 1.1 s, 2 recomposited, encode p50 5.00 ms p95 40.00 ms max 40.00 ms (at +0.7 s, while drawing), "
+                       + "gpu p50 12.00 ms p95 12.00 ms max 12.00 ms",
+                       "a slow frame says when it was and what was going on; the GPU's own times follow")
     }
 
     func testTheBundleGathersTheFoldersAndASummary() throws {

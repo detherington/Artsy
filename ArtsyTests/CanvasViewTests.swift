@@ -397,18 +397,20 @@ final class CanvasViewTests: XCTestCase {
         XCTAssertEqual(viewModel.undoManager.undoCount, steps, "and no steps for what did not happen")
     }
 
-    /// AppKit sends a tablet event repeating a sample that already came as a mouse event, a
+    /// AppKit sends a second copy of a pen sample, as a tablet event or another drag, a
     /// frame late; that is not a sample. Pressing harder without moving is.
-    func testARepeatedTabletSampleIsDroppedButAPressureChangeIsKept() throws {
+    func testARepeatedSampleIsDroppedButAPressureChangeIsKept() throws {
         view.mouseDown(with: try pen(.leftMouseDown, atCanvas: CGPoint(x: 40, y: 128), pressure: 0.5))
         view.mouseDragged(with: try pen(.leftMouseDragged, atCanvas: CGPoint(x: 60, y: 128), pressure: 0.5))
         XCTAssertEqual(viewModel.drawnPath?.samples.count, 2)
         XCTAssertEqual(viewModel.lastRawInput?.pressure ?? 0, 0.5, accuracy: 0.01)
 
-        // The repeat never reaches the stroke: not as a sample, nor as time the pen rested
+        // The repeats never reach the stroke: not as samples, nor as time the pen rested
         view.tabletPoint(with: try tabletPoint(atCanvas: CGPoint(x: 60, y: 128), pressure: 0.5))
+        view.mouseDragged(with: try pen(.leftMouseDragged, atCanvas: CGPoint(x: 60, y: 128), pressure: 0.5))
         XCTAssertEqual(viewModel.drawnPath?.samples.count, 2, "a repeat of the last sample is dropped")
         XCTAssertEqual(viewModel.drawnPath?.holdDuration, 0)
+        XCTAssertEqual(view.repeatsDroppedInStroke, 2, "both copies, whichever way they came")
 
         // Pressing harder without moving does reach it: the sample at that spot takes the pressure
         view.tabletPoint(with: try tabletPoint(atCanvas: CGPoint(x: 60, y: 128), pressure: 0.8))

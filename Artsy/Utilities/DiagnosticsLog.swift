@@ -112,9 +112,13 @@ final class DiagnosticsLog {
 
     // MARK: - Frame timings
 
-    /// Encode times of the frames since the last line, written out every few seconds.
+    /// Encode and GPU times of the frames since the last line, written out every few seconds.
     final class FrameTimings {
         private var encodeMilliseconds: [Double] = []
+        /// What the GPU spent on each frame, reported by the command buffers as they finish
+        /// (on Metal's thread, hence the lock).
+        private var gpuMilliseconds: [Double] = []
+        private let lock = NSLock()
         private var recomposited = 0
         /// When the frames being summarised began: the first frame's time.
         private var since: TimeInterval?
@@ -123,6 +127,11 @@ final class DiagnosticsLog {
         let interval: TimeInterval
 
         init(interval: TimeInterval = 5) { self.interval = interval }
+
+        func gpu(milliseconds: Double) {
+            guard milliseconds.isFinite, milliseconds >= 0 else { return }
+            lock.lock(); gpuMilliseconds.append(milliseconds); lock.unlock()
+        }
 
         /// Returns the line to log, once `interval` has passed.
         func frame(encodeMilliseconds ms: Double, recomposited didRecomposite: Bool, drawing: Bool, at now: TimeInterval) -> String? {
@@ -139,6 +148,14 @@ final class DiagnosticsLog {
                               sorted[sorted.count / 2], sorted[min(sorted.count - 1, sorted.count * 95 / 100)], sorted[sorted.count - 1])
             if let slowest, slowest.ms >= 8 {
                 line += String(format: " (at +%.1f s, %@)", slowest.at, slowest.drawing ? "while drawing" : "idle")
+            }
+            lock.lock()
+            let gpu = gpuMilliseconds.sorted()
+            gpuMilliseconds.removeAll(keepingCapacity: true)
+            lock.unlock()
+            if !gpu.isEmpty {
+                line += String(format: ", gpu p50 %.2f ms p95 %.2f ms max %.2f ms",
+                               gpu[gpu.count / 2], gpu[min(gpu.count - 1, gpu.count * 95 / 100)], gpu[gpu.count - 1])
             }
             encodeMilliseconds.removeAll(keepingCapacity: true)
             recomposited = 0
