@@ -557,6 +557,38 @@ Diagnostics… copies the logs, the stroke recordings and the brush library into
 folder to send back; the recordings replay here through `BrushGoldenTests`, the log says
 what the engine did around them.
 
+### What the first session on a real pen showed
+
+Artsy 0.7.0 on a Mac mini M4 (macOS 27.0) with an XP-Pen tablet (vendor 10429), 35
+strokes over two minutes with Hard Round, Chalk, Sumi-e, the eraser end, Pastel,
+Calligraphy and Ink Brush, saved as a 2048² document; nothing with wet media or thick
+paint yet.
+
+- **The engine draws the same picture here.** The recording replayed through the
+  harness matches the document's drawing layer to within 0.3% of pixels, all on stroke
+  edges (8-bit on disk, antialiasing), once replayed at the session's zoom. Adaptive
+  smoothing depends on the zoom, which recordings did not keep; they do now.
+- **A fifth of the pen samples were repeats.** AppKit delivers a `tabletPoint` event for
+  every few samples that already came as mouse events, repeating position and pressure
+  with a timestamp from delivery, 20–25 ms late. The view fed them in: the stroke path
+  absorbed them as rests (so brush velocity and the geometry were unharmed), but the
+  smoother runs before that and goes by timestamps — the pen stood still for a frame,
+  then the next real sample ran its clock backwards (clamped to a millisecond, so its
+  speed read as thousands of pixels a second and smoothing let go for a sample). That
+  happened every five samples. Repeats are dropped now; pressure-only changes, which
+  those events exist for, are kept. The real report rate is about 200 a second, not the
+  260 the log counted, and recordings from 0.7.0 carry the repeats.
+- **Pressure never reached 0.87.** A third of all samples sit at 0.6–0.7; the pen's
+  top tenth is unused. Hard Round at 12 px drew at little over half width most of the
+  time. A per-pen pressure range learnt from use (or the firm curve) would give the
+  whole brush; not done, since it changes the feel and is a choice to make with the pen
+  in hand.
+- **Timings.** Frames idle at 0.04 ms encode and draw at 0.1–0.3 ms; one 85 ms frame in
+  the first second of drawing (first-stroke allocations), none after. Commits 0.1–0.9 ms.
+  Save 0.17 s. The displays run at 60 Hz, so the 120 fps view draws 60.
+- **The eraser end** was recognised through proximity and erased; tilt is reported
+  (up to 0.57) and reaches tilt dynamics.
+
 ## Risks to check early
 
 - **macOS input rate.** Developers report macOS 26.2 downsampling mouse events to the

@@ -205,12 +205,15 @@ final class CanvasViewModel: ObservableObject {
         path.append(smoother.filter(point))
         activePath = path
         lastInput = point
+        lastRawInput = rawPoint
         strokeIsSettled = false
         isDrawing = true
     }
 
     /// The last sample the pen sent, before smoothing.
     private var lastInput: StrokePoint?
+    /// The last sample as it arrived, before guides; what a repeat of it is checked against.
+    private(set) var lastRawInput: StrokePoint?
 
     /// Call once per frame while the pen is down. If no sample has arrived since the last
     /// frame the pen is resting, which the stroke still needs to know about: smoothing
@@ -248,6 +251,7 @@ final class CanvasViewModel: ObservableObject {
         guard isDrawing else { return }
         let point = snappedToGuides(rawPoint)
         lastInput = point
+        lastRawInput = rawPoint
         activePath?.append(smoother.filter(point))
         checkShapeSnap()
     }
