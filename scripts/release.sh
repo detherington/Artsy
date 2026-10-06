@@ -23,7 +23,9 @@ if [ ! -x ./sparkle-tools/bin/sign_update ]; then
   curl -sL "https://github.com/sparkle-project/Sparkle/releases/download/2.6.4/Sparkle-2.6.4.tar.xz" | tar -xJ -C sparkle-tools
 fi
 TEAM_ID="8B29CDK832"
-IDENT="Developer ID Application: Darrell Etherington ($TEAM_ID)"
+# The certificate's SHA-1, not its name: the same name is in the login and the System
+# keychains, and codesign refuses to choose. This is the login keychain's.
+IDENT="970C8BC88ECFD993055238A42FFCB2DFBD50833F"
 ENTS="Artsy/App/Artsy-Release.entitlements"
 REPO_OWNER="detherington"
 REPO_NAME="Artsy"
