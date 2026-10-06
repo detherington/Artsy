@@ -203,7 +203,7 @@ Done:
   the dab is too, which breaks a plain tip up into texture. In the Brush Studio under
   "Second tip".
 
-### 5. Wet media (large) — in progress
+### 5. Wet media (large) — done, untested by hand
 
 Done:
 
@@ -272,10 +272,27 @@ Done:
   - Pipeline creation now fails loudly when a shader function is missing; a missing
     fragment function used to build a pipeline that silently drew nothing.
 
+- **Impasto.** A stamp brush with `impasto` settings (Oil, Acrylic; Brush Studio → Thick
+  paint) lays thickness as well as colour: every dab adds height to the layer's height
+  map, shaped by the tip and its grain, so bristle streaks stand up as ridges. The
+  display lights it from the top left (diffuse plus a glint on ridges), with the strength
+  in Settings → Thick Paint → Relief; exports show it the same way. One pass of a stroke
+  builds about 1; what is lit saturates softly, so paint piled high reads as thick
+  rather than as a cliff.
+  - Height is a half-float texture per layer (`Layer.heightTexture`), made when thick
+    paint first touches the layer; the composite's height adds the visible layers' up.
+  - Dabs' height goes straight into the layer as they settle, like a smudge; the undo
+    step takes it from a copy made at pen-down. The eraser takes thickness away. Undo,
+    whole-stack snapshots, the move and transform tools, selection cut/move/clear,
+    merge down and flatten all carry it; `.artsy` documents save it as a 16-bit grey
+    PNG per layer (thickness 0...8).
+  - Smudge brushes do not move thickness yet, and the floating preview while a
+    selection is being dragged shows its colour but not its relief.
+
 Still to do:
 
-- Impasto height map with lighting.
-- Smudge samples the active layer only ("sample all layers" is not offered).
+- Smudge samples the active layer only ("sample all layers" is not offered), and does
+  not move thickness.
 - Pigment mixing follows spectral.js's weighting; black is a weak pigment there (its
   luminance is ~0), which is tempered only by the squared share. Tinting strength per
   colour is not exposed.

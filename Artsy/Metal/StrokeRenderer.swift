@@ -84,6 +84,7 @@ final class StrokeRenderer {
         var grainOnStroke: Int32
         var hasSecondTip: Int32
         var secondTipScale: Float
+        var thickness: Float
     }
 
     /// Draw dabs into an open render pass on a stroke texture, once per entry in `mirrors`
@@ -101,6 +102,36 @@ final class StrokeRenderer {
         mirrors: [(CGPoint) -> CGPoint],
         encoder: MTLRenderCommandEncoder,
         canvasSize: CGSize
+    ) -> [CGRect] {
+        encodeDabs(dabs, brush: brush, settings: settings, color: color, opacityScale: opacityScale, mirrors: mirrors,
+                   encoder: encoder, canvasSize: canvasSize, pipeline: context.stampPipelineState)
+    }
+
+    /// The same dabs as paint thickness, into an open render pass on a layer's height map.
+    @discardableResult
+    func encodeHeight(
+        dabs: [Dab],
+        brush: BrushDescriptor,
+        settings: StampSettings,
+        opacityScale: Float,
+        mirrors: [(CGPoint) -> CGPoint],
+        encoder: MTLRenderCommandEncoder,
+        canvasSize: CGSize
+    ) -> [CGRect] {
+        encodeDabs(dabs, brush: brush, settings: settings, color: .white, opacityScale: opacityScale, mirrors: mirrors,
+                   encoder: encoder, canvasSize: canvasSize, pipeline: context.stampHeightPipelineState)
+    }
+
+    private func encodeDabs(
+        _ dabs: [Dab],
+        brush: BrushDescriptor,
+        settings: StampSettings,
+        color: StrokeColor,
+        opacityScale: Float,
+        mirrors: [(CGPoint) -> CGPoint],
+        encoder: MTLRenderCommandEncoder,
+        canvasSize: CGSize,
+        pipeline: MTLRenderPipelineState
     ) -> [CGRect] {
         guard !dabs.isEmpty, let paper = context.brushTextures.paperGrain else { return [] }
         let grainTexture = settings.grain.flatMap { context.brushTextures.grainTexture(for: $0.texture) } ?? paper
@@ -121,10 +152,11 @@ final class StrokeRenderer {
             grainDepth: settings.grain?.depth ?? 0,
             grainOnStroke: settings.grain?.attachment == .stroke ? 1 : 0,
             hasSecondTip: secondTipTexture == nil ? 0 : 1,
-            secondTipScale: max(settings.secondTip?.scale ?? 1, 0.05)
+            secondTipScale: max(settings.secondTip?.scale ?? 1, 0.05),
+            thickness: settings.impasto?.thickness ?? 0
         )
 
-        encoder.setRenderPipelineState(context.stampPipelineState)
+        encoder.setRenderPipelineState(pipeline)
         encoder.setVertexBytes(&transform, length: MemoryLayout<float4x4>.size, index: 1)
         encoder.setFragmentBytes(&params, length: MemoryLayout<StampParams>.stride, index: 0)
         // Both slots need a texture even when the shader won't sample one of them.

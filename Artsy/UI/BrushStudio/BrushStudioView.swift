@@ -14,6 +14,7 @@ struct BrushStudioView: View {
                 shapeSection
                 if model.stampSettings != nil {
                     smudgeSection
+                    impastoSection
                     secondTipSection
                     grainSection
                     jitterSection
@@ -140,6 +141,20 @@ struct BrushStudioView: View {
                 }
                 slider(smudge.mode == .smearing ? "Carry" : "Strength", smudgeBinding(\.strength, smudge), in: 0...1, percent: true)
                 slider("Add brush colour", smudgeBinding(\.colorRate, smudge), in: 0...1, percent: true)
+            }
+        }
+    }
+
+    private var impastoSection: some View {
+        Section("Thick paint") {
+            Toggle("Builds up thickness that catches the light (impasto)", isOn: Binding(
+                get: { model.stampSettings?.impasto != nil },
+                set: { on in
+                    model.stampBinding(\.impasto, default: nil).wrappedValue = on ? StampSettings.Impasto() : nil
+                }
+            ))
+            if let impasto = model.stampSettings?.impasto {
+                slider("Thickness", impastoBinding(\.thickness, impasto), in: 0.01...0.5, percent: true)
             }
         }
     }
@@ -292,6 +307,18 @@ struct BrushStudioView: View {
                 var smudge = model.stampSettings?.smudge ?? current
                 smudge[keyPath: keyPath] = value
                 model.stampBinding(\.smudge, default: nil).wrappedValue = smudge
+            }
+        )
+    }
+
+    private func impastoBinding<Value>(_ keyPath: WritableKeyPath<StampSettings.Impasto, Value>,
+                                       _ current: StampSettings.Impasto) -> Binding<Value> {
+        Binding(
+            get: { (model.stampSettings?.impasto ?? current)[keyPath: keyPath] },
+            set: { value in
+                var impasto = model.stampSettings?.impasto ?? current
+                impasto[keyPath: keyPath] = value
+                model.stampBinding(\.impasto, default: nil).wrappedValue = impasto
             }
         )
     }

@@ -16,6 +16,8 @@ final class TransformSession {
     /// GPU snapshot of the source content — sampled during preview, stamped
     /// back onto the layer when the transform is committed.
     let sourceTexture: MTLTexture
+    /// The thickness of that content, when the layer has a height map; transformed with it.
+    let sourceHeight: MTLTexture?
 
     /// The target layer whose content was extracted into `sourceTexture`.
     let targetLayer: Layer
@@ -40,12 +42,14 @@ final class TransformSession {
 
     init(
         sourceTexture: MTLTexture,
+        sourceHeight: MTLTexture? = nil,
         targetLayer: Layer,
         canvasSize: CGSize,
         sourceBounds: CGRect,
         hasSelection: Bool
     ) {
         self.sourceTexture = sourceTexture
+        self.sourceHeight = sourceHeight
         self.targetLayer = targetLayer
         self.canvasSize = canvasSize
         self.sourceBounds = sourceBounds
@@ -84,6 +88,16 @@ final class TransformSession {
         // Clear the floating source to transparent.
         textureManager.clearTexture(source, commandBuffer: cmdBuf)
 
+        // The paint's thickness goes along with it
+        var sourceHeight: MTLTexture?
+        if targetLayer.heightTexture != nil,
+           let height = try? textureManager.makeHeightTexture(width: W, height: H, label: "TransformSourceHeight") {
+            textureManager.clearTexture(height, commandBuffer: cmdBuf)
+            sourceHeight = height
+        }
+        var cuts: [(from: MTLTexture, to: MTLTexture)] = [(targetLayer.texture, source)]
+        if let layerHeight = targetLayer.heightTexture, let sourceHeight { cuts.append((layerHeight, sourceHeight)) }
+
         let bounds: CGRect
         let hasSelection: Bool
 
@@ -96,12 +110,14 @@ final class TransformSession {
 
             guard let encoder = cmdBuf.makeComputeCommandEncoder() else { return nil }
             encoder.setComputePipelineState(context.maskedCutPipelineState)
-            encoder.setTexture(targetLayer.texture, index: 0)
-            encoder.setTexture(source, index: 1)
-            encoder.setTexture(mask, index: 2)
             let tg = MTLSize(width: 16, height: 16, depth: 1)
             let groups = MTLSize(width: (W + 15) / 16, height: (H + 15) / 16, depth: 1)
-            encoder.dispatchThreadgroups(groups, threadsPerThreadgroup: tg)
+            for cut in cuts {
+                encoder.setTexture(cut.from, index: 0)
+                encoder.setTexture(cut.to, index: 1)
+                encoder.setTexture(mask, index: 2)
+                encoder.dispatchThreadgroups(groups, threadsPerThreadgroup: tg)
+            }
             encoder.endEncoding()
 
             let boxCanvas = path.boundingBoxOfPath.intersection(
@@ -112,9 +128,9 @@ final class TransformSession {
         } else {
             // Whole layer: blit the layer into the source, then clear the layer.
             guard let blit = cmdBuf.makeBlitCommandEncoder() else { return nil }
-            blit.copy(from: targetLayer.texture, to: source)
+            for cut in cuts { blit.copy(from: cut.from, to: cut.to) }
             blit.endEncoding()
-            textureManager.clearTexture(targetLayer.texture, commandBuffer: cmdBuf)
+            for cut in cuts { textureManager.clearTexture(cut.from, commandBuffer: cmdBuf) }
             bounds = CGRect(x: 0, y: 0, width: canvasSize.width, height: canvasSize.height)
             hasSelection = false
         }
@@ -124,6 +140,7 @@ final class TransformSession {
 
         return TransformSession(
             sourceTexture: source,
+            sourceHeight: sourceHeight,
             targetLayer: targetLayer,
             canvasSize: canvasSize,
             sourceBounds: bounds,
@@ -141,17 +158,26 @@ final class TransformSession {
         compositor: CompositorPipeline
     ) {
         guard let cmdBuf = context.commandQueue.makeCommandBuffer() else { return }
-        compositor.compositeWithAffineTransform(
-            source: sourceTexture,
-            sourceRect: sourceBounds,
-            onto: targetLayer.texture,
-            canvasSize: canvasSize,
-            transform: currentTransform,
-            opacity: 1.0,
-            commandBuffer: cmdBuf
-        )
+        stamp(with: currentTransform, compositor: compositor, commandBuffer: cmdBuf)
         cmdBuf.commit()
         // No wait — next render frame picks up the new content.
+    }
+
+    /// The source, and its thickness, onto the layer through `transform`.
+    private func stamp(with transform: CGAffineTransform, compositor: CompositorPipeline, commandBuffer: MTLCommandBuffer) {
+        var stamps: [(from: MTLTexture, onto: MTLTexture)] = [(sourceTexture, targetLayer.texture)]
+        if let sourceHeight, let height = targetLayer.heightTexture { stamps.append((sourceHeight, height)) }
+        for stamp in stamps {
+            compositor.compositeWithAffineTransform(
+                source: stamp.from,
+                sourceRect: sourceBounds,
+                onto: stamp.onto,
+                canvasSize: canvasSize,
+                transform: transform,
+                opacity: 1.0,
+                commandBuffer: commandBuffer
+            )
+        }
     }
 
     /// Cancel: restore the original state by stamping the source back at
@@ -162,15 +188,7 @@ final class TransformSession {
         compositor: CompositorPipeline
     ) {
         guard let cmdBuf = context.commandQueue.makeCommandBuffer() else { return }
-        compositor.compositeWithAffineTransform(
-            source: sourceTexture,
-            sourceRect: sourceBounds,
-            onto: targetLayer.texture,
-            canvasSize: canvasSize,
-            transform: .identity,
-            opacity: 1.0,
-            commandBuffer: cmdBuf
-        )
+        stamp(with: .identity, compositor: compositor, commandBuffer: cmdBuf)
         cmdBuf.commit()
     }
 

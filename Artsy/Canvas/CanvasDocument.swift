@@ -11,6 +11,7 @@ import UniformTypeIdentifiers
 ///   ├── document.json    (metadata, canvas size, layer info)
 ///   ├── layers/
 ///   │   ├── layer-0.png
+///   │   ├── layer-0-height.png   (16-bit grey: paint thickness 0...8, only for layers that have any)
 ///   │   ├── layer-1.png
 ///   │   └── ...
 ///   └── thumbnail.png
@@ -102,6 +103,15 @@ final class CanvasDocument {
             readables.append(t)
         }
 
+        // Height maps, for the layers that have one
+        var heightReadables: [(index: Int, texture: MTLTexture)] = []
+        for (i, layer) in layerStack.layers.enumerated() {
+            guard let height = layer.heightTexture,
+                  let t = try? textureManager.makeHeightTexture(width: height.width, height: height.height,
+                                                               label: "SaveHeight", shared: true) else { continue }
+            heightReadables.append((i, t))
+        }
+
         guard let composite = renderer.compositeTexture,
               let compositeReadable = try? textureManager.makeSharedTexture(
                 width: composite.width, height: composite.height, label: "SaveComposite"
@@ -125,7 +135,15 @@ final class CanvasDocument {
             for (i, layer) in layerStack.layers.enumerated() where i < readables.count {
                 blit.copy(from: layer.texture, to: readables[i])
             }
+            for (i, readable) in heightReadables {
+                blit.copy(from: layerStack.layers[i].heightTexture!, to: readable)
+            }
             blit.copy(from: composite, to: compositeReadable)
+            #if !arch(arm64)
+            for readable in readables + heightReadables.map(\.texture) + [compositeReadable] {
+                blit.synchronize(resource: readable)
+            }
+            #endif
             blit.endEncoding()
         }
 
@@ -152,6 +170,14 @@ final class CanvasDocument {
                 if let firstError = parallelErrors.compactMap({ $0 }).first {
                     DispatchQueue.main.async { completion(.failure(firstError)) }
                     return
+                }
+                for (i, readable) in heightReadables {
+                    do {
+                        try writeHeightPNG(readable, to: layersDir.appendingPathComponent("layer-\(i)-height.png"))
+                    } catch {
+                        DispatchQueue.main.async { completion(.failure(error)) }
+                        return
+                    }
                 }
 
                 // Thumbnail
@@ -235,6 +261,13 @@ final class CanvasDocument {
                 loadCGImageIntoTexture(cgImage: cgImage, texture: texture, context: metalContext)
             }
 
+            // And its thickness, if it was saved with any
+            let heightFile = layersDir.appendingPathComponent("layer-\(i)-height.png")
+            if fm.fileExists(atPath: heightFile.path) {
+                layer.heightTexture = loadHeightPNG(from: heightFile, width: doc.canvasWidth, height: doc.canvasHeight,
+                                                    textureManager: textureManager, context: metalContext)
+            }
+
             layerStack.layers.append(layer)
         }
 
@@ -243,6 +276,66 @@ final class CanvasDocument {
         }
 
         return (viewModel, canvasView)
+    }
+
+    // MARK: - Height maps
+
+    /// Thickness this high is stored as full white; paint is rarely piled past 2 or 3.
+    private static let heightFileScale: Float = 8
+
+    /// Write a CPU-readable height map as a 16-bit grey PNG, thickness 0...8 as 0...65535.
+    private static func writeHeightPNG(_ texture: MTLTexture, to url: URL) throws {
+        let w = texture.width, h = texture.height
+        var half = [UInt16](repeating: 0, count: w * h)
+        half.withUnsafeMutableBytes {
+            texture.getBytes($0.baseAddress!, bytesPerRow: w * 2,
+                             from: MTLRegion(origin: MTLOrigin(x: 0, y: 0, z: 0), size: MTLSize(width: w, height: h, depth: 1)),
+                             mipmapLevel: 0)
+        }
+        let grey: [UInt16] = half.map {
+            UInt16((max(0, min(1, Float(Float16(bitPattern: $0)) / heightFileScale)) * 65535).rounded())
+        }
+        let data = grey.withUnsafeBufferPointer { Data(buffer: $0) }
+        guard let provider = CGDataProvider(data: data as CFData),
+              let image = CGImage(
+                width: w, height: h, bitsPerComponent: 16, bitsPerPixel: 16, bytesPerRow: w * 2,
+                space: CGColorSpaceCreateDeviceGray(),
+                bitmapInfo: CGBitmapInfo(rawValue: CGImageAlphaInfo.none.rawValue | CGBitmapInfo.byteOrder16Little.rawValue),
+                provider: provider, decode: nil, shouldInterpolate: false, intent: .defaultIntent
+              ) else { throw DocumentError.loadFailed }
+        try writeCGImageAsPNG(image, to: url)
+    }
+
+    /// Read a height map written by `writeHeightPNG` into a new height texture.
+    private static func loadHeightPNG(from url: URL, width: Int, height: Int, textureManager: TextureManager,
+                                      context: MetalContext) -> MTLTexture? {
+        guard let source = CGImageSourceCreateWithURL(url as CFURL, nil),
+              let image = CGImageSourceCreateImageAtIndex(source, 0, nil),
+              let ctx = CGContext(
+                data: nil, width: width, height: height, bitsPerComponent: 16, bytesPerRow: width * 2,
+                space: CGColorSpaceCreateDeviceGray(),
+                bitmapInfo: CGImageAlphaInfo.none.rawValue | CGBitmapInfo.byteOrder16Little.rawValue
+              ) else { return nil }
+        ctx.draw(image, in: CGRect(x: 0, y: 0, width: width, height: height))
+        guard let data = ctx.data else { return nil }
+        let grey = data.assumingMemoryBound(to: UInt16.self)
+        var half = [UInt16](repeating: 0, count: width * height)
+        for i in 0..<(width * height) {
+            half[i] = Float16(Float(grey[i]) / 65535 * heightFileScale).bitPattern
+        }
+
+        guard let staging = try? textureManager.makeHeightTexture(width: width, height: height, label: "HeightStaging", shared: true),
+              let texture = try? textureManager.makeHeightTexture(width: width, height: height, label: "Height") else { return nil }
+        half.withUnsafeBytes {
+            staging.replace(region: MTLRegion(origin: MTLOrigin(x: 0, y: 0, z: 0), size: MTLSize(width: width, height: height, depth: 1)),
+                            mipmapLevel: 0, withBytes: $0.baseAddress!, bytesPerRow: width * 2)
+        }
+        guard let cmdBuf = context.commandQueue.makeCommandBuffer(),
+              let blit = cmdBuf.makeBlitCommandEncoder() else { return nil }
+        blit.copy(from: staging, to: texture)
+        blit.endEncoding()
+        cmdBuf.commit()
+        return texture
     }
 
     // MARK: - Fast save helpers

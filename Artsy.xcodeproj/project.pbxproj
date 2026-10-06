@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		9F4B6E72ED36054E23D3B6D8 /* ImpastoTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C620C18B57AC3DF098EA49AB /* ImpastoTests.swift */; };
 		7DFD6E819B5DE80A59AD991E /* WetMediaTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FE6CCE7FADFE87962124F696 /* WetMediaTests.swift */; };
 		AD2F98BF9620B34D6940D8B0 /* PigmentMixingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A9EB61B4A10FA48DDFBBA0FD /* PigmentMixingTests.swift */; };
 		08608ECD7F5F1176B6C435F8 /* SmudgeBrushTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0075B40DC2354EE098F1E0CD /* SmudgeBrushTests.swift */; };
@@ -115,6 +116,7 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		C620C18B57AC3DF098EA49AB /* ImpastoTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImpastoTests.swift; sourceTree = "<group>"; };
 		FE6CCE7FADFE87962124F696 /* WetMediaTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WetMediaTests.swift; sourceTree = "<group>"; };
 		A9EB61B4A10FA48DDFBBA0FD /* PigmentMixingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PigmentMixingTests.swift; sourceTree = "<group>"; };
 		7864208A72AA1D379DC90B77 /* Spectral.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = Spectral.h; sourceTree = "<group>"; };
@@ -364,6 +366,7 @@
 		B48AF066E85C8962CFFD499C /* ArtsyTests */ = {
 			isa = PBXGroup;
 			children = (
+				C620C18B57AC3DF098EA49AB /* ImpastoTests.swift */,
 				FE6CCE7FADFE87962124F696 /* WetMediaTests.swift */,
 				A9EB61B4A10FA48DDFBBA0FD /* PigmentMixingTests.swift */,
 				0075B40DC2354EE098F1E0CD /* SmudgeBrushTests.swift */,
@@ -687,6 +690,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				9F4B6E72ED36054E23D3B6D8 /* ImpastoTests.swift in Sources */,
 				7DFD6E819B5DE80A59AD991E /* WetMediaTests.swift in Sources */,
 				AD2F98BF9620B34D6940D8B0 /* PigmentMixingTests.swift in Sources */,
 				08608ECD7F5F1176B6C435F8 /* SmudgeBrushTests.swift in Sources */,

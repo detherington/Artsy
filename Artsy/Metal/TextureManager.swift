@@ -25,6 +25,28 @@ final class TextureManager {
         return texture
     }
 
+    /// A layer's height map (impasto): one half-float per pixel, paint thickness in 0...1.
+    func makeHeightTexture(width: Int, height: Int, label: String? = nil, shared: Bool = false) throws -> MTLTexture {
+        let desc = MTLTextureDescriptor.texture2DDescriptor(
+            pixelFormat: .r16Float,
+            width: width,
+            height: height,
+            mipmapped: false
+        )
+        desc.usage = [.shaderRead, .shaderWrite, .renderTarget]
+        #if arch(arm64)
+        desc.storageMode = shared ? .shared : .private
+        #else
+        desc.storageMode = shared ? .managed : .private
+        #endif
+
+        guard let texture = device.makeTexture(descriptor: desc) else {
+            throw MetalError.textureCreationFailed
+        }
+        texture.label = label
+        return texture
+    }
+
     func makeSharedTexture(width: Int, height: Int, label: String? = nil) throws -> MTLTexture {
         let desc = MTLTextureDescriptor.texture2DDescriptor(
             pixelFormat: .rgba16Float,

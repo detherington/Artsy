@@ -140,6 +140,62 @@ final class EngineHarness {
     func displayed() -> PixelGrid {
         composite().flattenedOverWhite()
     }
+
+    /// Render a frame through the display shader itself, one canvas pixel per output pixel:
+    /// the composite over white with thick paint lit. 8-bit, so values are multiples of 1/255.
+    func shown(relief: Float = 1) -> PixelGrid {
+        let desc = MTLTextureDescriptor.texture2DDescriptor(
+            pixelFormat: .bgra8Unorm, width: width, height: height, mipmapped: false
+        )
+        desc.usage = [.renderTarget, .shaderRead]
+        desc.storageMode = .shared
+        let target = context.device.makeTexture(descriptor: desc)!
+        let commandBuffer = context.commandQueue.makeCommandBuffer()!
+        renderer.encodeFrame(into: commandBuffer)
+        var transform = CanvasTransform()
+        transform.scale = 1
+        transform.offset = CGPoint(x: -Double(width) / 2, y: -Double(height) / 2)
+        renderer.compositor.renderToScreen(
+            composite: renderer.compositeTexture, height: renderer.compositeHeightTexture, relief: relief,
+            drawable: target, transform: transform, viewSize: CGSize(width: width, height: height),
+            backgroundColor: (1, 1, 1), commandBuffer: commandBuffer
+        )
+        commandBuffer.commit()
+        commandBuffer.waitUntilCompleted()
+
+        var bgra = [UInt8](repeating: 0, count: width * height * 4)
+        target.getBytes(&bgra, bytesPerRow: width * 4, from: MTLRegionMake2D(0, 0, width, height), mipmapLevel: 0)
+        var values = [Float](repeating: 1, count: width * height * 4)
+        for i in 0..<(width * height) {
+            values[i * 4] = Float(bgra[i * 4 + 2]) / 255
+            values[i * 4 + 1] = Float(bgra[i * 4 + 1]) / 255
+            values[i * 4 + 2] = Float(bgra[i * 4]) / 255
+        }
+        return PixelGrid(width: width, height: height, values: values)
+    }
+
+    /// A layer's paint thickness, in each pixel's `.x`; zero everywhere for a layer without any.
+    func heights(of layer: Layer) -> PixelGrid {
+        var values = [Float](repeating: 0, count: width * height * 4)
+        if let heightMap = layer.heightTexture {
+            let readable = try! renderer.textureManager.makeHeightTexture(
+                width: heightMap.width, height: heightMap.height, label: "HarnessHeights", shared: true
+            )
+            let commandBuffer = context.commandQueue.makeCommandBuffer()!
+            let blit = commandBuffer.makeBlitCommandEncoder()!
+            blit.copy(from: heightMap, to: readable)
+            blit.endEncoding()
+            commandBuffer.commit()
+            commandBuffer.waitUntilCompleted()
+            var half = [UInt16](repeating: 0, count: width * height)
+            half.withUnsafeMutableBytes {
+                readable.getBytes($0.baseAddress!, bytesPerRow: width * 2,
+                                  from: MTLRegionMake2D(0, 0, width, height), mipmapLevel: 0)
+            }
+            for i in 0..<(width * height) { values[i * 4] = Float(Float16(bitPattern: half[i])) }
+        }
+        return PixelGrid(width: width, height: height, values: values)
+    }
 }
 
 /// RGBA float pixels read back from a canvas texture. Row 0 is the top of the texture;

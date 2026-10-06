@@ -33,6 +33,8 @@ final class CanvasUndoManager {
         let opacity: Float
         let blendMode: LayerBlendMode
         let texture: MTLTexture  // GPU copy
+        /// GPU copy of the layer's height map, if it had one
+        let height: MTLTexture?
     }
 
     struct StackSnapshot {
@@ -49,6 +51,8 @@ final class CanvasUndoManager {
         let region: MTLScissorRect
         /// GPU copy, the size of `region`
         let texture: MTLTexture
+        /// The same rectangle of the layer's height map, if it had one
+        let height: MTLTexture?
         let description: String
     }
 
@@ -66,12 +70,17 @@ final class CanvasUndoManager {
     /// The copy is encoded into `commandBuffer`, so it runs ahead of whatever that buffer
     /// does to the layer next.
     ///
-    /// - Parameter source: where the pixels come from, if not the layer itself: a tool that
-    ///   has already changed the layer passes the copy it took beforehand.
+    /// - Parameters:
+    ///   - source: where the pixels come from, if not the layer itself: a tool that has
+    ///     already changed the layer passes the copy it took beforehand.
+    ///   - heightSource: likewise for the layer's height map, which is saved whenever the
+    ///     layer has one.
     func saveRegion(of layer: Layer, in layerStack: LayerStack, region: MTLScissorRect, from source: MTLTexture? = nil,
-                    context: MetalContext, description: String, commandBuffer: MTLCommandBuffer) {
-        guard let snapshot = captureRegion(of: layer, region: region, from: source, context: context,
-                                           description: description, commandBuffer: commandBuffer) else { return }
+                    heightFrom heightSource: MTLTexture? = nil, context: MetalContext, description: String,
+                    commandBuffer: MTLCommandBuffer) {
+        guard let snapshot = captureRegion(of: layer, region: region, from: source, heightFrom: heightSource,
+                                           context: context, description: description,
+                                           commandBuffer: commandBuffer) else { return }
         noteStackSize(layerStack)
         push(.region(snapshot))
     }
@@ -135,9 +144,47 @@ final class CanvasUndoManager {
                           destinationOrigin: MTLOrigin(x: snapshot.region.x, y: snapshot.region.y, z: 0))
                 blit.endEncoding()
             }
+            if let height = snapshot.height, let layerHeight = heightTexture(for: layer, context: context, commandBuffer: commandBuffer),
+               let blit = commandBuffer.makeBlitCommandEncoder() {
+                blit.copy(from: height,
+                          sourceSlice: 0, sourceLevel: 0,
+                          sourceOrigin: MTLOrigin(x: 0, y: 0, z: 0),
+                          sourceSize: MTLSize(width: snapshot.region.width, height: snapshot.region.height, depth: 1),
+                          to: layerHeight,
+                          destinationSlice: 0, destinationLevel: 0,
+                          destinationOrigin: MTLOrigin(x: snapshot.region.x, y: snapshot.region.y, z: 0))
+                blit.endEncoding()
+            }
             commandBuffer.commit()
             return current.map(Entry.region)
         }
+    }
+
+    /// The layer's height map, made and cleared (in `commandBuffer`) if it has none.
+    private func heightTexture(for layer: Layer, context: MetalContext, commandBuffer: MTLCommandBuffer) -> MTLTexture? {
+        if let height = layer.heightTexture { return height }
+        guard let height = makeTexture(like: layer.texture, pixelFormat: .r16Float, context: context) else { return nil }
+        clear(height, commandBuffer: commandBuffer)
+        layer.heightTexture = height
+        return height
+    }
+
+    private func makeTexture(like source: MTLTexture, pixelFormat: MTLPixelFormat, context: MetalContext) -> MTLTexture? {
+        let desc = MTLTextureDescriptor.texture2DDescriptor(
+            pixelFormat: pixelFormat, width: source.width, height: source.height, mipmapped: false
+        )
+        desc.usage = [.shaderRead, .shaderWrite, .renderTarget]
+        desc.storageMode = .private
+        return context.device.makeTexture(descriptor: desc)
+    }
+
+    private func clear(_ texture: MTLTexture, commandBuffer: MTLCommandBuffer) {
+        let pass = MTLRenderPassDescriptor()
+        pass.colorAttachments[0].texture = texture
+        pass.colorAttachments[0].loadAction = .clear
+        pass.colorAttachments[0].storeAction = .store
+        pass.colorAttachments[0].clearColor = MTLClearColor(red: 0, green: 0, blue: 0, alpha: 0)
+        commandBuffer.makeRenderCommandEncoder(descriptor: pass)?.endEncoding()
     }
 
     func clear() {
@@ -159,38 +206,41 @@ final class CanvasUndoManager {
     private static func bytes(of entry: Entry) -> Int {
         switch entry {
         case .stack(let snapshot):
-            return snapshot.layers.reduce(0) { $0 + $1.texture.width * $1.texture.height * 8 }
+            return snapshot.layers.reduce(0) { $0 + $1.texture.width * $1.texture.height * ($1.height == nil ? 8 : 10) }
         case .region(let snapshot):
-            return snapshot.texture.width * snapshot.texture.height * 8
+            return snapshot.texture.width * snapshot.texture.height * (snapshot.height == nil ? 8 : 10)
         }
     }
 
     // MARK: - Snapshot Capture & Restore
 
     private func captureRegion(of layer: Layer, region: MTLScissorRect, from source: MTLTexture? = nil,
-                               context: MetalContext, description: String,
+                               heightFrom heightSource: MTLTexture? = nil, context: MetalContext, description: String,
                                commandBuffer: MTLCommandBuffer) -> RegionSnapshot? {
         guard region.width > 0, region.height > 0 else { return nil }
-        let desc = MTLTextureDescriptor.texture2DDescriptor(
-            pixelFormat: layer.texture.pixelFormat,
-            width: region.width,
-            height: region.height,
-            mipmapped: false
-        )
-        desc.usage = [.shaderRead]
-        desc.storageMode = .private
 
-        guard let copy = context.device.makeTexture(descriptor: desc),
-              let blit = commandBuffer.makeBlitCommandEncoder() else { return nil }
-        blit.copy(from: source ?? layer.texture,
-                  sourceSlice: 0, sourceLevel: 0,
-                  sourceOrigin: MTLOrigin(x: region.x, y: region.y, z: 0),
-                  sourceSize: MTLSize(width: region.width, height: region.height, depth: 1),
-                  to: copy,
-                  destinationSlice: 0, destinationLevel: 0,
-                  destinationOrigin: MTLOrigin(x: 0, y: 0, z: 0))
-        blit.endEncoding()
-        return RegionSnapshot(layerID: layer.id, region: region, texture: copy, description: description)
+        func copy(of texture: MTLTexture) -> MTLTexture? {
+            let desc = MTLTextureDescriptor.texture2DDescriptor(
+                pixelFormat: texture.pixelFormat, width: region.width, height: region.height, mipmapped: false
+            )
+            desc.usage = [.shaderRead]
+            desc.storageMode = .private
+            guard let copy = context.device.makeTexture(descriptor: desc),
+                  let blit = commandBuffer.makeBlitCommandEncoder() else { return nil }
+            blit.copy(from: texture,
+                      sourceSlice: 0, sourceLevel: 0,
+                      sourceOrigin: MTLOrigin(x: region.x, y: region.y, z: 0),
+                      sourceSize: MTLSize(width: region.width, height: region.height, depth: 1),
+                      to: copy,
+                      destinationSlice: 0, destinationLevel: 0,
+                      destinationOrigin: MTLOrigin(x: 0, y: 0, z: 0))
+            blit.endEncoding()
+            return copy
+        }
+
+        guard let pixels = copy(of: source ?? layer.texture) else { return nil }
+        let height = (heightSource ?? layer.heightTexture).flatMap(copy(of:))
+        return RegionSnapshot(layerID: layer.id, region: region, texture: pixels, height: height, description: description)
     }
 
     private func captureStack(layerStack: LayerStack, selectionPath: CGPath?, context: MetalContext, description: String) -> StackSnapshot? {
@@ -205,7 +255,8 @@ final class CanvasUndoManager {
                 isLocked: layer.isLocked,
                 opacity: layer.opacity,
                 blendMode: layer.blendMode,
-                texture: textureCopy
+                texture: textureCopy,
+                height: layer.heightTexture.flatMap { copyTexture($0, context: context) }
             ))
         }
 
@@ -231,6 +282,7 @@ final class CanvasUndoManager {
                 existing.blendMode = snap.blendMode
                 // Restore texture
                 blitCopy(from: snap.texture, to: existing.texture, context: context)
+                restoreHeight(snap.height, to: existing, context: context)
                 newLayers.append(existing)
             } else {
                 // Layer was deleted — recreate it
@@ -250,12 +302,26 @@ final class CanvasUndoManager {
                 layer.opacity = snap.opacity
                 layer.blendMode = snap.blendMode
                 blitCopy(from: snap.texture, to: newTexture, context: context)
+                restoreHeight(snap.height, to: layer, context: context)
                 newLayers.append(layer)
             }
         }
 
         layerStack.layers = newLayers
         layerStack.activeLayerIndex = min(snapshot.activeLayerIndex, newLayers.count - 1)
+    }
+
+    /// Put a snapshot's height map back on a layer: none means flat.
+    private func restoreHeight(_ snapshot: MTLTexture?, to layer: Layer, context: MetalContext) {
+        if let snapshot {
+            guard let commandBuffer = context.commandQueue.makeCommandBuffer(),
+                  let height = heightTexture(for: layer, context: context, commandBuffer: commandBuffer) else { return }
+            commandBuffer.commit()
+            blitCopy(from: snapshot, to: height, context: context)
+        } else if let height = layer.heightTexture, let commandBuffer = context.commandQueue.makeCommandBuffer() {
+            clear(height, commandBuffer: commandBuffer)
+            commandBuffer.commit()
+        }
     }
 
     // MARK: - GPU Texture Copy
