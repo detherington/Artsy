@@ -76,6 +76,62 @@ enum StrokeFixtures {
         }
     }
 
+    /// `points` followed by `seconds` of the pen resting on the last one, sampled at 120 Hz:
+    /// what a hold at the end of a stroke looks like to the engine.
+    static func held(_ points: [StrokePoint], for seconds: Double) -> [StrokePoint] {
+        guard let last = points.last else { return points }
+        let rests = (1...max(1, Int(seconds * 120))).map { i in
+            StrokePoint(position: last.position, pressure: last.pressure, tiltX: last.tiltX, tiltY: last.tiltY,
+                        rotation: last.rotation, timestamp: last.timestamp + Double(i) / 120)
+        }
+        return points + rests
+    }
+
+    /// A hand-drawn version of `ideal` (positions around a shape, open or closed): slow
+    /// wobble of about `wobble` pixels, from a fixed seed.
+    static func rough(_ ideal: [CGPoint], wobble: CGFloat, seed: UInt64 = 3, pressure: Float = 0.7,
+                      duration: Double = 1.0) -> [StrokePoint] {
+        var state = seed
+        func next() -> CGFloat {
+            state = state &* 6364136223846793005 &+ 1442695040888963407
+            return CGFloat(state >> 40) / CGFloat(1 << 24) * 2 - 1
+        }
+        let phases = (0..<4).map { _ in next() * .pi }
+        let count = ideal.count
+        return ideal.enumerated().map { i, p in
+            let t = Double(i) / Double(count)
+            // Slow drift and a tremor; at a pen's sample rate the tremor spans many samples
+            let dx = wobble * (0.6 * sin(t * 5 * .pi + phases[0]) + 0.4 * sin(t * 11 * .pi + phases[1]))
+            let dy = wobble * (0.6 * sin(t * 4 * .pi + phases[2]) + 0.4 * sin(t * 13 * .pi + phases[3]))
+            return StrokePoint(position: CGPoint(x: p.x + dx, y: p.y + dy), pressure: pressure,
+                               tiltX: 0, tiltY: 0, rotation: 0, timestamp: t * duration)
+        }
+    }
+
+    /// Positions around an ideal circle, 3 px apart, starting at the top.
+    static func circlePositions(center: CGPoint, radius: CGFloat) -> [CGPoint] {
+        let count = max(24, Int(2 * .pi * radius / 3))
+        return (0...count).map { i in
+            let a = CGFloat(i) / CGFloat(count) * 2 * .pi + .pi / 2
+            return CGPoint(x: center.x + radius * cos(a), y: center.y + radius * sin(a))
+        }
+    }
+
+    /// Positions around a polygon, 3 px apart, back to the first corner.
+    static func polygonPositions(_ corners: [CGPoint]) -> [CGPoint] {
+        var result: [CGPoint] = []
+        for (i, a) in corners.enumerated() {
+            let b = corners[(i + 1) % corners.count]
+            let steps = max(1, Int(hypot(b.x - a.x, b.y - a.y) / 3))
+            for s in 0..<steps {
+                let t = CGFloat(s) / CGFloat(steps)
+                result.append(CGPoint(x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t))
+            }
+        }
+        result.append(corners[0])
+        return result
+    }
+
     /// The standard sheet every brush is drawn with, for a 512×288 canvas: a pressure ramp,
     /// a wave, sharp corners with a line crossing them, a spiral, and two taps.
     static var brushSheet: [[StrokePoint]] {

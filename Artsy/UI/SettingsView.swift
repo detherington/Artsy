@@ -187,6 +187,18 @@ struct PressurelessInputSettings: View {
     @ObservedObject private var prefs = AppPreferences.shared
 
     var body: some View {
+        GroupBox("Shapes") {
+            VStack(alignment: .leading, spacing: 8) {
+                Toggle("Hold still at the end of a stroke to snap it to a shape", isOn: $prefs.snapShapesOnHold)
+
+                Text("Draw a rough line, circle, rectangle or polygon and keep the pen down and still for a moment: the stroke becomes the shape, drawn with the same brush. Move on and it goes back to what you drew.")
+                    .font(.system(size: 11))
+                    .foregroundColor(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .padding(4)
+        }
+
         GroupBox("Mouse and trackpad") {
             VStack(alignment: .leading, spacing: 8) {
                 Toggle("Ease strokes in and out", isOn: $prefs.easeStrokesWithoutPressure)

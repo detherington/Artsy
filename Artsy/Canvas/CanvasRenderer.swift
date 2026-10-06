@@ -32,6 +32,8 @@ final class CanvasRenderer: NSObject, MTKViewDelegate {
     /// Stamp brushes that spray while resting: dabs already laid per rest, by sample index.
     private var restDabsLaid: [Int: Int] = [:]
     private var renderedRevision = 0
+    /// Which path the stroke textures hold: a stroke that snaps to a shape swaps paths.
+    private var renderedPathID: ObjectIdentifier?
     /// Where the tail was drawn last frame.
     private var tailRegions: [MTLScissorRect] = []
     /// Everything drawn into `activeStrokeTexture` by this stroke — or, for a smudge brush,
@@ -255,7 +257,12 @@ final class CanvasRenderer: NSObject, MTKViewDelegate {
     ///
     /// - Parameter finishing: the pen has lifted, so every point is settled.
     private func encodeActiveStroke(into commandBuffer: MTLCommandBuffer, finishing: Bool = false) {
-        guard let viewModel = viewModel, viewModel.isDrawing, let path = viewModel.activePath else { return }
+        guard let viewModel = viewModel, viewModel.isDrawing, let path = viewModel.drawnPath else { return }
+        // The stroke snapped to a shape, or snapped back: draw it again from the start
+        if let rendered = renderedPathID, rendered != ObjectIdentifier(path) {
+            restartStroke(into: commandBuffer)
+        }
+        renderedPathID = ObjectIdentifier(path)
         guard finishing || path.revision != renderedRevision else { return }
         renderedRevision = path.revision
 
@@ -988,6 +995,37 @@ final class CanvasRenderer: NSObject, MTKViewDelegate {
         resetStrokeState()
     }
 
+    /// Throw away what has been drawn of the stroke so far, so it is drawn again from the
+    /// start: for a stroke that snapped to a shape, or snapped back. Thick paint already
+    /// laid goes back to how the layer was at pen-down.
+    private func restartStroke(into commandBuffer: MTLCommandBuffer) {
+        var stale = tailRegions
+        if let strokeRegion {
+            compositor.clear(activeStrokeTexture, regions: [strokeRegion], commandBuffer: commandBuffer)
+            stale.append(strokeRegion)
+            if let brush = viewModel?.currentBrush, Self.laysThickPaint(brush),
+               let height = viewModel?.layerStack?.activeLayer?.heightTexture, let before = heightBeforeStroke,
+               let blit = commandBuffer.makeBlitCommandEncoder() {
+                blit.copy(from: before,
+                          sourceSlice: 0, sourceLevel: 0,
+                          sourceOrigin: MTLOrigin(x: strokeRegion.x, y: strokeRegion.y, z: 0),
+                          sourceSize: MTLSize(width: strokeRegion.width, height: strokeRegion.height, depth: 1),
+                          to: height,
+                          destinationSlice: 0, destinationLevel: 0,
+                          destinationOrigin: MTLOrigin(x: strokeRegion.x, y: strokeRegion.y, z: 0))
+                blit.endEncoding()
+            }
+        }
+        compositor.clear(strokeTailTexture, regions: tailRegions, commandBuffer: commandBuffer)
+        pendingRegions += stale
+        committedThrough = nil
+        dabPlacer = nil
+        restDabsLaid = [:]
+        renderedRevision = -1
+        tailRegions = []
+        strokeRegion = nil
+    }
+
     /// A stamp brush with impasto that is not a smudge or an eraser.
     private static func laysThickPaint(_ brush: BrushDescriptor) -> Bool {
         guard case .stamp(let settings) = brush.rendering else { return false }
@@ -995,6 +1033,7 @@ final class CanvasRenderer: NSObject, MTKViewDelegate {
     }
 
     private func resetStrokeState() {
+        renderedPathID = nil
         committedThrough = nil
         dabPlacer = nil
         restDabsLaid = [:]

@@ -329,7 +329,23 @@ Done:
   8192² with many mostly-empty layers; the memory-bounded limits above cover that case
   honestly instead.
 
-Still to do: hold-to-snap shapes, guides.
+- **Hold-to-snap shapes.** Draw a rough line, circle, ellipse, rectangle, triangle or
+  other simple polygon and keep the pen down and still for 0.6 s: the stroke becomes the
+  shape, drawn with the same brush at the stroke's usual pressure (`ShapeRecognizer`;
+  Settings → Shapes). Move on and it goes back to what was drawn, continued; lift and it
+  stays. The status bar names the shape while it is held.
+  - Recognition: a light smoothing takes the tremor out; a stroke that runs nearly
+    straight from start to end is a line; one that comes back to its start is resampled
+    into a ring and simplified, and the vertices the path really turns at (40° or more)
+    are its corners — three to six, with the ring following their polygon, make a
+    polygon (a near-rectangle is squared up and fitted to the ring); otherwise an
+    ellipse is fitted (axes from the ring's spread, radii by least squares) and accepted
+    if the ring sits on it. Anything else is left alone, which is most strokes.
+  - The engine draws the snapped path in place of the stroke: the stroke textures are
+    started over, and thick paint already laid goes back to the layer's state at
+    pen-down. Smudge brushes, which have already changed the layer, do not snap.
+
+Still to do: guides.
 
 ## Measurements
 
