@@ -12,16 +12,21 @@ final class MetalContext {
     let strokeWatercolorPipelineState: MTLRenderPipelineState
     let strokeAcrylicPipelineState: MTLRenderPipelineState
     let strokeOilPipelineState: MTLRenderPipelineState
-    let strokeEraserPipelineState: MTLRenderPipelineState
     // Radial-distance variants for stroke caps (rounded endpoints, Procreate-style)
     let strokeRadialPipelineState: MTLRenderPipelineState
     let strokeRadialPencilPipelineState: MTLRenderPipelineState
     let strokeRadialWatercolorPipelineState: MTLRenderPipelineState
     let strokeRadialAcrylicPipelineState: MTLRenderPipelineState
     let strokeRadialOilPipelineState: MTLRenderPipelineState
-    let strokeRadialEraserPipelineState: MTLRenderPipelineState
     let compositeNormalPipelineState: MTLRenderPipelineState
     let compositeBlendPipelineState: MTLRenderPipelineState
+    // Active-layer variants that merge the in-progress stroke into the layer first
+    let compositeNormalWithStrokePipelineState: MTLRenderPipelineState
+    let compositeBlendWithStrokePipelineState: MTLRenderPipelineState
+    /// Removes the source's coverage from the destination (eraser strokes).
+    let compositeErasePipelineState: MTLRenderPipelineState
+    /// Writes transparent black; used under a scissor rect to clear part of a texture.
+    let clearPipelineState: MTLRenderPipelineState
     let displayPipelineState: MTLRenderPipelineState
     let maskedCutPipelineState: MTLComputePipelineState
     let maskedClearPipelineState: MTLComputePipelineState
@@ -111,11 +116,6 @@ final class MetalContext {
             fragmentFunction: "strokeOilFragment"
         )
 
-        // Stroke eraser — uses destination-out blending to remove pixels
-        self.strokeEraserPipelineState = try MetalContext.makeEraserPipeline(
-            device: device, library: library, vertexDescriptor: strokeVD
-        )
-
         // Radial cap variants
         self.strokeRadialPipelineState = try MetalContext.makeStrokePipeline(
             device: device, library: library, vertexDescriptor: strokeVD,
@@ -137,37 +137,36 @@ final class MetalContext {
             device: device, library: library, vertexDescriptor: strokeVD,
             fragmentFunction: "strokeRadialOilFragment"
         )
-        // Eraser cap also uses destination-out blending with the radial shape
-        let radialEraserDesc = MTLRenderPipelineDescriptor()
-        radialEraserDesc.vertexFunction = library.makeFunction(name: "strokeVertex")
-        radialEraserDesc.fragmentFunction = library.makeFunction(name: "strokeRadialFragment")
-        radialEraserDesc.vertexDescriptor = strokeVD
-        radialEraserDesc.colorAttachments[0].pixelFormat = .rgba16Float
-        let eraserAttach = radialEraserDesc.colorAttachments[0]!
-        eraserAttach.isBlendingEnabled = true
-        eraserAttach.rgbBlendOperation = .add
-        eraserAttach.alphaBlendOperation = .add
-        eraserAttach.sourceRGBBlendFactor = .zero
-        eraserAttach.destinationRGBBlendFactor = .oneMinusSourceAlpha
-        eraserAttach.sourceAlphaBlendFactor = .zero
-        eraserAttach.destinationAlphaBlendFactor = .oneMinusSourceAlpha
-        self.strokeRadialEraserPipelineState = try device.makeRenderPipelineState(descriptor: radialEraserDesc)
 
         // Composite normal
         self.compositeNormalPipelineState = try MetalContext.makeCompositePipeline(
             device: device, library: library, vertexDescriptor: compVD,
-            fragmentFunction: "compositeNormal"
+            fragmentFunction: "compositeNormal", blending: .sourceOver
+        )
+        self.compositeNormalWithStrokePipelineState = try MetalContext.makeCompositePipeline(
+            device: device, library: library, vertexDescriptor: compVD,
+            fragmentFunction: "compositeNormalWithStroke", blending: .sourceOver
         )
 
-        // Blend pipeline — disables alpha blending since the shader does
+        // Blend pipelines — alpha blending is disabled since the shader does
         // all compositing internally and writes the final composited result
-        let blendDesc = MTLRenderPipelineDescriptor()
-        blendDesc.vertexFunction = library.makeFunction(name: "compositeVertex")
-        blendDesc.fragmentFunction = library.makeFunction(name: "compositeBlend")
-        blendDesc.vertexDescriptor = compVD
-        blendDesc.colorAttachments[0].pixelFormat = .rgba16Float
-        blendDesc.colorAttachments[0].isBlendingEnabled = false
-        self.compositeBlendPipelineState = try device.makeRenderPipelineState(descriptor: blendDesc)
+        self.compositeBlendPipelineState = try MetalContext.makeCompositePipeline(
+            device: device, library: library, vertexDescriptor: compVD,
+            fragmentFunction: "compositeBlend", blending: .replace
+        )
+        self.compositeBlendWithStrokePipelineState = try MetalContext.makeCompositePipeline(
+            device: device, library: library, vertexDescriptor: compVD,
+            fragmentFunction: "compositeBlendWithStroke", blending: .replace
+        )
+
+        self.compositeErasePipelineState = try MetalContext.makeCompositePipeline(
+            device: device, library: library, vertexDescriptor: compVD,
+            fragmentFunction: "compositeNormal", blending: .destinationOut
+        )
+        self.clearPipelineState = try MetalContext.makeCompositePipeline(
+            device: device, library: library, vertexDescriptor: compVD,
+            fragmentFunction: "clearFragment", blending: .replace
+        )
 
         // Display
         let displayDesc = MTLRenderPipelineDescriptor()
@@ -243,11 +242,21 @@ final class MetalContext {
         return try device.makeRenderPipelineState(descriptor: desc)
     }
 
+    private enum CompositeBlending {
+        /// Premultiplied source over destination
+        case sourceOver
+        /// The fragment's output replaces the destination
+        case replace
+        /// Destination-out: erases by the source's alpha
+        case destinationOut
+    }
+
     private static func makeCompositePipeline(
         device: MTLDevice,
         library: MTLLibrary,
         vertexDescriptor: MTLVertexDescriptor,
-        fragmentFunction: String
+        fragmentFunction: String,
+        blending: CompositeBlending
     ) throws -> MTLRenderPipelineState {
         let desc = MTLRenderPipelineDescriptor()
         desc.vertexFunction = library.makeFunction(name: "compositeVertex")
@@ -256,37 +265,26 @@ final class MetalContext {
         desc.colorAttachments[0].pixelFormat = .rgba16Float
 
         let attachment = desc.colorAttachments[0]!
-        attachment.isBlendingEnabled = true
-        attachment.rgbBlendOperation = .add
-        attachment.alphaBlendOperation = .add
-        attachment.sourceRGBBlendFactor = .one
-        attachment.destinationRGBBlendFactor = .oneMinusSourceAlpha
-        attachment.sourceAlphaBlendFactor = .one
-        attachment.destinationAlphaBlendFactor = .oneMinusSourceAlpha
-
-        return try device.makeRenderPipelineState(descriptor: desc)
-    }
-
-    private static func makeEraserPipeline(
-        device: MTLDevice,
-        library: MTLLibrary,
-        vertexDescriptor: MTLVertexDescriptor
-    ) throws -> MTLRenderPipelineState {
-        let desc = MTLRenderPipelineDescriptor()
-        desc.vertexFunction = library.makeFunction(name: "strokeVertex")
-        desc.fragmentFunction = library.makeFunction(name: "strokeProceduralFragment")
-        desc.vertexDescriptor = vertexDescriptor
-        desc.colorAttachments[0].pixelFormat = .rgba16Float
-
-        // Destination-out blending: erases by subtracting source alpha from destination
-        let attachment = desc.colorAttachments[0]!
-        attachment.isBlendingEnabled = true
-        attachment.rgbBlendOperation = .add
-        attachment.alphaBlendOperation = .add
-        attachment.sourceRGBBlendFactor = .zero
-        attachment.destinationRGBBlendFactor = .oneMinusSourceAlpha
-        attachment.sourceAlphaBlendFactor = .zero
-        attachment.destinationAlphaBlendFactor = .oneMinusSourceAlpha
+        switch blending {
+        case .replace:
+            attachment.isBlendingEnabled = false
+        case .sourceOver:
+            attachment.isBlendingEnabled = true
+            attachment.rgbBlendOperation = .add
+            attachment.alphaBlendOperation = .add
+            attachment.sourceRGBBlendFactor = .one
+            attachment.destinationRGBBlendFactor = .oneMinusSourceAlpha
+            attachment.sourceAlphaBlendFactor = .one
+            attachment.destinationAlphaBlendFactor = .oneMinusSourceAlpha
+        case .destinationOut:
+            attachment.isBlendingEnabled = true
+            attachment.rgbBlendOperation = .add
+            attachment.alphaBlendOperation = .add
+            attachment.sourceRGBBlendFactor = .zero
+            attachment.destinationRGBBlendFactor = .oneMinusSourceAlpha
+            attachment.sourceAlphaBlendFactor = .zero
+            attachment.destinationAlphaBlendFactor = .oneMinusSourceAlpha
+        }
 
         return try device.makeRenderPipelineState(descriptor: desc)
     }

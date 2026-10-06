@@ -30,6 +30,7 @@ class CanvasView: MTKView {
     private var transformDragStart: CGPoint?
     private var transformStartTransform: CGAffineTransform = .identity
     private var toolChangeObservation: AnyCancellable?
+    private var brushCursorObservation: AnyCancellable?
 
     override var acceptsFirstResponder: Bool { true }
 
@@ -73,9 +74,32 @@ class CanvasView: MTKView {
                 } else if self.viewModel.transformSession != nil {
                     self.commitTransformIfNeeded()
                 }
-                ToolCursor.current(for: newTool).set()
+                self.cursor(for: newTool).set()
                 self.window?.invalidateCursorRects(for: self)
             }
+
+        // The brush cursor is a ring the size of the tip on screen, so it follows the
+        // brush size and the zoom level.
+        brushCursorObservation = viewModel.$brushSize.map { _ in () }
+            .merge(with: viewModel.$transform.map(\.scale).removeDuplicates().map { _ in () })
+            .receive(on: RunLoop.main)   // read the new values, not the ones being replaced
+            .sink { [weak self] in
+                guard let self = self, let window = self.window else { return }
+                window.invalidateCursorRects(for: self)
+                let tool = self.viewModel.currentTool
+                if (tool == .brush || tool == .eraser), !self.isPanning, !self.isSpaceHeld,
+                   self.bounds.contains(self.convert(window.mouseLocationOutsideOfEventStream, from: nil)) {
+                    self.cursor(for: tool).set()
+                }
+            }
+    }
+
+    /// The cursor to show over the canvas for a tool.
+    private func cursor(for tool: ToolType) -> NSCursor {
+        guard tool == .brush || tool == .eraser, let viewModel = viewModel else {
+            return ToolCursor.current(for: tool)
+        }
+        return BrushCursor.cursor(diameter: CGFloat(viewModel.brushSize) * viewModel.transform.scale)
     }
 
     // MARK: - Mouse Down
@@ -266,8 +290,9 @@ class CanvasView: MTKView {
         let point = TabletEventHandler.strokePoint(from: event, in: self)
         let canvasPoint = viewToCanvasPoint(point)
 
-        let brushName = viewModel.currentBrush.category == .utility ? "Erase" : viewModel.currentBrush.name
-        viewModel.saveUndoSnapshot(renderer: renderer, description: brushName)
+        // A tablet reports several times per display frame. AppKit merges those reports by
+        // default; while drawing we want every one.
+        NSEvent.isMouseCoalescingEnabled = false
 
         renderer.beginStroke()
         viewModel.beginStroke(point: canvasPoint)
@@ -287,6 +312,7 @@ class CanvasView: MTKView {
         // Finalize first: the renderer still needs the stroke's points to draw its last samples.
         renderer.finalizeStroke()
         viewModel.endStroke()
+        NSEvent.isMouseCoalescingEnabled = true
     }
 
     // MARK: - Eyedropper Tool
@@ -1089,7 +1115,7 @@ class CanvasView: MTKView {
         super.resetCursorRects()
         guard let viewModel = viewModel else { return }
         discardCursorRects()
-        addCursorRect(bounds, cursor: ToolCursor.current(for: viewModel.currentTool))
+        addCursorRect(bounds, cursor: cursor(for: viewModel.currentTool))
     }
 
     // Cursor-rect system handles tool cursor + revert-on-exit automatically
@@ -1146,7 +1172,12 @@ class CanvasView: MTKView {
 
     // MARK: - Tablet Events
 
-    override func tabletPoint(with event: NSEvent) {}
+    /// Pen samples normally arrive as mouse events. When only the pressure changes — the
+    /// pen is pressed harder without moving — AppKit sends a tablet event here instead.
+    override func tabletPoint(with event: NSEvent) {
+        guard let viewModel = viewModel, viewModel.isDrawing else { return }
+        handleDrawingMouseDragged(event)
+    }
 
     override func tabletProximity(with event: NSEvent) {
         // Handled by app-level event monitor

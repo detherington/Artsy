@@ -1,7 +1,7 @@
 import Metal
 import simd
 
-/// Renders stroke geometry onto the active stroke texture.
+/// Renders stroke geometry into a stroke texture.
 final class StrokeRenderer {
     private let context: MetalContext
     private let brushEngine = BrushEngine()
@@ -10,20 +10,23 @@ final class StrokeRenderer {
         self.context = context
     }
 
-    /// Render interpolated points onto the target texture using the specified brush.
-    /// Renders the ribbon first, then overlays tip-quad caps at the start and end
-    /// using a radial-distance shader for smooth, rounded endpoints (Procreate-style).
-    func render(
+    /// Draw `points[range]` into an open render pass on a stroke texture: the ribbon first,
+    /// then tip-quad caps using a radial-distance shader for smooth, rounded endpoints
+    /// (Procreate-style). One copy is drawn per entry in `mirrors` (symmetry).
+    ///
+    /// - Returns: the canvas-space bounds of each copy that produced geometry.
+    @discardableResult
+    func encode(
         points: [InterpolatedPoint],
+        range: ClosedRange<Int>,
         brush: BrushDescriptor,
         color: StrokeColor,
-        targetTexture: MTLTexture,
-        commandBuffer: MTLCommandBuffer,
-        canvasSize: CGSize,
-        isEraser: Bool = false
-    ) {
-        guard !points.isEmpty else { return }
-
+        startCap: Bool,
+        endCap: Bool,
+        mirrors: [(CGPoint) -> CGPoint],
+        encoder: MTLRenderCommandEncoder,
+        canvasSize: CGSize
+    ) -> [CGRect] {
         var transform = orthographicProjection(
             left: 0, right: Float(canvasSize.width),
             bottom: 0, top: Float(canvasSize.height),
@@ -31,57 +34,48 @@ final class StrokeRenderer {
         )
         var brushColor = color.simd
         var hardness = brush.hardness
+        var drawn: [CGRect] = []
 
-        let passDesc = MTLRenderPassDescriptor()
-        passDesc.colorAttachments[0].texture = targetTexture
-        passDesc.colorAttachments[0].loadAction = .load
-        passDesc.colorAttachments[0].storeAction = .store
+        for mirror in mirrors {
+            let geometry = brushEngine.generateGeometry(
+                for: points, range: range, brush: brush,
+                startCap: startCap, endCap: endCap, transform: mirror
+            )
+            guard !geometry.isEmpty else { continue }
+            drawn.append(geometry.bounds)
 
-        guard let encoder = commandBuffer.makeRenderCommandEncoder(descriptor: passDesc) else { return }
-
-        // 1. Ribbon (for strokes with 2+ points)
-        if points.count >= 2 {
-            let (stripVerts, stripIndices) = brushEngine.generateStripVertices(for: points, brush: brush)
-            if !stripVerts.isEmpty, let vb = makeBuffer(stripVerts), let ib = makeIndexBuffer(stripIndices) {
-                let ribbonPipeline = ribbonPipelineState(brush: brush, isEraser: isEraser)
-                encoder.setRenderPipelineState(ribbonPipeline)
+            if !geometry.ribbonIndices.isEmpty,
+               let vb = makeBuffer(geometry.ribbonVertices), let ib = makeIndexBuffer(geometry.ribbonIndices) {
+                encoder.setRenderPipelineState(ribbonPipelineState(brush: brush))
                 encoder.setVertexBuffer(vb, offset: 0, index: 0)
                 encoder.setVertexBytes(&transform, length: MemoryLayout<float4x4>.size, index: 1)
                 encoder.setFragmentBytes(&brushColor, length: MemoryLayout<SIMD4<Float>>.size, index: 0)
                 encoder.setFragmentBytes(&hardness, length: MemoryLayout<Float>.size, index: 1)
                 encoder.drawIndexedPrimitives(
-                    type: .triangle, indexCount: stripIndices.count,
+                    type: .triangle, indexCount: geometry.ribbonIndices.count,
                     indexType: .uint32, indexBuffer: ib, indexBufferOffset: 0
                 )
             }
-        }
 
-        // 2. Round caps at start/end (or a single dot if only one point).
-        // Skip caps for fixed-nib (calligraphy) brushes — round caps would spoil
-        // the crisp angular nib look. The ribbon's edges are the correct shape.
-        let (capVerts, capIndices) = brush.fixedNibAngle == nil
-            ? brushEngine.generateCapVertices(for: points, brush: brush)
-            : ([], [])
-        if !capVerts.isEmpty, let capVB = makeBuffer(capVerts), let capIB = makeIndexBuffer(capIndices) {
-            let capPipeline = radialCapPipelineState(brush: brush, isEraser: isEraser)
-            encoder.setRenderPipelineState(capPipeline)
-            encoder.setVertexBuffer(capVB, offset: 0, index: 0)
-            encoder.setVertexBytes(&transform, length: MemoryLayout<float4x4>.size, index: 1)
-            encoder.setFragmentBytes(&brushColor, length: MemoryLayout<SIMD4<Float>>.size, index: 0)
-            encoder.setFragmentBytes(&hardness, length: MemoryLayout<Float>.size, index: 1)
-            encoder.drawIndexedPrimitives(
-                type: .triangle, indexCount: capIndices.count,
-                indexType: .uint32, indexBuffer: capIB, indexBufferOffset: 0
-            )
+            if !geometry.capIndices.isEmpty,
+               let capVB = makeBuffer(geometry.capVertices), let capIB = makeIndexBuffer(geometry.capIndices) {
+                encoder.setRenderPipelineState(radialCapPipelineState(brush: brush))
+                encoder.setVertexBuffer(capVB, offset: 0, index: 0)
+                encoder.setVertexBytes(&transform, length: MemoryLayout<float4x4>.size, index: 1)
+                encoder.setFragmentBytes(&brushColor, length: MemoryLayout<SIMD4<Float>>.size, index: 0)
+                encoder.setFragmentBytes(&hardness, length: MemoryLayout<Float>.size, index: 1)
+                encoder.drawIndexedPrimitives(
+                    type: .triangle, indexCount: geometry.capIndices.count,
+                    indexType: .uint32, indexBuffer: capIB, indexBufferOffset: 0
+                )
+            }
         }
-
-        encoder.endEncoding()
+        return drawn
     }
 
     // MARK: - Pipeline Selection
 
-    private func ribbonPipelineState(brush: BrushDescriptor, isEraser: Bool) -> MTLRenderPipelineState {
-        if isEraser { return context.strokeEraserPipelineState }
+    private func ribbonPipelineState(brush: BrushDescriptor) -> MTLRenderPipelineState {
         switch brush.shaderType {
         case .procedural: return context.strokeProceduralPipelineState
         case .pencil: return context.strokePencilPipelineState
@@ -91,8 +85,7 @@ final class StrokeRenderer {
         }
     }
 
-    private func radialCapPipelineState(brush: BrushDescriptor, isEraser: Bool) -> MTLRenderPipelineState {
-        if isEraser { return context.strokeRadialEraserPipelineState }
+    private func radialCapPipelineState(brush: BrushDescriptor) -> MTLRenderPipelineState {
         switch brush.shaderType {
         case .pencil: return context.strokeRadialPencilPipelineState
         case .watercolor: return context.strokeRadialWatercolorPipelineState

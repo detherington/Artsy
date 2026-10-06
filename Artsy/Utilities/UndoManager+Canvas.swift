@@ -2,13 +2,20 @@ import Foundation
 import Metal
 import CoreGraphics
 
-/// Snapshot-based undo/redo that captures the full layer stack state.
-/// Every undoable action saves a complete snapshot of all layers, their
-/// textures, properties, and the active layer index. This handles all cases:
-/// drawing, erasing, adding/removing layers, reordering, property changes.
+/// Snapshot-based undo/redo.
+///
+/// Most actions save a complete snapshot of all layers, their textures, properties, and the
+/// active layer index, which handles every case: adding/removing layers, reordering,
+/// property changes, fills, pastes. A brush or eraser stroke only changes pixels inside its
+/// own bounds on one layer, so it saves just that rectangle.
 final class CanvasUndoManager {
-    private var undoStack: [StackSnapshot] = []
-    private var redoStack: [StackSnapshot] = []
+    private enum Entry {
+        case stack(StackSnapshot)
+        case region(RegionSnapshot)
+    }
+
+    private var undoStack: [Entry] = []
+    private var redoStack: [Entry] = []
     let maxUndoLevels: Int = 25
 
     struct LayerSnapshot {
@@ -28,13 +35,37 @@ final class CanvasUndoManager {
         let description: String
     }
 
+    /// The pixels of one rectangle of one layer.
+    struct RegionSnapshot {
+        let layerID: UUID
+        /// Position in the layer texture (pixels, origin top-left)
+        let region: MTLScissorRect
+        /// GPU copy, the size of `region`
+        let texture: MTLTexture
+        let description: String
+    }
+
     var canUndo: Bool { !undoStack.isEmpty }
     var canRedo: Bool { !redoStack.isEmpty }
 
     /// Save the full layer stack state BEFORE performing an action.
     func saveSnapshot(layerStack: LayerStack, selectionPath: CGPath?, context: MetalContext, description: String) {
         guard let snapshot = captureStack(layerStack: layerStack, selectionPath: selectionPath, context: context, description: description) else { return }
-        undoStack.append(snapshot)
+        push(.stack(snapshot))
+    }
+
+    /// Save one rectangle of a layer BEFORE a stroke is merged into it.
+    /// The copy is encoded into `commandBuffer`, so it runs ahead of whatever that buffer
+    /// does to the layer next.
+    func saveRegion(of layer: Layer, region: MTLScissorRect, context: MetalContext,
+                    description: String, commandBuffer: MTLCommandBuffer) {
+        guard let snapshot = captureRegion(of: layer, region: region, context: context,
+                                           description: description, commandBuffer: commandBuffer) else { return }
+        push(.region(snapshot))
+    }
+
+    private func push(_ entry: Entry) {
+        undoStack.append(entry)
         redoStack.removeAll()
 
         while undoStack.count > maxUndoLevels {
@@ -44,26 +75,47 @@ final class CanvasUndoManager {
 
     /// Undo: restore the previous snapshot.
     func undo(layerStack: LayerStack, viewModel: CanvasViewModel, context: MetalContext) {
-        guard let snapshot = undoStack.popLast() else { return }
-
-        if let current = captureStack(layerStack: layerStack, selectionPath: viewModel.selectionPath, context: context, description: snapshot.description) {
-            redoStack.append(current)
+        guard let entry = undoStack.popLast() else { return }
+        if let inverse = apply(entry, layerStack: layerStack, viewModel: viewModel, context: context) {
+            redoStack.append(inverse)
         }
-
-        restoreStack(snapshot: snapshot, layerStack: layerStack, context: context)
-        viewModel.selectionPath = snapshot.selectionPath
     }
 
     /// Redo: restore the state that was undone.
     func redo(layerStack: LayerStack, viewModel: CanvasViewModel, context: MetalContext) {
-        guard let snapshot = redoStack.popLast() else { return }
-
-        if let current = captureStack(layerStack: layerStack, selectionPath: viewModel.selectionPath, context: context, description: snapshot.description) {
-            undoStack.append(current)
+        guard let entry = redoStack.popLast() else { return }
+        if let inverse = apply(entry, layerStack: layerStack, viewModel: viewModel, context: context) {
+            undoStack.append(inverse)
         }
+    }
 
-        restoreStack(snapshot: snapshot, layerStack: layerStack, context: context)
-        viewModel.selectionPath = snapshot.selectionPath
+    /// Restore `entry` and return an entry that reverses the restore.
+    private func apply(_ entry: Entry, layerStack: LayerStack, viewModel: CanvasViewModel, context: MetalContext) -> Entry? {
+        switch entry {
+        case .stack(let snapshot):
+            let current = captureStack(layerStack: layerStack, selectionPath: viewModel.selectionPath, context: context, description: snapshot.description)
+            restoreStack(snapshot: snapshot, layerStack: layerStack, context: context)
+            viewModel.selectionPath = snapshot.selectionPath
+            return current.map(Entry.stack)
+
+        case .region(let snapshot):
+            guard let layer = layerStack.layers.first(where: { $0.id == snapshot.layerID }),
+                  let commandBuffer = context.commandQueue.makeCommandBuffer() else { return nil }
+            let current = captureRegion(of: layer, region: snapshot.region, context: context,
+                                        description: snapshot.description, commandBuffer: commandBuffer)
+            if let blit = commandBuffer.makeBlitCommandEncoder() {
+                blit.copy(from: snapshot.texture,
+                          sourceSlice: 0, sourceLevel: 0,
+                          sourceOrigin: MTLOrigin(x: 0, y: 0, z: 0),
+                          sourceSize: MTLSize(width: snapshot.region.width, height: snapshot.region.height, depth: 1),
+                          to: layer.texture,
+                          destinationSlice: 0, destinationLevel: 0,
+                          destinationOrigin: MTLOrigin(x: snapshot.region.x, y: snapshot.region.y, z: 0))
+                blit.endEncoding()
+            }
+            commandBuffer.commit()
+            return current.map(Entry.region)
+        }
     }
 
     func clear() {
@@ -77,7 +129,44 @@ final class CanvasUndoManager {
         _ = undoStack.popLast()
     }
 
+    /// Bytes of texture memory held by the undo and redo stacks.
+    var textureBytes: Int {
+        (undoStack + redoStack).reduce(0) { total, entry in
+            switch entry {
+            case .stack(let snapshot):
+                return total + snapshot.layers.reduce(0) { $0 + $1.texture.width * $1.texture.height * 8 }
+            case .region(let snapshot):
+                return total + snapshot.texture.width * snapshot.texture.height * 8
+            }
+        }
+    }
+
     // MARK: - Snapshot Capture & Restore
+
+    private func captureRegion(of layer: Layer, region: MTLScissorRect, context: MetalContext,
+                               description: String, commandBuffer: MTLCommandBuffer) -> RegionSnapshot? {
+        guard region.width > 0, region.height > 0 else { return nil }
+        let desc = MTLTextureDescriptor.texture2DDescriptor(
+            pixelFormat: layer.texture.pixelFormat,
+            width: region.width,
+            height: region.height,
+            mipmapped: false
+        )
+        desc.usage = [.shaderRead]
+        desc.storageMode = .private
+
+        guard let copy = context.device.makeTexture(descriptor: desc),
+              let blit = commandBuffer.makeBlitCommandEncoder() else { return nil }
+        blit.copy(from: layer.texture,
+                  sourceSlice: 0, sourceLevel: 0,
+                  sourceOrigin: MTLOrigin(x: region.x, y: region.y, z: 0),
+                  sourceSize: MTLSize(width: region.width, height: region.height, depth: 1),
+                  to: copy,
+                  destinationSlice: 0, destinationLevel: 0,
+                  destinationOrigin: MTLOrigin(x: 0, y: 0, z: 0))
+        blit.endEncoding()
+        return RegionSnapshot(layerID: layer.id, region: region, texture: copy, description: description)
+    }
 
     private func captureStack(layerStack: LayerStack, selectionPath: CGPath?, context: MetalContext, description: String) -> StackSnapshot? {
         var layerSnapshots: [LayerSnapshot] = []
