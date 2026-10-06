@@ -274,6 +274,25 @@ struct GeneralSettingsView: View {
                     .padding(4)
                 }
 
+                GroupBox("Thick Paint") {
+                    VStack(alignment: .leading, spacing: 8) {
+                        HStack {
+                            Text("Relief")
+                                .font(.system(size: 11, weight: .medium))
+                                .frame(width: 60, alignment: .leading)
+                            Slider(value: $prefs.paintRelief, in: 0...2)
+                            Text("\(Int((prefs.paintRelief * 100).rounded()))%")
+                                .font(.system(size: 11, design: .monospaced))
+                                .foregroundColor(.secondary)
+                                .frame(width: 50, alignment: .trailing)
+                        }
+                        Text("How strongly thick paint (Oil, Acrylic) is lit on the canvas and in exports. 0 shows it flat.")
+                            .font(.system(size: 10))
+                            .foregroundColor(.secondary)
+                    }
+                    .padding(4)
+                }
+
                 GroupBox("Default Brush") {
                     VStack(alignment: .leading, spacing: 12) {
                         HStack {

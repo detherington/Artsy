@@ -16,6 +16,8 @@ final class CanvasRenderer: NSObject, MTKViewDelegate {
     var strokeTailTexture: MTLTexture!
     var compositeTexture: MTLTexture!
     var blendTempTexture: MTLTexture!
+    /// Every visible layer's paint thickness added up, for the display to light.
+    var compositeHeightTexture: MTLTexture!
 
     let canvasSize: CGSize
     weak var viewModel: CanvasViewModel?
@@ -38,6 +40,8 @@ final class CanvasRenderer: NSObject, MTKViewDelegate {
     /// The active layer as it was at pen-down, for the undo step of a brush that changes the
     /// layer as it goes (smudge). Made the first time one is used.
     private var layerBeforeStroke: MTLTexture?
+    /// Likewise the layer's height map, for a brush that lays thick paint.
+    private var heightBeforeStroke: MTLTexture?
     /// What has changed since `compositeTexture` was last brought up to date.
     private var pendingRegions: [MTLScissorRect] = []
     /// The scene `compositeTexture` currently shows, while a stroke is in progress.
@@ -60,6 +64,7 @@ final class CanvasRenderer: NSObject, MTKViewDelegate {
         strokeTailTexture = try textureManager.makeCanvasTexture(width: w, height: h, label: "Stroke Tail")
         compositeTexture = try textureManager.makeCanvasTexture(width: w, height: h, label: "Composite")
         blendTempTexture = try textureManager.makeCanvasTexture(width: w, height: h, label: "Blend Temp")
+        compositeHeightTexture = try textureManager.makeHeightTexture(width: w, height: h, label: "Composite Height")
 
         guard let commandBuffer = context.commandQueue.makeCommandBuffer() else { return }
         textureManager.clearTexture(activeStrokeTexture, commandBuffer: commandBuffer)
@@ -112,6 +117,8 @@ final class CanvasRenderer: NSObject, MTKViewDelegate {
         // Display
         compositor.renderToScreen(
             composite: compositeTexture,
+            height: compositeHeightTexture,
+            relief: Float(AppPreferences.shared.paintRelief),
             drawable: drawable.texture,
             transform: viewModel.transform,
             viewSize: view.bounds.size,
@@ -142,8 +149,10 @@ final class CanvasRenderer: NSObject, MTKViewDelegate {
         if let regions {
             guard !regions.isEmpty else { return }
             compositor.clear(compositeTexture, regions: regions, commandBuffer: commandBuffer)
+            compositor.clear(compositeHeightTexture, regions: regions, commandBuffer: commandBuffer)
         } else {
             textureManager.clearTexture(compositeTexture, commandBuffer: commandBuffer)
+            textureManager.clearTexture(compositeHeightTexture, commandBuffer: commandBuffer)
         }
 
         let stroke = viewModel.isDrawing ? strokeOverlay(for: viewModel) : nil
@@ -163,6 +172,11 @@ final class CanvasRenderer: NSObject, MTKViewDelegate {
                 regions: regions,
                 commandBuffer: commandBuffer
             )
+            // Thick paint on top of thick paint adds up
+            if let height = layer.heightTexture {
+                compositor.accumulateHeight(source: height, onto: compositeHeightTexture, opacity: layer.opacity,
+                                            regions: regions, commandBuffer: commandBuffer)
+            }
 
             if isActive {
                 // Transform tool preview — composite the source snapshot warped by
@@ -313,6 +327,28 @@ final class CanvasRenderer: NSObject, MTKViewDelegate {
 
             dabPlacer = placer
 
+            // Thick paint: the dabs' thickness goes straight into the layer's height map as
+            // they settle, the way a smudge works, while the colour goes through the stroke
+            // textures as usual. The undo step takes its height from the copy made at pen-down.
+            if settings.impasto != nil, settings.smudge == nil, brush.category != .utility, !dabs.isEmpty,
+               let layer = viewModel.layerStack?.activeLayer,
+               let height = heightTexture(for: layer, commandBuffer: commandBuffer) {
+                let pass = MTLRenderPassDescriptor()
+                pass.colorAttachments[0].texture = height
+                pass.colorAttachments[0].loadAction = .load
+                pass.colorAttachments[0].storeAction = .store
+                if let encoder = commandBuffer.makeRenderCommandEncoder(descriptor: pass) {
+                    let regions = renderer.encodeHeight(dabs: dabs, brush: brush, settings: settings, opacityScale: dabScale,
+                                                        mirrors: mirrors, encoder: encoder, canvasSize: size)
+                        .compactMap(region(for:))
+                    encoder.endEncoding()
+                    for region in regions {
+                        strokeRegion = strokeRegion.map { Self.union($0, region) } ?? region
+                    }
+                    pendingRegions += regions
+                }
+            }
+
             // A smudge brush works on the layer itself, and only where the path has settled:
             // what it does cannot be redrawn next frame. The pixels it changes still need
             // recompositing, and remembering for the undo step.
@@ -412,6 +448,18 @@ final class CanvasRenderer: NSObject, MTKViewDelegate {
         )
     }
 
+    /// The layer's height map, made (and cleared, in `commandBuffer`) the first time it is
+    /// asked for.
+    func heightTexture(for layer: Layer, commandBuffer: MTLCommandBuffer) -> MTLTexture? {
+        if let height = layer.heightTexture { return height }
+        guard let height = try? textureManager.makeHeightTexture(
+            width: layer.texture.width, height: layer.texture.height, label: "\(layer.name) height"
+        ) else { return nil }
+        textureManager.clearTexture(height, commandBuffer: commandBuffer)
+        layer.heightTexture = height
+        return height
+    }
+
     // MARK: - Regions
 
     /// Canvas-space bounds (Y up) as a rectangle of texture pixels (Y down), padded so
@@ -478,31 +526,25 @@ final class CanvasRenderer: NSObject, MTKViewDelegate {
     // MARK: - Move / Shift Content
 
     func shiftLayerContent(layer: Layer, dx: Int, dy: Int, context: MetalContext) {
-        let w = layer.texture.width
-        let h = layer.texture.height
+        guard let temp = try? textureManager.makeCanvasTexture(width: layer.texture.width, height: layer.texture.height,
+                                                               label: "MoveTemp") else { return }
+        shift(layer.texture, dx: dx, dy: dy, through: temp, context: context)
+        if let height = layer.heightTexture,
+           let heightTemp = try? textureManager.makeHeightTexture(width: height.width, height: height.height,
+                                                                  label: "MoveTempHeight") {
+            shift(height, dx: dx, dy: dy, through: heightTemp, context: context)
+        }
+    }
 
-        // Create a temp copy
-        guard let temp = try? textureManager.makeCanvasTexture(width: w, height: h, label: "MoveTemp"),
-              let cb = context.commandQueue.makeCommandBuffer(),
+    /// Move `texture`'s contents by (dx, dy) pixels, through a scratch texture of the same
+    /// size and format. Pixels moved off the edge are lost.
+    private func shift(_ texture: MTLTexture, dx: Int, dy: Int, through temp: MTLTexture, context: MetalContext) {
+        let w = texture.width, h = texture.height
+        guard let cb = context.commandQueue.makeCommandBuffer(),
               let blit = cb.makeBlitCommandEncoder() else { return }
-
-        // Copy current layer to temp
-        blit.copy(from: layer.texture,
-                  sourceSlice: 0, sourceLevel: 0,
-                  sourceOrigin: MTLOrigin(x: 0, y: 0, z: 0),
-                  sourceSize: MTLSize(width: w, height: h, depth: 1),
-                  to: temp,
-                  destinationSlice: 0, destinationLevel: 0,
-                  destinationOrigin: MTLOrigin(x: 0, y: 0, z: 0))
+        blit.copy(from: texture, to: temp)
         blit.endEncoding()
-        cb.commit()
-        cb.waitUntilCompleted()
-
-        // Clear layer
-        guard let cb2 = context.commandQueue.makeCommandBuffer() else { return }
-        textureManager.clearTexture(layer.texture, commandBuffer: cb2)
-        cb2.commit()
-        cb2.waitUntilCompleted()
+        textureManager.clearTexture(texture, commandBuffer: cb)
 
         // Blit shifted — clip to valid regions
         let srcX = max(0, -dx)
@@ -511,22 +553,18 @@ final class CanvasRenderer: NSObject, MTKViewDelegate {
         let dstY = max(0, dy)
         let copyW = w - abs(dx)
         let copyH = h - abs(dy)
-
-        guard copyW > 0, copyH > 0 else { return }
-
-        guard let cb3 = context.commandQueue.makeCommandBuffer(),
-              let blit3 = cb3.makeBlitCommandEncoder() else { return }
-
-        blit3.copy(from: temp,
-                   sourceSlice: 0, sourceLevel: 0,
-                   sourceOrigin: MTLOrigin(x: srcX, y: srcY, z: 0),
-                   sourceSize: MTLSize(width: copyW, height: copyH, depth: 1),
-                   to: layer.texture,
-                   destinationSlice: 0, destinationLevel: 0,
-                   destinationOrigin: MTLOrigin(x: dstX, y: dstY, z: 0))
-        blit3.endEncoding()
-        cb3.commit()
-        cb3.waitUntilCompleted()
+        if copyW > 0, copyH > 0, let blit = cb.makeBlitCommandEncoder() {
+            blit.copy(from: temp,
+                      sourceSlice: 0, sourceLevel: 0,
+                      sourceOrigin: MTLOrigin(x: srcX, y: srcY, z: 0),
+                      sourceSize: MTLSize(width: copyW, height: copyH, depth: 1),
+                      to: texture,
+                      destinationSlice: 0, destinationLevel: 0,
+                      destinationOrigin: MTLOrigin(x: dstX, y: dstY, z: 0))
+            blit.endEncoding()
+        }
+        cb.commit()
+        cb.waitUntilCompleted()
     }
 
     // MARK: - Thumbnails
@@ -860,12 +898,14 @@ final class CanvasRenderer: NSObject, MTKViewDelegate {
               let encoder = commandBuffer.makeComputeCommandEncoder() else { return }
 
         encoder.setComputePipelineState(context.maskedClearPipelineState)
-        encoder.setTexture(layer.texture, index: 0)
-        encoder.setTexture(maskTexture, index: 1)
-
         let threadGroupSize = MTLSize(width: 16, height: 16, depth: 1)
         let threadGroups = MTLSize(width: (w + 15) / 16, height: (h + 15) / 16, depth: 1)
-        encoder.dispatchThreadgroups(threadGroups, threadsPerThreadgroup: threadGroupSize)
+        // The paint and, if there is any, its thickness
+        for texture in [layer.texture, layer.heightTexture].compactMap({ $0 }) {
+            encoder.setTexture(texture, index: 0)
+            encoder.setTexture(maskTexture, index: 1)
+            encoder.dispatchThreadgroups(threadGroups, threadsPerThreadgroup: threadGroupSize)
+        }
         encoder.endEncoding()
 
         commandBuffer.commit()
@@ -927,9 +967,29 @@ final class CanvasRenderer: NSObject, MTKViewDelegate {
                 blit.endEncoding()
             }
         }
+        // Likewise a thick-paint brush changes the layer's height map as it goes.
+        if let brush = viewModel?.currentBrush, Self.laysThickPaint(brush),
+           let layer = viewModel?.layerStack?.activeLayer,
+           let height = heightTexture(for: layer, commandBuffer: commandBuffer) {
+            if heightBeforeStroke == nil {
+                heightBeforeStroke = try? textureManager.makeHeightTexture(
+                    width: height.width, height: height.height, label: "HeightBeforeStroke"
+                )
+            }
+            if let copy = heightBeforeStroke, let blit = commandBuffer.makeBlitCommandEncoder() {
+                blit.copy(from: height, to: copy)
+                blit.endEncoding()
+            }
+        }
         smudgeRenderer.beginStroke()
         commandBuffer.commit()
         resetStrokeState()
+    }
+
+    /// A stamp brush with impasto that is not a smudge or an eraser.
+    private static func laysThickPaint(_ brush: BrushDescriptor) -> Bool {
+        guard case .stamp(let settings) = brush.rendering else { return false }
+        return settings.impasto != nil && settings.smudge == nil && brush.category != .utility
     }
 
     private func resetStrokeState() {
@@ -960,10 +1020,13 @@ final class CanvasRenderer: NSObject, MTKViewDelegate {
 
         if let strokeRegion {
             // Undo only needs the pixels this stroke changes. A smudge has changed them
-            // already; its copy of the layer from pen-down has the originals.
+            // already; its copy of the layer from pen-down has the originals. Thick paint
+            // has likewise changed the height map already.
             viewModel.undoManager.saveRegion(
                 of: activeLayer, in: layerStack, region: strokeRegion,
-                from: isSmudging ? layerBeforeStroke : nil, context: context,
+                from: isSmudging ? layerBeforeStroke : nil,
+                heightFrom: Self.laysThickPaint(viewModel.currentBrush) ? heightBeforeStroke : nil,
+                context: context,
                 description: isErasing ? "Erase" : viewModel.currentBrush.name,
                 commandBuffer: commandBuffer
             )
@@ -977,6 +1040,11 @@ final class CanvasRenderer: NSObject, MTKViewDelegate {
                     source: activeStrokeTexture, from: activeLayer.texture,
                     opacity: overlay?.opacity ?? 1, regions: [strokeRegion], commandBuffer: commandBuffer
                 )
+                // Erasing paint erases its thickness
+                if let height = activeLayer.heightTexture {
+                    compositor.erase(source: activeStrokeTexture, from: height, opacity: overlay?.opacity ?? 1,
+                                     regions: [strokeRegion], commandBuffer: commandBuffer)
+                }
             } else if let overlay, overlay.mixing != .light || overlay.wet != nil {
                 compositor.mergeStroke(
                     overlay, onto: activeLayer.texture, tempTexture: blendTempTexture,

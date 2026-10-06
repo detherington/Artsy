@@ -19,6 +19,7 @@ final class AppPreferences: ObservableObject {
         static let smoothingMode = "smoothingMode" // SmoothingMode raw value
         static let pressureCurves = "pressureCurves" // JSON: [pen key: PressureCurve]
         static let easeStrokesWithoutPressure = "easeStrokesWithoutPressure"
+        static let paintRelief = "paintRelief"
     }
 
     // MARK: - Published
@@ -63,6 +64,11 @@ final class AppPreferences: ObservableObject {
         didSet { defaults.set(easeStrokesWithoutPressure, forKey: Key.easeStrokesWithoutPressure) }
     }
 
+    /// How strongly thick paint (impasto) is lit on the canvas and in exports; 0 shows it flat.
+    @Published var paintRelief: Double {
+        didSet { defaults.set(paintRelief, forKey: Key.paintRelief) }
+    }
+
     /// Pressure curves by pen (see `TabletEventHandler.currentPenKey`). A pen that has none
     /// saved uses the linear curve.
     @Published var pressureCurves: [String: PressureCurve] {
@@ -97,6 +103,7 @@ final class AppPreferences: ObservableObject {
 
         self.smoothingMode = defaults.string(forKey: Key.smoothingMode).flatMap(SmoothingMode.init(rawValue:)) ?? .oneEuro
         self.easeStrokesWithoutPressure = (defaults.object(forKey: Key.easeStrokesWithoutPressure) as? Bool) ?? true
+        self.paintRelief = (defaults.object(forKey: Key.paintRelief) as? Double) ?? 1.0
         self.pressureCurves = defaults.data(forKey: Key.pressureCurves)
             .flatMap { try? JSONDecoder().decode([String: PressureCurve].self, from: $0) } ?? [:]
     }

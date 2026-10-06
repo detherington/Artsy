@@ -39,6 +39,22 @@ final class BrushGoldenTests: XCTestCase {
         }
     }
 
+    /// Thick paint lit by the display: Oil and Acrylic strokes crossing, through the display
+    /// shader at full relief.
+    func testThickPaintRelief() throws {
+        let harness = try EngineHarness()
+        harness.select(.oil)
+        harness.viewModel.brushSize = 44
+        harness.viewModel.currentColor = StrokeColor(red: 0.85, green: 0.55, blue: 0.15, alpha: 1)
+        harness.draw(StrokeFixtures.wave(from: CGPoint(x: 30, y: 180), length: 452, amplitude: 40, cycles: 2))
+        harness.select(.acrylic)
+        harness.viewModel.brushSize = 36
+        harness.viewModel.currentColor = StrokeColor(red: 0.2, green: 0.4, blue: 0.75, alpha: 1)
+        harness.draw(StrokeFixtures.zigzag(from: CGPoint(x: 40, y: 60), length: 430, height: 160, teeth: 5))
+        harness.draw(StrokeFixtures.line(from: CGPoint(x: 60, y: 250), to: CGPoint(x: 460, y: 250), pressure: 0.3...1.0))
+        Golden.assertMatches(harness.shown(relief: 1), named: "thick-paint-relief")
+    }
+
     /// Light paint over dark: the case the default white canvas hides.
     func testSoftBrushesOverDarkPaint() throws {
         let harness = try EngineHarness()

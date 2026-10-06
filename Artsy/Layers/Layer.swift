@@ -33,6 +33,9 @@ final class Layer: Identifiable, ObservableObject {
     @Published var blendMode: LayerBlendMode = .normal
 
     var texture: MTLTexture
+    /// Paint thickness per pixel (impasto), the same size as `texture`. Nil until a brush
+    /// that lays thick paint has been used on the layer; whoever creates it clears it.
+    var heightTexture: MTLTexture?
     @Published var thumbnail: NSImage?
 
     init(id: UUID = UUID(), name: String, texture: MTLTexture) {

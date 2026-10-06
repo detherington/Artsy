@@ -10,6 +10,14 @@ final class MetalContext {
     let strokeProceduralPipelineState: MTLRenderPipelineState
     /// Dabs of a stamp brush, blended source-over into the stroke texture.
     let stampPipelineState: MTLRenderPipelineState
+    /// Dabs as paint thickness, added to a layer's height map
+    let stampHeightPipelineState: MTLRenderPipelineState
+    /// Height maps: a layer's added into the composite's, erased by a stroke, cleared, and
+    /// stamped through an affine transform
+    let heightAccumulatePipelineState: MTLRenderPipelineState
+    let heightErasePipelineState: MTLRenderPipelineState
+    let clearHeightPipelineState: MTLRenderPipelineState
+    let heightAffinePipelineState: MTLRenderPipelineState
     /// Smudge brushes: lays carried paint into the layer, then picks up what is under the dab
     let smudgeDepositPipelineState: MTLRenderPipelineState
     let smudgePickupPipelineState: MTLRenderPipelineState
@@ -116,6 +124,23 @@ final class MetalContext {
         stampAttachment.destinationAlphaBlendFactor = .oneMinusSourceAlpha
         self.stampPipelineState = try device.makeRenderPipelineState(descriptor: stampDesc)
 
+        let stampHeightDesc = MTLRenderPipelineDescriptor()
+        stampHeightDesc.vertexFunction = library.makeFunction(name: "stampVertex")
+        guard let stampHeightFragment = library.makeFunction(name: "stampHeightFragment") else {
+            throw MetalError.pipelineCreationFailed("stampHeightFragment not found")
+        }
+        stampHeightDesc.fragmentFunction = stampHeightFragment
+        stampHeightDesc.colorAttachments[0].pixelFormat = .r16Float
+        let stampHeightAttachment = stampHeightDesc.colorAttachments[0]!
+        stampHeightAttachment.isBlendingEnabled = true
+        stampHeightAttachment.rgbBlendOperation = .add
+        stampHeightAttachment.alphaBlendOperation = .add
+        stampHeightAttachment.sourceRGBBlendFactor = .one
+        stampHeightAttachment.destinationRGBBlendFactor = .one
+        stampHeightAttachment.sourceAlphaBlendFactor = .one
+        stampHeightAttachment.destinationAlphaBlendFactor = .one
+        self.stampHeightPipelineState = try device.makeRenderPipelineState(descriptor: stampHeightDesc)
+
         // Smudge deposit: the same quads, drawn straight onto the layer. The fragment reads
         // the layer from a copy of the patch under the dab and writes the mix itself.
         let smudgeDesc = MTLRenderPipelineDescriptor()
@@ -163,6 +188,23 @@ final class MetalContext {
         self.compositeStrokeMergePipelineState = try MetalContext.makeCompositePipeline(
             device: device, library: library, vertexDescriptor: compVD,
             fragmentFunction: "compositeStrokeMerge", blending: .replace
+        )
+
+        self.heightAccumulatePipelineState = try MetalContext.makeCompositePipeline(
+            device: device, library: library, vertexDescriptor: compVD,
+            fragmentFunction: "heightAccumulateFragment", blending: .add, pixelFormat: .r16Float
+        )
+        self.heightErasePipelineState = try MetalContext.makeCompositePipeline(
+            device: device, library: library, vertexDescriptor: compVD,
+            fragmentFunction: "compositeNormal", blending: .destinationOut, pixelFormat: .r16Float
+        )
+        self.clearHeightPipelineState = try MetalContext.makeCompositePipeline(
+            device: device, library: library, vertexDescriptor: compVD,
+            fragmentFunction: "clearFragment", blending: .replace, pixelFormat: .r16Float
+        )
+        self.heightAffinePipelineState = try MetalContext.makeCompositePipeline(
+            device: device, library: library, vertexDescriptor: compVD,
+            fragmentFunction: "compositeNormal", blending: .add, pixelFormat: .r16Float
         )
 
         self.compositeErasePipelineState = try MetalContext.makeCompositePipeline(
@@ -287,6 +329,8 @@ final class MetalContext {
         case replace
         /// Destination-out: erases by the source's alpha
         case destinationOut
+        /// Source plus destination: height maps add up
+        case add
     }
 
     private static func makeCompositePipeline(
@@ -294,7 +338,8 @@ final class MetalContext {
         library: MTLLibrary,
         vertexDescriptor: MTLVertexDescriptor,
         fragmentFunction: String,
-        blending: CompositeBlending
+        blending: CompositeBlending,
+        pixelFormat: MTLPixelFormat = .rgba16Float
     ) throws -> MTLRenderPipelineState {
         guard let fragment = library.makeFunction(name: fragmentFunction) else {
             throw MetalError.pipelineCreationFailed("\(fragmentFunction) not found")
@@ -303,7 +348,7 @@ final class MetalContext {
         desc.vertexFunction = library.makeFunction(name: "compositeVertex")
         desc.fragmentFunction = fragment
         desc.vertexDescriptor = vertexDescriptor
-        desc.colorAttachments[0].pixelFormat = .rgba16Float
+        desc.colorAttachments[0].pixelFormat = pixelFormat
 
         let attachment = desc.colorAttachments[0]!
         switch blending {
@@ -325,6 +370,14 @@ final class MetalContext {
             attachment.destinationRGBBlendFactor = .oneMinusSourceAlpha
             attachment.sourceAlphaBlendFactor = .zero
             attachment.destinationAlphaBlendFactor = .oneMinusSourceAlpha
+        case .add:
+            attachment.isBlendingEnabled = true
+            attachment.rgbBlendOperation = .add
+            attachment.alphaBlendOperation = .add
+            attachment.sourceRGBBlendFactor = .one
+            attachment.destinationRGBBlendFactor = .one
+            attachment.sourceAlphaBlendFactor = .one
+            attachment.destinationAlphaBlendFactor = .one
         }
 
         return try device.makeRenderPipelineState(descriptor: desc)

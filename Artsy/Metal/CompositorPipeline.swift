@@ -232,8 +232,36 @@ final class CompositorPipeline {
         blit.endEncoding()
     }
 
+    /// Add a layer's height map into `destination`, at the layer's opacity.
+    func accumulateHeight(
+        source: MTLTexture,
+        onto destination: MTLTexture,
+        opacity: Float,
+        regions: [MTLScissorRect]? = nil,
+        commandBuffer: MTLCommandBuffer
+    ) {
+        if let regions, regions.isEmpty { return }
+        var layerOpacity = opacity
+        var identity = float4x4(diagonal: SIMD4<Float>(1, 1, 1, 1))
+
+        let passDesc = MTLRenderPassDescriptor()
+        passDesc.colorAttachments[0].texture = destination
+        passDesc.colorAttachments[0].loadAction = .load
+        passDesc.colorAttachments[0].storeAction = .store
+
+        guard let encoder = commandBuffer.makeRenderCommandEncoder(descriptor: passDesc) else { return }
+        encoder.setRenderPipelineState(context.heightAccumulatePipelineState)
+        encoder.setVertexBuffer(quadVertexBuffer, offset: 0, index: 0)
+        encoder.setVertexBytes(&identity, length: MemoryLayout<float4x4>.size, index: 1)
+        encoder.setFragmentTexture(source, index: 0)
+        encoder.setFragmentSamplerState(context.linearSampler, index: 0)
+        encoder.setFragmentBytes(&layerOpacity, length: MemoryLayout<Float>.size, index: 0)
+        drawQuad(encoder, regions: regions)
+        encoder.endEncoding()
+    }
+
     /// Remove `source`'s coverage (times `opacity`) from `destination`: how an eraser stroke
-    /// is applied to its layer.
+    /// is applied to its layer (and, with a height map as the destination, its thickness).
     func erase(
         source: MTLTexture,
         from destination: MTLTexture,
@@ -251,7 +279,8 @@ final class CompositorPipeline {
         passDesc.colorAttachments[0].storeAction = .store
 
         guard let encoder = commandBuffer.makeRenderCommandEncoder(descriptor: passDesc) else { return }
-        encoder.setRenderPipelineState(context.compositeErasePipelineState)
+        encoder.setRenderPipelineState(destination.pixelFormat == .r16Float ? context.heightErasePipelineState
+                                                                           : context.compositeErasePipelineState)
         encoder.setVertexBuffer(quadVertexBuffer, offset: 0, index: 0)
         encoder.setVertexBytes(&identity, length: MemoryLayout<float4x4>.size, index: 1)
         encoder.setFragmentTexture(source, index: 0)
@@ -298,7 +327,7 @@ final class CompositorPipeline {
     func encodeClear(regions: [MTLScissorRect], in encoder: MTLRenderCommandEncoder, of texture: MTLTexture) {
         guard !regions.isEmpty else { return }
         var identity = float4x4(diagonal: SIMD4<Float>(1, 1, 1, 1))
-        encoder.setRenderPipelineState(context.clearPipelineState)
+        encoder.setRenderPipelineState(texture.pixelFormat == .r16Float ? context.clearHeightPipelineState : context.clearPipelineState)
         encoder.setVertexBuffer(quadVertexBuffer, offset: 0, index: 0)
         encoder.setVertexBytes(&identity, length: MemoryLayout<float4x4>.size, index: 1)
         drawQuad(encoder, regions: regions)
@@ -370,7 +399,8 @@ final class CompositorPipeline {
         passDesc.colorAttachments[0].storeAction = .store
 
         guard let encoder = commandBuffer.makeRenderCommandEncoder(descriptor: passDesc) else { return }
-        encoder.setRenderPipelineState(context.compositeNormalPipelineState)
+        encoder.setRenderPipelineState(destination.pixelFormat == .r16Float ? context.heightAffinePipelineState
+                                                                           : context.compositeNormalPipelineState)
         encoder.setVertexBuffer(vbuf, offset: 0, index: 0)
         encoder.setVertexBytes(&projection, length: MemoryLayout<float4x4>.size, index: 1)
         encoder.setFragmentTexture(source, index: 0)
@@ -381,8 +411,13 @@ final class CompositorPipeline {
     }
 
     /// Render a texture to the screen drawable with the display shader (white background).
+    /// - Parameters:
+    ///   - height: the composite's height map, lit as paint relief; nil for none.
+    ///   - relief: how strongly the relief is lit; 0 shows the paint flat.
     func renderToScreen(
         composite: MTLTexture,
+        height: MTLTexture? = nil,
+        relief: Float = 0,
         drawable: MTLTexture,
         transform: CanvasTransform,
         viewSize: CGSize,
@@ -390,6 +425,7 @@ final class CompositorPipeline {
         commandBuffer: MTLCommandBuffer
     ) {
         var transformMatrix = transform.transformMatrix(viewSize: viewSize)
+        var reliefStrength = height == nil ? 0 : relief
 
         let passDesc = MTLRenderPassDescriptor()
         passDesc.colorAttachments[0].texture = drawable
@@ -422,7 +458,10 @@ final class CompositorPipeline {
         encoder.setVertexBuffer(canvasBuffer, offset: 0, index: 0)
         encoder.setVertexBytes(&transformMatrix, length: MemoryLayout<float4x4>.size, index: 1)
         encoder.setFragmentTexture(composite, index: 0)
+        // The slot needs a texture even when the shader will not light anything
+        encoder.setFragmentTexture(height ?? composite, index: 1)
         encoder.setFragmentSamplerState(context.linearSampler, index: 0)
+        encoder.setFragmentBytes(&reliefStrength, length: MemoryLayout<Float>.size, index: 0)
 
         encoder.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: 6)
         encoder.endEncoding()

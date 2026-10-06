@@ -256,10 +256,20 @@ struct StampSettings: Codable, Equatable {
         }
     }
 
+    /// Thick paint: every dab adds height to the layer, which the display lights.
+    struct Impasto: Codable, Equatable {
+        /// Height one dab at full coverage adds. Dabs overlap many times over, so one pass
+        /// of a stroke builds roughly `thickness / spacing` times the flow; the display
+        /// lights height on a scale where 1 is thick.
+        var thickness: Float = 0.08
+    }
+
     var tip: Tip = .round
     var secondTip: SecondTip? = nil
     /// Set for a brush that moves the paint under it.
     var smudge: Smudge? = nil
+    /// Set for a brush that lays thick paint.
+    var impasto: Impasto? = nil
     /// Distance between dabs, as a fraction of the dab's diameter.
     var spacing: Float
     /// Opacity of a single dab, before pressure.
@@ -414,7 +424,8 @@ extension BrushDescriptor {
         smoothing: 0.3,
         fixedNibAngle: nil,
         rendering: .stamp(StampSettings(
-            tip: .bristle, spacing: 0.05, flow: 0.6, accumulation: .wash,
+            tip: .bristle,
+            impasto: .init(thickness: 0.06), spacing: 0.05, flow: 0.6, accumulation: .wash,
             grain: .init(mode: .multiply, texture: .bristles, attachment: .stroke, scale: 1.2, depth: 0.55),
             opacityJitter: 0.1, followsDirection: true
         )),
@@ -538,7 +549,8 @@ extension BrushDescriptor {
         fixedNibAngle: nil,
         // Thicker paint than acrylic: deeper bristle furrows
         rendering: .stamp(StampSettings(
-            tip: .bristle, spacing: 0.05, flow: 0.75, accumulation: .wash,
+            tip: .bristle,
+            impasto: .init(thickness: 0.08), spacing: 0.05, flow: 0.75, accumulation: .wash,
             grain: .init(mode: .multiply, texture: .bristles, attachment: .stroke, scale: 1.0, depth: 0.7),
             sizeJitter: 0.05, opacityJitter: 0.1, followsDirection: true
         )),

@@ -82,6 +82,12 @@ final class LayerStack: ObservableObject {
             opacity: upper.opacity,
             commandBuffer: commandBuffer
         )
+        // Thick paint on top of thick paint adds up
+        if let upperHeight = upper.heightTexture,
+           let lowerHeight = renderer.heightTexture(for: lower, commandBuffer: commandBuffer) {
+            renderer.compositor.accumulateHeight(source: upperHeight, onto: lowerHeight, opacity: upper.opacity,
+                                                 commandBuffer: commandBuffer)
+        }
         commandBuffer.commit()
         commandBuffer.waitUntilCompleted()
 
@@ -109,6 +115,11 @@ final class LayerStack: ObservableObject {
                 opacity: layer.opacity,
                 commandBuffer: commandBuffer
             )
+            if let height = layer.heightTexture,
+               let resultHeight = renderer.heightTexture(for: result, commandBuffer: commandBuffer) {
+                renderer.compositor.accumulateHeight(source: height, onto: resultHeight, opacity: layer.opacity,
+                                                     commandBuffer: commandBuffer)
+            }
         }
         commandBuffer.commit()
         commandBuffer.waitUntilCompleted()

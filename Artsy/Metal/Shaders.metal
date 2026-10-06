@@ -142,6 +142,7 @@ struct StampParams {
     int    grainOnStroke;    // 0 = fixed to the canvas, 1 = runs along the stroke
     int    hasSecondTip;
     float  secondTipScale;   // size of the second tip relative to the dab
+    float  thickness;        // height one dab at full coverage adds (impasto)
 };
 
 vertex StampVertexOut stampVertex(
@@ -173,14 +174,11 @@ vertex StampVertexOut stampVertex(
     return out;
 }
 
-fragment float4 stampFragment(
-    StampVertexOut in [[stage_in]],
-    texture2d<float> tip [[texture(0)]],
-    texture2d<float> grain [[texture(1)]],
-    texture2d<float> secondTip [[texture(2)]],
-    sampler tipSampler [[sampler(0)]],
-    sampler grainSampler [[sampler(1)]],
-    constant StampParams &params [[buffer(0)]]
+/// A dab's coverage at this fragment: the tip's shape, the second tip's mask, and grain.
+static inline float stampCoverage(
+    StampVertexOut in, constant StampParams &params,
+    texture2d<float> tip, texture2d<float> grain, texture2d<float> secondTip,
+    sampler tipSampler, sampler grainSampler
 ) {
     float coverage;
     if (params.tipIsTexture != 0) {
@@ -223,8 +221,35 @@ fragment float4 stampFragment(
             alpha *= saturate((press - (1.0 - height) * params.grainDepth) / 0.3);
         }
     }
+    return alpha;
+}
 
+fragment float4 stampFragment(
+    StampVertexOut in [[stage_in]],
+    texture2d<float> tip [[texture(0)]],
+    texture2d<float> grain [[texture(1)]],
+    texture2d<float> secondTip [[texture(2)]],
+    sampler tipSampler [[sampler(0)]],
+    sampler grainSampler [[sampler(1)]],
+    constant StampParams &params [[buffer(0)]]
+) {
+    float alpha = stampCoverage(in, params, tip, grain, secondTip, tipSampler, grainSampler);
     return premultiplied(params.color.rgb, params.color.a * alpha);
+}
+
+// The same dab as paint thickness, added to the layer's height map (impasto). Grain
+// shapes it as it shapes the colour, so bristle streaks stand up as ridges.
+fragment float4 stampHeightFragment(
+    StampVertexOut in [[stage_in]],
+    texture2d<float> tip [[texture(0)]],
+    texture2d<float> grain [[texture(1)]],
+    texture2d<float> secondTip [[texture(2)]],
+    sampler tipSampler [[sampler(0)]],
+    sampler grainSampler [[sampler(1)]],
+    constant StampParams &params [[buffer(0)]]
+) {
+    float alpha = stampCoverage(in, params, tip, grain, secondTip, tipSampler, grainSampler);
+    return float4(alpha * params.thickness, 0.0, 0.0, 1.0);
 }
 
 // --- Smudge ---
@@ -637,15 +662,46 @@ kernel void maskedClearKernel(
 }
 
 // Display with solid white background
+// Adds a layer's height map into the composite's, at the layer's opacity.
+fragment float4 heightAccumulateFragment(
+    CompositeVertexOut in [[stage_in]],
+    texture2d<float> height [[texture(0)]],
+    sampler s [[sampler(0)]],
+    constant float &layerOpacity [[buffer(0)]]
+) {
+    return float4(height.sample(s, in.texCoord).r * layerOpacity, 0.0, 0.0, 1.0);
+}
+
 fragment float4 displayWhiteFragment(
     CompositeVertexOut in [[stage_in]],
     texture2d<float> composite [[texture(0)]],
-    sampler s [[sampler(0)]]
+    texture2d<float> height [[texture(1)]],
+    sampler s [[sampler(0)]],
+    constant float &relief [[buffer(0)]]
 ) {
     float4 color = composite.sample(s, in.texCoord);
     // The composite is premultiplied
     float3 result = color.rgb + float3(1.0) * (1.0 - color.a);
-    return float4(result, 1.0);
+
+    if (relief > 0.0) {
+        // Thick paint catches the light from the top left: a slope facing it is lit, one
+        // facing away is shaded, and a ridge gets a glint. Flat paint is left as it is.
+        // Thickness adds up without limit as paint is piled on; what is lit saturates
+        // softly, so a pile of paint reads as thick rather than as a cliff.
+        float2 texel = 1.0 / float2(height.get_width(), height.get_height());
+        float hl = 1.0 - exp(-height.sample(s, in.texCoord - float2(texel.x, 0.0)).r);
+        float hr = 1.0 - exp(-height.sample(s, in.texCoord + float2(texel.x, 0.0)).r);
+        float hu = 1.0 - exp(-height.sample(s, in.texCoord - float2(0.0, texel.y)).r);   // the row above: canvas up
+        float hd = 1.0 - exp(-height.sample(s, in.texCoord + float2(0.0, texel.y)).r);
+        float h = 1.0 - exp(-height.sample(s, in.texCoord).r);
+        float3 n = normalize(float3((hl - hr) * 3.0 * relief, (hd - hu) * 3.0 * relief, 1.0));
+        float3 l = normalize(float3(-0.55, 0.6, 0.6));
+        float3 halfway = normalize(l + float3(0.0, 0.0, 1.0));
+        float diffuse = max(0.0, dot(n, l)) / l.z;    // 1 where the paint is flat
+        float glint = pow(max(0.0, dot(n, halfway)), 32.0) * 0.35 * saturate(h * 4.0) * relief;
+        result = result * (0.3 + 0.7 * diffuse) + glint;
+    }
+    return float4(saturate(result), 1.0);
 }
 
 // --- Pigment mixing on its own ---
