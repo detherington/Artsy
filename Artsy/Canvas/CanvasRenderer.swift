@@ -34,6 +34,21 @@ final class CanvasRenderer: NSObject, MTKViewDelegate {
     private var renderedRevision = 0
     /// Which path the stroke textures hold: a stroke that snaps to a shape swaps paths.
     private var renderedPathID: ObjectIdentifier?
+    /// What the composite texture holds: the scene it was built from, the content version
+    /// and the time, so an idle frame can skip rebuilding it. Twelve layers at 8192² take
+    /// over 100 ms to composite; the display pass that follows takes a fraction of that.
+    private var compositedSignature: CompositeSignature?
+    private var compositedContentVersion = -1
+    private var compositedAt: TimeInterval = 0
+    /// Whether the last `encodeFrame` rebuilt the composite; for tests.
+    private(set) var lastFrameRecomposited = false
+    /// Idle, the composite is rebuilt at least this often, in case a change went unnoted.
+    static let idleRecompositeInterval: TimeInterval = 0.25
+
+    /// Make the next frame rebuild the composite from the layers.
+    func invalidateComposite() {
+        compositedSignature = nil
+    }
     /// Where the tail was drawn last frame.
     private var tailRegions: [MTLScissorRect] = []
     /// Everything drawn into `activeStrokeTexture` by this stroke — or, for a smudge brush,
@@ -144,9 +159,22 @@ final class CanvasRenderer: NSObject, MTKViewDelegate {
 
         encodeActiveStroke(into: commandBuffer)
 
+        // Idle, with the same scene and content as last time, the composite still stands
+        let signature = CompositeSignature(viewModel: viewModel, layerStack: layerStack)
+        let now = ProcessInfo.processInfo.systemUptime
+        let idle = !viewModel.isDrawing && viewModel.transformSession == nil && viewModel.floatingTexture == nil
+        if idle, signature == compositedSignature, viewModel.contentVersion == compositedContentVersion,
+           now - compositedAt < Self.idleRecompositeInterval {
+            lastFrameRecomposited = false
+            return
+        }
+        lastFrameRecomposited = true
+        compositedSignature = signature
+        compositedContentVersion = viewModel.contentVersion
+        compositedAt = now
+
         // While the pen is down, only the pixels the stroke touched since the last frame can
         // have changed — provided nothing else about the scene did. Otherwise redo all of it.
-        let signature = CompositeSignature(viewModel: viewModel, layerStack: layerStack)
         let strokeOnly = viewModel.isDrawing && viewModel.transformSession == nil && viewModel.floatingTexture == nil
         let regions: [MTLScissorRect]? =
             strokeOnly && signature == compositeSignature ? Self.disjoint(pendingRegions) : nil
@@ -533,6 +561,7 @@ final class CanvasRenderer: NSObject, MTKViewDelegate {
     // MARK: - Move / Shift Content
 
     func shiftLayerContent(layer: Layer, dx: Int, dy: Int, context: MetalContext) {
+        defer { viewModel?.noteContentChanged() }
         guard let temp = try? textureManager.makeCanvasTexture(width: layer.texture.width, height: layer.texture.height,
                                                                label: "MoveTemp") else { return }
         shift(layer.texture, dx: dx, dy: dy, through: temp, context: context)
@@ -708,6 +737,7 @@ final class CanvasRenderer: NSObject, MTKViewDelegate {
 
     /// Decode image data, scale to fit canvas preserving aspect, center, and upload to the layer's texture.
     func fillLayerWithImageFitToCanvas(imageData: Data, layer: Layer) throws {
+        defer { viewModel?.noteContentChanged() }
         guard let nsImage = NSImage(data: imageData),
               let cgImage = nsImage.cgImage(forProposedRect: nil, context: nil, hints: nil) else {
             throw NSError(domain: "Artsy", code: -1, userInfo: [NSLocalizedDescriptionKey: "Could not decode image"])
@@ -764,6 +794,7 @@ final class CanvasRenderer: NSObject, MTKViewDelegate {
         layer: Layer,
         context: MetalContext
     ) {
+        defer { viewModel?.noteContentChanged() }
         let w = layer.texture.width
         let h = layer.texture.height
 
@@ -894,6 +925,7 @@ final class CanvasRenderer: NSObject, MTKViewDelegate {
     // MARK: - Selection Operations
 
     func clearInsideSelection(path: CGPath, layer: Layer, context: MetalContext) {
+        defer { viewModel?.noteContentChanged() }
         let w = layer.texture.width
         let h = layer.texture.height
 

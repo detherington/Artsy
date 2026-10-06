@@ -75,8 +75,17 @@ final class EngineHarness {
 
     // MARK: - Drawing
 
-    /// Render one frame up to the composite texture and wait for the GPU.
+    /// Render one frame up to the composite texture and wait for the GPU. Tests write
+    /// layers directly (fills, tool commits), so the composite is always rebuilt here; a
+    /// frame that may skip it is `renderFrameAsTheAppWould()`.
     func renderFrame() {
+        renderer.invalidateComposite()
+        renderFrameAsTheAppWould()
+    }
+
+    /// A frame exactly as the app's display loop runs it, which skips rebuilding the
+    /// composite when nothing it knows of has changed.
+    func renderFrameAsTheAppWould() {
         let commandBuffer = context.commandQueue.makeCommandBuffer()!
         renderer.encodeFrame(into: commandBuffer)
         commandBuffer.commit()
@@ -158,6 +167,7 @@ final class EngineHarness {
         desc.storageMode = .shared
         let target = context.device.makeTexture(descriptor: desc)!
         let commandBuffer = context.commandQueue.makeCommandBuffer()!
+        renderer.invalidateComposite()
         renderer.encodeFrame(into: commandBuffer)
         var transform = CanvasTransform()
         transform.scale = 1

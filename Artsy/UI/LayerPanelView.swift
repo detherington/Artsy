@@ -97,7 +97,8 @@ struct LayerPanelView: View {
     private func saveUndoSnapshot(description: String) {
         if let appDelegate = NSApp.delegate as? AppDelegate,
            let store = appDelegate.activeStorePublic {
-            viewModel.saveUndoSnapshot(renderer: store.canvasView.renderer, description: description)
+            // Layer order, settings, adding and deleting: no pixels change
+            viewModel.saveUndoSnapshot(renderer: store.canvasView.renderer, description: description, changing: .nothing)
         }
     }
 

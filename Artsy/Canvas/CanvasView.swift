@@ -138,7 +138,7 @@ class CanvasView: MTKView {
             if let path = viewModel.selectionPath, path.contains(canvasPoint) {
                 isMovingSelection = true
                 moveLastCanvasPoint = canvasPoint
-                viewModel.saveUndoSnapshot(renderer: renderer, description: "Move Selection")
+                viewModel.saveUndoSnapshot(renderer: renderer, description: "Move Selection", changing: .layer(viewModel.layerStack?.activeLayer))
 
                 if let activeLayer = viewModel.layerStack?.activeLayer {
                     selectionMoveHandler.begin(
@@ -156,7 +156,7 @@ class CanvasView: MTKView {
             }
 
             // Otherwise, start a new selection — save undo so the selection itself can be undone
-            viewModel.saveUndoSnapshot(renderer: renderer, description: "Select")
+            viewModel.saveUndoSnapshot(renderer: renderer, description: "Select", changing: .nothing)
             selectionAnchor = canvasPoint
             selectionDragPoints = [canvasPoint]
             viewModel.clearSelection()
@@ -270,6 +270,7 @@ class CanvasView: MTKView {
                     textureManager: renderer.textureManager,
                     compositor: renderer.compositor
                 )
+                viewModel.noteContentChanged()
                 renderer.updateThumbnail(for: activeLayer)
             }
             viewModel.floatingTexture = nil
@@ -434,7 +435,7 @@ class CanvasView: MTKView {
         if layer.isLocked { NSSound.beep(); return }
 
         let selectionPath = viewModel.selectionPath
-        viewModel.saveUndoSnapshot(renderer: renderer, description: "Transform")
+        viewModel.saveUndoSnapshot(renderer: renderer, description: "Transform", changing: .layer(layer))
 
         viewModel.transformSession = TransformSession.begin(
             targetLayer: layer,
@@ -569,6 +570,7 @@ class CanvasView: MTKView {
             textureManager: renderer.textureManager,
             compositor: renderer.compositor
         )
+        viewModel.noteContentChanged()
         viewModel.transformSession = nil
         if let layer = viewModel.layerStack?.activeLayer {
             renderer.updateThumbnail(for: layer)
@@ -618,7 +620,7 @@ class CanvasView: MTKView {
         if viewModel.transformSession != nil {
             commitTransformIfNeeded()
         }
-        viewModel.saveUndoSnapshot(renderer: renderer, description: "Select All")
+        viewModel.saveUndoSnapshot(renderer: renderer, description: "Select All", changing: .nothing)
         viewModel.selectAll()
         redrawOverlays()
     }
@@ -627,7 +629,7 @@ class CanvasView: MTKView {
     func performDeselectAction() {
         guard let viewModel = viewModel, let renderer = renderer else { return }
         guard viewModel.selectionPath != nil else { return }
-        viewModel.saveUndoSnapshot(renderer: renderer, description: "Deselect")
+        viewModel.saveUndoSnapshot(renderer: renderer, description: "Deselect", changing: .nothing)
         viewModel.clearSelection()
         redrawOverlays()
     }
@@ -659,7 +661,7 @@ class CanvasView: MTKView {
         if layer.isLocked { NSSound.beep(); return }
         if viewModel.transformSession != nil { commitTransformIfNeeded() }
 
-        viewModel.saveUndoSnapshot(renderer: renderer, description: "Cut")
+        viewModel.saveUndoSnapshot(renderer: renderer, description: "Cut", changing: .layer(layer))
 
         ClipboardManager.copyAsync(
             layer: layer,
@@ -713,9 +715,11 @@ class CanvasView: MTKView {
         // origin (0,0)), falls back to centered placement.
         let origin: CGPoint? = inPlace ? ClipboardManager.readOrigin() : nil
 
+        // Pasting adds a layer; nothing already there changes
         viewModel.saveUndoSnapshot(
             renderer: renderer,
-            description: inPlace ? "Paste in Place" : "Paste"
+            description: inPlace ? "Paste in Place" : "Paste",
+            changing: .nothing
         )
 
         let W = Int(viewModel.canvasSize.width)
@@ -745,6 +749,7 @@ class CanvasView: MTKView {
             DispatchQueue.main.async { [weak renderer, weak pasted] in
                 guard let renderer = renderer, let pasted = pasted else { return }
                 renderer.updateThumbnail(for: pasted)
+                renderer.viewModel?.noteContentChanged()
             }
         }
     }
@@ -1004,7 +1009,7 @@ class CanvasView: MTKView {
               canvasPoint.y >= 0, canvasPoint.y < cs.height else { return }
 
         // Snapshot BEFORE dispatching async work so redo/undo captures pre-fill state.
-        viewModel.saveUndoSnapshot(renderer: renderer, description: "Fill")
+        viewModel.saveUndoSnapshot(renderer: renderer, description: "Fill", changing: .layer(viewModel.layerStack?.activeLayer))
 
         // Run fill in the background — returns immediately so the UI stays responsive.
         BucketFill.fillAsync(
@@ -1018,7 +1023,8 @@ class CanvasView: MTKView {
         ) { [weak renderer, weak layer] in
             guard let renderer = renderer, let layer = layer else { return }
             renderer.updateThumbnail(for: layer)
-            // MTKView redraws continuously
+            // The pixels changed after the undo step noted them: tell the display
+            renderer.viewModel?.noteContentChanged()
         }
     }
 
@@ -1125,7 +1131,7 @@ class CanvasView: MTKView {
         viewModel.previewShapePath = nil
 
         if let path = finalPath {
-            viewModel.saveUndoSnapshot(renderer: renderer, description: "Shape")
+            viewModel.saveUndoSnapshot(renderer: renderer, description: "Shape", changing: .layer(viewModel.layerStack?.activeLayer))
 
             renderer.drawShape(
                 path: path,
@@ -1281,10 +1287,10 @@ class CanvasView: MTKView {
                     performUndoAction()
                 }
             case "a":
-                viewModel.saveUndoSnapshot(renderer: renderer, description: "Select All")
+                viewModel.saveUndoSnapshot(renderer: renderer, description: "Select All", changing: .nothing)
                 viewModel.selectAll()
             case "d":
-                viewModel.saveUndoSnapshot(renderer: renderer, description: "Deselect")
+                viewModel.saveUndoSnapshot(renderer: renderer, description: "Deselect", changing: .nothing)
                 viewModel.clearSelection()
             case "0":
                 viewModel.transform.zoomToFit(canvasSize: viewModel.canvasSize, viewSize: bounds.size)
@@ -1325,7 +1331,7 @@ class CanvasView: MTKView {
         if event.keyCode == 51 || event.keyCode == 117 {
             if let path = viewModel.selectionPath,
                let activeLayer = viewModel.layerStack?.activeLayer {
-                viewModel.saveUndoSnapshot(renderer: renderer, description: "Delete Selection")
+                viewModel.saveUndoSnapshot(renderer: renderer, description: "Delete Selection", changing: .layer(activeLayer))
                 renderer.clearInsideSelection(path: path, layer: activeLayer, context: renderer.context)
                 renderer.updateThumbnail(for: activeLayer)
             }

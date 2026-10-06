@@ -45,7 +45,7 @@ final class UnsplashManager: ObservableObject {
             let data = try await service.downloadPhoto(photo, size: downloadSize)
 
             // Save undo snapshot before adding
-            store.viewModel.saveUndoSnapshot(renderer: store.canvasView.renderer, description: "Add Stock Image")
+            store.viewModel.saveUndoSnapshot(renderer: store.canvasView.renderer, description: "Add Stock Image", changing: .nothing)
 
             // Create a new layer above the active layer
             let name = "Unsplash: \(photo.user.name)"

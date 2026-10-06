@@ -111,6 +111,7 @@ final class LayerStack: ObservableObject {
         if activeLayerIndex >= layers.count {
             activeLayerIndex = layers.count - 1
         }
+        renderer.viewModel?.noteContentChanged()
         return true
     }
 
@@ -142,6 +143,7 @@ final class LayerStack: ObservableObject {
 
         layers = [result]
         activeLayerIndex = 0
+        renderer.viewModel?.noteContentChanged()
         return result
     }
 

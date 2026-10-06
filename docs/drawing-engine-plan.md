@@ -357,6 +357,35 @@ Done:
 Step 6 is done, which closes the plan as written. Not done: tiled layers (see above,
 on evidence), and the hardware pen session that has been owed since step 1.
 
+## At the limits: 8192² with 12 layers
+
+Measured after step 6 opened these limits up (`testLargeCanvasCosts`, debug build, M4 Pro):
+
+| | before | after |
+|---|---|---|
+| Idle frame (nothing changed) | 107 ms | 0.03 ms |
+| Frame while drawing | 3.3 ms | 2.5 ms |
+| Stroke commit, GPU | 68 ms | 10 ms (6 of it the thumbnail) |
+| Undo step for a selection, GPU | 1.56 s | 2.7 ms |
+| Undo step for a fill, GPU | 2.25 s | 19 ms |
+| History after those two steps | 6.3 GB | 0.5 GB |
+
+Two changes made the difference:
+
+- **Idle frames skip the composite.** The view runs at 120 fps whether or not anything
+  changes, and every frame rebuilt the composite from all the layers. Now the renderer
+  keeps the composite when the scene (layer list and settings), the view model's
+  content version (bumped by `markDirty` and by every tool that writes pixels) and the
+  stroke state are unchanged — and rebuilds it at least every 0.25 s regardless, in
+  case a change went unnoted. The display pass still runs every frame.
+- **Undo snapshots copy only what the action will change.** `saveUndoSnapshot` takes a
+  scope: `.nothing` for a selection or a change to the layer list, `.layer(x)` for a
+  fill, transform, cut, shape or move, `.everything` only when the caller cannot say.
+  Layers outside the scope are referenced, not copied: when the step is undone every
+  later change to them has been undone first, so their textures are in the right state
+  — including a deleted layer's, which the snapshot keeps alive. The redo step made by
+  an undo copies exactly the layers the undo restored.
+
 ## Coverage beyond the steps
 
 Three suites run the whole engine rather than one feature at a time:
