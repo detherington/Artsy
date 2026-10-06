@@ -73,11 +73,6 @@ final class BrushStudioModel: ObservableObject {
         return nil
     }
 
-    var ribbonShader: RibbonShader? {
-        if case .ribbon(let shader) = brush.rendering { return shader }
-        return nil
-    }
-
     /// A binding to one field of the stamp settings; does nothing for a ribbon brush.
     func stampBinding<Value>(_ keyPath: WritableKeyPath<StampSettings, Value>, default fallback: Value) -> Binding<Value> {
         Binding(

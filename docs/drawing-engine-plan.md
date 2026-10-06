@@ -253,14 +253,35 @@ Done:
     the layer). Dulling's average is still an average of light.
   - A mix costs ~40 × (7 + 3) multiply-adds per pixel, on dirty regions only.
 
+- **Washes: glazing, wet edges, granulation.** `mixing` is now a three-way choice —
+  light (the usual average), pigment, or *glaze*: the stroke multiplies what is under it,
+  as a transparent wash does, and never lightens it. A brush with `wet` settings dries
+  as a wash at merge time, on the stroke's accumulated coverage rather than per dab:
+  - *Edges*: the soft outer falloff becomes a crisp boundary, roughened by the paper,
+    with a darker rim just inside it where the pigment gathered, and a lighter middle
+    it left. A pixel's rim is capped at a few times its own coverage, so a faint stroke
+    gets a faint rim rather than a dark outline.
+  - *Granulation*: pigment settles into the paper's valleys — the canvas-fixed paper
+    texture from step 3, so the same paper shows through every wash.
+  - All of it runs in the live composite and in the pen-up merge, through the same
+    shader (`mergeStroke` in Shaders.metal), so the preview is what you get.
+  - **Watercolor** is a stamp brush on these settings (wash accumulation, glaze, edges
+    0.6, granulation 0.5, drier when fast). The ribbon watercolor shader is retired;
+    a brush file naming it opens as a plain ribbon. Brush Studio: Stroke → Colour
+    mixing, and a Wet section.
+  - Pipeline creation now fails loudly when a shader function is missing; a missing
+    fragment function used to build a pipeline that silently drew nothing.
+
 Still to do:
 
-- Wet edges, paper granulation, impasto height map with lighting; redo Watercolor on
-  them (its mixing should be multiplicative, as a glaze, not pigment).
+- Impasto height map with lighting.
 - Smudge samples the active layer only ("sample all layers" is not offered).
 - Pigment mixing follows spectral.js's weighting; black is a weak pigment there (its
   luminance is ~0), which is tempered only by the squared share. Tinting strength per
   colour is not exposed.
+- The wash look (rim darkness, granulation strength, the boundary's roughness) is tuned
+  from test renders of straight strokes; wet-into-wet (a wash diffusing into a wet one)
+  is not modelled — a second wash over a dried one glazes it.
 
 ### 6. Scale (large, optional)
 

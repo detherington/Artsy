@@ -34,18 +34,55 @@ struct BrushDescriptor: Codable, Identifiable, Equatable {
     var tiltDynamics: TiltDynamics? = nil
     /// Response to the speed of the stroke; nil ignores it.
     var velocityDynamics: VelocityDynamics? = nil
-    /// The stroke's colour mixes with the paint under it as pigments do (yellow over blue
-    /// makes green) rather than as light. Off, colours blend the usual way.
-    var mixesPigments: Bool = false
+    /// How the stroke's colour meets the paint already under it.
+    var mixing: PaintMixing = .light
+    /// Set for a brush whose strokes dry as a wash on paper; nil for ordinary paint.
+    var wet: Wet? = nil
+
+    /// A stroke that dries as a wash: how a watercolour behaves once it is on the paper.
+    struct Wet: Codable, Equatable {
+        /// How much pigment gathers at the stroke's edge as it dries, 0...1: the soft edge
+        /// becomes a crisp boundary with a darker rim inside it, and the middle lightens.
+        var edges: Float = 0.6
+        /// How much pigment settles into the paper's valleys, 0...1.
+        var granulation: Float = 0.5
+        /// Paper texels per canvas pixel.
+        var grainScale: Float = 1
+    }
 
     enum CodingKeys: String, CodingKey {
         case id, name, category, hardness, baseSize, pressureDynamics, opacity, smoothing, fixedNibAngle
-        case rendering, tiltDynamics, velocityDynamics, mixesPigments
+        case rendering, tiltDynamics, velocityDynamics, mixing, wet
+    }
+}
+
+/// How a stroke's colour meets the paint already on the layer.
+enum PaintMixing: String, Codable {
+    /// Colours average, as light does on a screen. The usual way.
+    case light
+    /// Colours mix as pigments do: yellow over blue makes green. See Spectral.h.
+    case pigment
+    /// A transparent wash that darkens what is under it, like a glaze: never lighter than
+    /// the paint beneath.
+    case glaze
+
+    /// `StrokeMergeParams.mixing` in Shaders.metal.
+    var shaderValue: Int32 {
+        switch self {
+        case .light: return 0
+        case .pigment: return 1
+        case .glaze: return 2
+        }
     }
 }
 
 extension BrushDescriptor {
-    /// Reads older brush files too, which have no `mixesPigments`.
+    /// Files from before `mixing` had a boolean for pigment mixing.
+    private enum LegacyKeys: String, CodingKey {
+        case mixesPigments
+    }
+
+    /// Reads older brush files too, which lack the newer keys.
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         id = try c.decode(UUID.self, forKey: .id)
@@ -60,7 +97,13 @@ extension BrushDescriptor {
         rendering = try c.decodeIfPresent(BrushRendering.self, forKey: .rendering) ?? .ribbon(.procedural)
         tiltDynamics = try c.decodeIfPresent(TiltDynamics.self, forKey: .tiltDynamics)
         velocityDynamics = try c.decodeIfPresent(VelocityDynamics.self, forKey: .velocityDynamics)
-        mixesPigments = try c.decodeIfPresent(Bool.self, forKey: .mixesPigments) ?? false
+        if let mixing = try c.decodeIfPresent(PaintMixing.self, forKey: .mixing) {
+            self.mixing = mixing
+        } else {
+            let legacy = try decoder.container(keyedBy: LegacyKeys.self)
+            mixing = try legacy.decodeIfPresent(Bool.self, forKey: .mixesPigments) == true ? .pigment : .light
+        }
+        wet = try c.decodeIfPresent(Wet.self, forKey: .wet)
     }
 }
 
@@ -97,9 +140,16 @@ enum BrushCategory: String, Codable, CaseIterable {
     case utility
 }
 
+/// The cross-section of a ribbon stroke.
 enum RibbonShader: String, Codable {
     case procedural   // Hard/soft round via smoothstep
-    case watercolor   // Soft edges with wet-edge darkening
+
+    /// Reads any name, for files that name a shader since retired (the ribbon watercolor,
+    /// which the wash settings replaced).
+    init(from decoder: Decoder) throws {
+        _ = try decoder.singleValueContainer().decode(String.self)
+        self = .procedural
+    }
 }
 
 /// Settings for a brush drawn with dabs.
@@ -332,18 +382,22 @@ extension BrushDescriptor {
         id: UUID(uuidString: "00000000-0007-0000-0000-000000000007")!,
         name: "Watercolor",
         category: .painting,
-        hardness: 0.0,
+        hardness: 0.3,
         baseSize: 40,
         pressureDynamics: PressureDynamics(
             sizeRange: 0.4...1.0,
-            opacityRange: 0.3...0.8
+            opacityRange: 0.6...0.9
         ),
-        opacity: 0.7,
+        opacity: 0.65,
         smoothing: 0.4,
         fixedNibAngle: nil,
-        rendering: .ribbon(.watercolor),
+        // A wash: dabs build to the stroke's opacity, and the stroke dries with crisp edges
+        // where the pigment gathers, settles into the paper, and glazes what is under it
+        rendering: .stamp(StampSettings(spacing: 0.1, flow: 0.35, accumulation: .wash)),
         // Fast strokes are drier
-        velocityDynamics: VelocityDynamics(referenceSpeed: 1500, sizeScale: 0.85, opacityScale: 0.6)
+        velocityDynamics: VelocityDynamics(referenceSpeed: 1500, sizeScale: 0.85, opacityScale: 0.6),
+        mixing: .glaze,
+        wet: Wet(edges: 0.6, granulation: 0.5, grainScale: 1)
     )
 
     static let acrylic = BrushDescriptor(
@@ -364,7 +418,7 @@ extension BrushDescriptor {
             grain: .init(mode: .multiply, texture: .bristles, attachment: .stroke, scale: 1.2, depth: 0.55),
             opacityJitter: 0.1, followsDirection: true
         )),
-        mixesPigments: true
+        mixing: .pigment
     )
 
     static let technicalPen = BrushDescriptor(
@@ -488,7 +542,7 @@ extension BrushDescriptor {
             grain: .init(mode: .multiply, texture: .bristles, attachment: .stroke, scale: 1.0, depth: 0.7),
             sizeJitter: 0.05, opacityJitter: 0.1, followsDirection: true
         )),
-        mixesPigments: true
+        mixing: .pigment
     )
 
     static let airbrush = BrushDescriptor(
@@ -618,7 +672,7 @@ extension BrushDescriptor {
             smudge: .init(mode: .smearing, strength: 0.75, colorRate: 0),
             spacing: 0.08, flow: 1.0, accumulation: .buildUp
         )),
-        mixesPigments: true
+        mixing: .pigment
     )
 
     static let allDefaults: [BrushDescriptor] = [

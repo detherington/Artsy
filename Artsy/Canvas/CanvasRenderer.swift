@@ -408,7 +408,7 @@ final class CanvasRenderer: NSObject, MTKViewDelegate {
         return CompositorPipeline.StrokeOverlay(
             committed: activeStrokeTexture, tail: strokeTailTexture,
             opacity: opacity, erase: brush.category == .utility, accumulates: accumulates,
-            mixesPigments: brush.mixesPigments
+            mixing: brush.mixing, wet: brush.wet
         )
     }
 
@@ -969,23 +969,23 @@ final class CanvasRenderer: NSObject, MTKViewDelegate {
             )
             viewModel.markDirty()
 
-            let opacity = strokeOverlay(for: viewModel)?.opacity ?? 1
+            let overlay = strokeOverlay(for: viewModel)
             if isSmudging {
                 // Already in the layer
-            } else if viewModel.currentBrush.mixesPigments {
-                compositor.mergePigments(
-                    source: activeStrokeTexture, onto: activeLayer.texture, opacity: opacity,
-                    tempTexture: blendTempTexture, regions: [strokeRegion], commandBuffer: commandBuffer
-                )
             } else if isErasing {
                 compositor.erase(
                     source: activeStrokeTexture, from: activeLayer.texture,
-                    opacity: opacity, regions: [strokeRegion], commandBuffer: commandBuffer
+                    opacity: overlay?.opacity ?? 1, regions: [strokeRegion], commandBuffer: commandBuffer
+                )
+            } else if let overlay, overlay.mixing != .light || overlay.wet != nil {
+                compositor.mergeStroke(
+                    overlay, onto: activeLayer.texture, tempTexture: blendTempTexture,
+                    regions: [strokeRegion], commandBuffer: commandBuffer
                 )
             } else {
                 compositor.compositeNormal(
                     source: activeStrokeTexture, onto: activeLayer.texture,
-                    opacity: opacity, regions: [strokeRegion], commandBuffer: commandBuffer
+                    opacity: overlay?.opacity ?? 1, regions: [strokeRegion], commandBuffer: commandBuffer
                 )
             }
             compositor.clear(activeStrokeTexture, regions: [strokeRegion], commandBuffer: commandBuffer)

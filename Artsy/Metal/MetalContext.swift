@@ -8,21 +8,19 @@ final class MetalContext {
 
     // Pipeline states
     let strokeProceduralPipelineState: MTLRenderPipelineState
-    let strokeWatercolorPipelineState: MTLRenderPipelineState
     /// Dabs of a stamp brush, blended source-over into the stroke texture.
     let stampPipelineState: MTLRenderPipelineState
     /// Smudge brushes: lays carried paint into the layer, then picks up what is under the dab
     let smudgeDepositPipelineState: MTLRenderPipelineState
     let smudgePickupPipelineState: MTLRenderPipelineState
-    /// Merges a finished stroke into its layer with pigment mixing
-    let compositePigmentMergePipelineState: MTLRenderPipelineState
+    /// Merges a finished stroke into its layer when fixed-function blending will not do
+    let compositeStrokeMergePipelineState: MTLRenderPipelineState
     /// Mixes colours as pigments, for tests and tools
     let mixPigmentsPipelineState: MTLComputePipelineState
     /// Tips and paper grain for stamp brushes.
     let brushTextures: BrushTextureLibrary
     // Radial-distance variants for stroke caps (rounded endpoints, Procreate-style)
     let strokeRadialPipelineState: MTLRenderPipelineState
-    let strokeRadialWatercolorPipelineState: MTLRenderPipelineState
     let compositeNormalPipelineState: MTLRenderPipelineState
     let compositeBlendPipelineState: MTLRenderPipelineState
     // Active-layer variants that merge the in-progress stroke into the layer first
@@ -103,12 +101,6 @@ final class MetalContext {
             fragmentFunction: "strokeProceduralFragment"
         )
 
-        // Stroke watercolor
-        self.strokeWatercolorPipelineState = try MetalContext.makeStrokePipeline(
-            device: device, library: library, vertexDescriptor: strokeVD,
-            fragmentFunction: "strokeWatercolorFragment"
-        )
-
         // Stamp brushes: instanced dabs, premultiplied source-over
         let stampDesc = MTLRenderPipelineDescriptor()
         stampDesc.vertexFunction = library.makeFunction(name: "stampVertex")
@@ -146,10 +138,6 @@ final class MetalContext {
             device: device, library: library, vertexDescriptor: strokeVD,
             fragmentFunction: "strokeRadialFragment"
         )
-        self.strokeRadialWatercolorPipelineState = try MetalContext.makeStrokePipeline(
-            device: device, library: library, vertexDescriptor: strokeVD,
-            fragmentFunction: "strokeRadialWatercolorFragment"
-        )
 
         // Composite normal
         self.compositeNormalPipelineState = try MetalContext.makeCompositePipeline(
@@ -172,9 +160,9 @@ final class MetalContext {
             fragmentFunction: "compositeBlendWithStroke", blending: .replace
         )
 
-        self.compositePigmentMergePipelineState = try MetalContext.makeCompositePipeline(
+        self.compositeStrokeMergePipelineState = try MetalContext.makeCompositePipeline(
             device: device, library: library, vertexDescriptor: compVD,
-            fragmentFunction: "compositePigmentMerge", blending: .replace
+            fragmentFunction: "compositeStrokeMerge", blending: .replace
         )
 
         self.compositeErasePipelineState = try MetalContext.makeCompositePipeline(
@@ -266,9 +254,13 @@ final class MetalContext {
         vertexDescriptor: MTLVertexDescriptor,
         fragmentFunction: String
     ) throws -> MTLRenderPipelineState {
+        // A pipeline with a missing fragment function builds, and then draws nothing.
+        guard let fragment = library.makeFunction(name: fragmentFunction) else {
+            throw MetalError.pipelineCreationFailed("\(fragmentFunction) not found")
+        }
         let desc = MTLRenderPipelineDescriptor()
         desc.vertexFunction = library.makeFunction(name: "strokeVertex")
-        desc.fragmentFunction = library.makeFunction(name: fragmentFunction)
+        desc.fragmentFunction = fragment
         desc.vertexDescriptor = vertexDescriptor
         desc.colorAttachments[0].pixelFormat = .rgba16Float
 
@@ -304,9 +296,12 @@ final class MetalContext {
         fragmentFunction: String,
         blending: CompositeBlending
     ) throws -> MTLRenderPipelineState {
+        guard let fragment = library.makeFunction(name: fragmentFunction) else {
+            throw MetalError.pipelineCreationFailed("\(fragmentFunction) not found")
+        }
         let desc = MTLRenderPipelineDescriptor()
         desc.vertexFunction = library.makeFunction(name: "compositeVertex")
-        desc.fragmentFunction = library.makeFunction(name: fragmentFunction)
+        desc.fragmentFunction = fragment
         desc.vertexDescriptor = vertexDescriptor
         desc.colorAttachments[0].pixelFormat = .rgba16Float
 

@@ -82,26 +82,6 @@ fragment float4 strokeRadialFragment(
     return premultiplied(brushColor.rgb, brushColor.a * alpha * in.opacity);
 }
 
-// Round tip for watercolor (cap version of watercolor brush)
-fragment float4 strokeRadialWatercolorFragment(
-    StrokeVertexOut in [[stage_in]],
-    constant float4 &brushColor [[buffer(0)]],
-    constant float &hardness [[buffer(1)]]
-) {
-    float dist = distance(in.texCoord, float2(0.5, 0.5)) * 2.0;
-    float shape = 1.0 - smoothstep(0.0, 0.85, dist);
-    float wetEdge = smoothstep(0.3, 0.75, dist) * (1.0 - smoothstep(0.75, 0.9, dist));
-    float edgeBoost = 1.0 + wetEdge * 0.6;
-
-    float2 p1 = in.position.xy * 0.15;
-    float noise1 = fract(sin(dot(floor(p1), float2(12.9898, 78.233))) * 43758.5453);
-    float paperTexture = mix(0.7, 1.0, noise1);
-
-    float alpha = shape * edgeBoost * paperTexture * in.opacity;
-    float3 color = brushColor.rgb * mix(1.0, 0.75, wetEdge);
-    return premultiplied(color, brushColor.a * alpha);
-}
-
 // Procedural brush: uses texCoord.x as cross-stroke distance (0=left edge, 1=right edge)
 // For triangle strip rendering, the stroke is a continuous ribbon.
 fragment float4 strokeProceduralFragment(
@@ -121,37 +101,6 @@ fragment float4 strokeProceduralFragment(
     }
 
     return premultiplied(brushColor.rgb, brushColor.a * alpha * in.opacity);
-}
-
-// Watercolor: very soft edges with wet-edge darkening effect
-// The edges of a watercolor stroke are slightly darker where pigment pools
-fragment float4 strokeWatercolorFragment(
-    StrokeVertexOut in [[stage_in]],
-    constant float4 &brushColor [[buffer(0)]],
-    constant float &hardness [[buffer(1)]]
-) {
-    float dist = abs(in.texCoord.x - 0.5) * 2.0;
-
-    // Soft base shape
-    float shape = 1.0 - smoothstep(0.0, 0.85, dist);
-
-    // Wet edge: slight darkening/concentration at the stroke edges
-    float wetEdge = smoothstep(0.3, 0.75, dist) * (1.0 - smoothstep(0.75, 0.9, dist));
-    float edgeBoost = 1.0 + wetEdge * 0.6;
-
-    // Subtle paper texture variation using position
-    float2 p1 = in.position.xy * 0.15;
-    float noise1 = fract(sin(dot(floor(p1), float2(12.9898, 78.233))) * 43758.5453);
-    float2 p2 = in.position.xy * 0.05;
-    float noise2 = fract(sin(dot(floor(p2), float2(63.7264, 10.873))) * 43758.5453);
-    float paperTexture = mix(0.7, 1.0, noise1 * 0.6 + noise2 * 0.4);
-
-    float alpha = shape * edgeBoost * paperTexture * in.opacity;
-
-    // Slightly shift color toward darker at edges for pigment pooling
-    float3 color = brushColor.rgb * mix(1.0, 0.75, wetEdge);
-
-    return premultiplied(color, brushColor.a * alpha);
 }
 
 // --- Stamp (dab) rendering ---
@@ -460,48 +409,6 @@ fragment float4 clearFragment(CompositeVertexOut in [[stage_in]]) {
 // two together are the stroke. It is merged into the active layer's colour *before* that
 // layer's opacity and blend mode apply, exactly as it will be once the pen lifts.
 
-struct StrokeMergeParams {
-    float opacity;      // caps the whole stroke
-    int   erase;        // 0 = paint over the layer, 1 = erase from it
-    int   accumulates;  // 0 = ribbon (the textures' maximum), 1 = dabs (tail over committed)
-    int   mixPigments;  // 1 = the stroke's colour mixes with the layer's as paint would
-};
-
-static inline float4 layerWithStroke(float4 layer, float4 committed, float4 tail, StrokeMergeParams params) {
-    // A ribbon's two halves are the same coverage drawn twice where they meet, so take the
-    // maximum. Dabs in the tail were laid after the committed ones and sit on top of them.
-    float4 combined = params.accumulates != 0 ? tail + committed * (1.0 - tail.a) : max(committed, tail);
-    float4 stroke = combined * params.opacity;
-    if (params.erase != 0) return layer * (1.0 - stroke.a);
-    return params.mixPigments != 0 ? pigmentOver(stroke, layer) : stroke + layer * (1.0 - stroke.a);
-}
-
-// Merges a finished stroke into its layer with pigment mixing; the result replaces the
-// layer pixel (rendered to a scratch texture and copied back, since it reads the layer).
-fragment float4 compositePigmentMerge(
-    CompositeVertexOut in [[stage_in]],
-    texture2d<float> strokeTex [[texture(0)]],
-    texture2d<float> layerTex [[texture(1)]],
-    sampler s [[sampler(0)]],
-    constant float &opacity [[buffer(0)]]
-) {
-    return pigmentOver(strokeTex.sample(s, in.texCoord) * opacity, layerTex.sample(s, in.texCoord));
-}
-
-fragment float4 compositeNormalWithStroke(
-    CompositeVertexOut in [[stage_in]],
-    texture2d<float> layer [[texture(0)]],
-    texture2d<float> committed [[texture(2)]],
-    texture2d<float> tail [[texture(3)]],
-    sampler s [[sampler(0)]],
-    constant float &layerOpacity [[buffer(0)]],
-    constant StrokeMergeParams &stroke [[buffer(2)]]
-) {
-    float4 merged = layerWithStroke(layer.sample(s, in.texCoord), committed.sample(s, in.texCoord),
-                                    tail.sample(s, in.texCoord), stroke);
-    return merged * layerOpacity;
-}
-
 // Blend `src` over `dst` — mode: 0=normal, 1=multiply, 2=screen, 3=overlay, 4=darken, 5=lighten.
 // Both are premultiplied. For blend modes we un-premultiply the src and dst colours,
 // compute the blend, then re-premultiply.
@@ -546,6 +453,103 @@ static inline float4 blendOver(float4 src, float4 dst, int mode) {
     return float4(outRGB, outA);
 }
 
+struct StrokeMergeParams {
+    float opacity;      // caps the whole stroke
+    int   erase;        // 0 = paint over the layer, 1 = erase from it
+    int   accumulates;  // 0 = ribbon (the textures' maximum), 1 = dabs (tail over committed)
+    int   mixing;       // how the stroke's colour meets the layer's: 0 light, 1 pigment, 2 glaze
+    float wetEdges;     // above 0 the stroke dries as a wash, pigment gathering at its edge
+    float granulation;  // above 0 pigment settles into the paper's valleys
+    float grainScale;   // paper texels per canvas pixel
+};
+
+// A wash drying on paper. `coverage` is the stroke's coverage, 0...1, before its opacity.
+static inline float4 wetWash(float4 coverage, float2 canvasPixel, constant StrokeMergeParams &p,
+                             texture2d<float> paper, sampler paperSampler) {
+    float s = coverage.a;
+    if (s <= 0.0) return coverage;
+    float height = paper.sample(paperSampler, canvasPixel * p.grainScale / float(paper.get_width())).r;
+    if (p.wetEdges > 0.0) {
+        // The soft outer falloff becomes a crisp boundary, roughened by the paper, with the
+        // pigment that left the middle gathered in a rim just inside it. A pixel's rim is
+        // never more than a few times its own coverage, so a faint edge stays faint.
+        float boundary = 0.12 + (height - 0.5) * 0.2 * p.granulation;
+        float edge = smoothstep(boundary, boundary + 0.08, s);
+        float inside = smoothstep(boundary, 1.0, s);
+        float rim = smoothstep(boundary, boundary + 0.12, s) * (1.0 - smoothstep(boundary + 0.2, boundary + 0.8, s));
+        float middle = inside * (1.0 - 0.4 * p.wetEdges);
+        s = edge * mix(middle, min(1.0, s * 3.0), saturate(1.5 * p.wetEdges * rim));
+    }
+    if (p.granulation > 0.0) {
+        // More pigment settles in the valleys than stays on the peaks
+        s *= 1.0 + p.granulation * (0.5 - height) * 0.8;
+    }
+    s = saturate(s);
+    return float4(straight(coverage) * s, s);
+}
+
+// The stroke, at its opacity, onto the layer.
+static inline float4 strokeOnto(float4 stroke, float4 layer, constant StrokeMergeParams &p) {
+    if (p.erase != 0) return layer * (1.0 - stroke.a);
+    if (p.mixing == 1) return pigmentOver(stroke, layer);
+    if (p.mixing == 2) return blendOver(stroke, layer, 1);   // multiply: a transparent glaze
+    return stroke + layer * (1.0 - stroke.a);
+}
+
+static inline float4 mergeStroke(float4 coverage, float4 layer, float2 canvasPixel, constant StrokeMergeParams &p,
+                                 texture2d<float> paper, sampler paperSampler) {
+    if (p.wetEdges > 0.0 || p.granulation > 0.0) coverage = wetWash(coverage, canvasPixel, p, paper, paperSampler);
+    return strokeOnto(coverage * p.opacity, layer, p);
+}
+
+static inline float4 layerWithStroke(float4 layer, float4 committed, float4 tail, float2 canvasPixel,
+                                     constant StrokeMergeParams &params,
+                                     texture2d<float> paper, sampler paperSampler) {
+    // A ribbon's two halves are the same coverage drawn twice where they meet, so take the
+    // maximum. Dabs in the tail were laid after the committed ones and sit on top of them.
+    float4 combined = params.accumulates != 0 ? tail + committed * (1.0 - tail.a) : max(committed, tail);
+    return mergeStroke(combined, layer, canvasPixel, params, paper, paperSampler);
+}
+
+// The canvas pixel (origin bottom-left, as the stamp shaders see it) under a composite
+// fragment, so paper looks the same here as under a stamp brush's grain.
+static inline float2 canvasPixel(float2 texCoord, texture2d<float> layer) {
+    return float2(texCoord.x * float(layer.get_width()), (1.0 - texCoord.y) * float(layer.get_height()));
+}
+
+// Merges a finished stroke into its layer when fixed-function blending will not do (mixing,
+// a wash). The result replaces the layer pixel: rendered to a scratch texture and copied
+// back, since it reads the layer.
+fragment float4 compositeStrokeMerge(
+    CompositeVertexOut in [[stage_in]],
+    texture2d<float> strokeTex [[texture(0)]],
+    texture2d<float> layerTex [[texture(1)]],
+    texture2d<float> paper [[texture(4)]],
+    sampler s [[sampler(0)]],
+    sampler paperSampler [[sampler(1)]],
+    constant StrokeMergeParams &params [[buffer(2)]]
+) {
+    return mergeStroke(strokeTex.sample(s, in.texCoord), layerTex.sample(s, in.texCoord),
+                       canvasPixel(in.texCoord, layerTex), params, paper, paperSampler);
+}
+
+fragment float4 compositeNormalWithStroke(
+    CompositeVertexOut in [[stage_in]],
+    texture2d<float> layer [[texture(0)]],
+    texture2d<float> committed [[texture(2)]],
+    texture2d<float> tail [[texture(3)]],
+    texture2d<float> paper [[texture(4)]],
+    sampler s [[sampler(0)]],
+    sampler paperSampler [[sampler(1)]],
+    constant float &layerOpacity [[buffer(0)]],
+    constant StrokeMergeParams &stroke [[buffer(2)]]
+) {
+    float4 merged = layerWithStroke(layer.sample(s, in.texCoord), committed.sample(s, in.texCoord),
+                                    tail.sample(s, in.texCoord), canvasPixel(in.texCoord, layer),
+                                    stroke, paper, paperSampler);
+    return merged * layerOpacity;
+}
+
 fragment float4 compositeBlend(
     CompositeVertexOut in [[stage_in]],
     texture2d<float> srcTex [[texture(0)]],
@@ -564,13 +568,16 @@ fragment float4 compositeBlendWithStroke(
     texture2d<float> dstTex [[texture(1)]],
     texture2d<float> committed [[texture(2)]],
     texture2d<float> tail [[texture(3)]],
+    texture2d<float> paper [[texture(4)]],
     sampler s [[sampler(0)]],
+    sampler paperSampler [[sampler(1)]],
     constant float &layerOpacity [[buffer(0)]],
     constant int &mode [[buffer(1)]],
     constant StrokeMergeParams &stroke [[buffer(2)]]
 ) {
     float4 merged = layerWithStroke(srcTex.sample(s, in.texCoord), committed.sample(s, in.texCoord),
-                                    tail.sample(s, in.texCoord), stroke);
+                                    tail.sample(s, in.texCoord), canvasPixel(in.texCoord, srcTex),
+                                    stroke, paper, paperSampler);
     return blendOver(merged * layerOpacity, dstTex.sample(s, in.texCoord), mode);
 }
 
