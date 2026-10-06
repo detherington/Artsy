@@ -300,7 +300,7 @@ Still to do:
   from test renders of straight strokes; wet-into-wet (a wash diffusing into a wet one)
   is not modelled — a second wash over a dried one glazes it.
 
-### 6. Scale (large, optional) — in progress
+### 6. Scale (large, optional) — done, untested by hand
 
 Done:
 
@@ -345,7 +345,16 @@ Done:
     started over, and thick paint already laid goes back to the layer's state at
     pen-down. Smudge brushes, which have already changed the layer, do not snap.
 
-Still to do: guides.
+- **Guides.** View → Guides: a grid (⌘' to show; spacing 16–256 px; snap to it or not)
+  and loose horizontal and vertical guide lines added through the middle of the view,
+  ⌘-dragged into place and dropped off the canvas to remove. The pen snaps to a guide
+  within 8 screen points, whatever the zoom: a guide holds the coordinate across it and
+  leaves the other free, like a ruler; the grid holds both; guides win over the grid.
+  Drawn by the overlay, so they turn and zoom with the canvas; saved with the document.
+  (`CanvasGuides`; snapping in `CanvasViewModel`, before smoothing.)
+
+Step 6 is done, which closes the plan as written. Not done: tiled layers (see above,
+on evidence), and the hardware pen session that has been owed since step 1.
 
 ## Measurements
 

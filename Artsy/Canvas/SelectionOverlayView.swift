@@ -32,6 +32,8 @@ class SelectionOverlayView: NSView {
         // Shared canvas → view transform
         var transform = vm.transform.affineTransform(viewSize: bounds.size)
 
+        drawGuides(vm.guides, canvasSize: vm.canvasSize, zoom: vm.transform.scale, transform: transform)
+
         // Draw symmetry guide lines (subtle dashed lines across the canvas center)
         if vm.symmetryMode.isOn {
             drawSymmetryGuides(for: vm, transform: transform)
@@ -71,6 +73,42 @@ class SelectionOverlayView: NSView {
             bezier.lineWidth = 1.0
             NSColor.black.setStroke()
             bezier.stroke()
+        }
+    }
+
+    /// The grid, faint, and the guide lines, teal: built in canvas space, clipped to the
+    /// canvas, and transformed into the view, so they turn and zoom with the canvas.
+    private func drawGuides(_ guides: CanvasGuides, canvasSize: CGSize, zoom: CGFloat, transform: CGAffineTransform) {
+        let canvasRect = CGRect(origin: .zero, size: canvasSize)
+        func stroke(_ segments: [(CGPoint, CGPoint)], color: NSColor, width: CGFloat) {
+            let path = NSBezierPath()
+            for (a, b) in segments {
+                if let (ca, cb) = liangBarskyClip(a: a, b: b, rect: canvasRect) {
+                    path.move(to: ca.applying(transform))
+                    path.line(to: cb.applying(transform))
+                }
+            }
+            path.lineWidth = width
+            color.setStroke()
+            path.stroke()
+        }
+
+        if guides.showsGrid, guides.gridSpacing > 0 {
+            // Zoomed out, draw every second, fourth… line, so the grid never turns to mush
+            var step = guides.gridSpacing
+            while step * zoom < 8 { step *= 2 }
+            var segments: [(CGPoint, CGPoint)] = []
+            var x = step
+            while x < canvasSize.width { segments.append((CGPoint(x: x, y: 0), CGPoint(x: x, y: canvasSize.height))); x += step }
+            var y = step
+            while y < canvasSize.height { segments.append((CGPoint(x: 0, y: y), CGPoint(x: canvasSize.width, y: y))); y += step }
+            stroke(segments, color: NSColor(calibratedWhite: 1.0, alpha: 0.18), width: 1)
+        }
+
+        let lines = guides.verticals.map { (CGPoint(x: $0, y: 0), CGPoint(x: $0, y: canvasSize.height)) }
+            + guides.horizontals.map { (CGPoint(x: 0, y: $0), CGPoint(x: canvasSize.width, y: $0)) }
+        if !lines.isEmpty {
+            stroke(lines, color: NSColor.systemTeal.withAlphaComponent(0.85), width: 1)
         }
     }
 

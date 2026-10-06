@@ -622,6 +622,30 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         viewMenu.addItem(withTitle: "Toggle Right Panel", action: #selector(handleToggleRightPanel), keyEquivalent: "\t")
         viewMenu.addItem(NSMenuItem.separator())
 
+        // Guides submenu; its check marks follow the front canvas (see menuNeedsUpdate)
+        let guidesItem = NSMenuItem(title: "Guides", action: nil, keyEquivalent: "")
+        let guidesMenu = NSMenu(title: "Guides")
+        guidesMenu.delegate = self
+        guidesMenu.addItem(withTitle: "Show Grid", action: #selector(toggleGrid), keyEquivalent: "'")
+        guidesMenu.addItem(withTitle: "Snap to Grid", action: #selector(toggleSnapToGrid), keyEquivalent: "")
+        let spacingItem = NSMenuItem(title: "Grid Spacing", action: nil, keyEquivalent: "")
+        let spacingMenu = NSMenu(title: "Grid Spacing")
+        spacingMenu.delegate = self
+        for spacing in [16, 32, 64, 128, 256] {
+            let item = spacingMenu.addItem(withTitle: "\(spacing) px", action: #selector(setGridSpacing(_:)), keyEquivalent: "")
+            item.tag = spacing
+        }
+        spacingItem.submenu = spacingMenu
+        guidesMenu.addItem(spacingItem)
+        guidesMenu.addItem(NSMenuItem.separator())
+        guidesMenu.addItem(withTitle: "Add Horizontal Guide", action: #selector(addHorizontalGuide), keyEquivalent: "")
+        guidesMenu.addItem(withTitle: "Add Vertical Guide", action: #selector(addVerticalGuide), keyEquivalent: "")
+        guidesMenu.addItem(withTitle: "Snap to Guides", action: #selector(toggleSnapToGuides), keyEquivalent: "")
+        guidesMenu.addItem(withTitle: "Clear Guides", action: #selector(clearGuides), keyEquivalent: "")
+        guidesItem.submenu = guidesMenu
+        viewMenu.addItem(guidesItem)
+        viewMenu.addItem(NSMenuItem.separator())
+
         // Background color submenu
         let bgMenuItem = NSMenuItem(title: "Background Color", action: nil, keyEquivalent: "")
         let bgMenu = NSMenu(title: "Background Color")
@@ -749,6 +773,50 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         guard let store = activeStore else { return }
         let (centre, size) = viewCentre(of: store)
         store.viewModel.transform.setRotation(0, at: centre, viewSize: size)
+    }
+
+    // MARK: - Guides
+
+    @objc private func toggleGrid() {
+        changeGuides { $0.showsGrid.toggle() }
+    }
+
+    @objc private func toggleSnapToGrid() {
+        changeGuides { $0.snapsToGrid.toggle() }
+    }
+
+    @objc private func setGridSpacing(_ sender: NSMenuItem) {
+        changeGuides { $0.gridSpacing = CGFloat(sender.tag) }
+    }
+
+    @objc private func toggleSnapToGuides() {
+        changeGuides { $0.snapsToGuides.toggle() }
+    }
+
+    /// New guides go through the middle of the view, where the eye is.
+    @objc private func addHorizontalGuide() {
+        guard let store = activeStore else { return }
+        let (centre, size) = viewCentre(of: store)
+        let canvasPoint = store.viewModel.transform.viewToCanvas(centre, viewSize: size)
+        changeGuides { $0.horizontals.append(canvasPoint.y.rounded()) }
+    }
+
+    @objc private func addVerticalGuide() {
+        guard let store = activeStore else { return }
+        let (centre, size) = viewCentre(of: store)
+        let canvasPoint = store.viewModel.transform.viewToCanvas(centre, viewSize: size)
+        changeGuides { $0.verticals.append(canvasPoint.x.rounded()) }
+    }
+
+    @objc private func clearGuides() {
+        changeGuides { $0.horizontals.removeAll(); $0.verticals.removeAll() }
+    }
+
+    private func changeGuides(_ change: (inout CanvasGuides) -> Void) {
+        guard let store = activeStore else { return }
+        change(&store.viewModel.guides)
+        store.viewModel.markDirty()
+        store.canvasView.redrawOverlays()
     }
 
     @objc private func handleFlipView() {
@@ -1160,5 +1228,23 @@ final class CanvasWindowStore {
 
     func remove(for window: NSWindow) {
         store.removeValue(forKey: ObjectIdentifier(window))
+    }
+}
+
+// MARK: - Guides menu check marks
+
+extension AppDelegate: NSMenuDelegate {
+    func menuNeedsUpdate(_ menu: NSMenu) {
+        guard let guides = activeStore?.viewModel.guides else { return }
+        for item in menu.items {
+            switch item.title {
+            case "Show Grid": item.state = guides.showsGrid ? .on : .off
+            case "Snap to Grid": item.state = guides.snapsToGrid ? .on : .off
+            case "Snap to Guides": item.state = guides.snapsToGuides ? .on : .off
+            case "Clear Guides": item.isEnabled = !guides.isEmpty
+            default:
+                if item.tag > 0 { item.state = Int(guides.gridSpacing) == item.tag ? .on : .off }
+            }
+        }
     }
 }
