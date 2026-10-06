@@ -1,29 +1,31 @@
 import Foundation
 
+/// Everything that defines a brush. Built-in brushes are the static members below; the
+/// user's own live in `BrushLibrary` as the same type, saved as JSON.
 struct BrushDescriptor: Codable, Identifiable, Equatable {
-    let id: UUID
-    let name: String
-    let category: BrushCategory
+    private(set) var id: UUID
+    var name: String
+    var category: BrushCategory
 
     // Tip
-    let hardness: Float       // 0.0 (soft gaussian) to 1.0 (hard edge)
+    var hardness: Float       // 0.0 (soft gaussian) to 1.0 (hard edge)
 
     // Size
-    let baseSize: Float       // Diameter the size slider starts at when this brush is first picked
+    var baseSize: Float       // Diameter the size slider starts at when this brush is first picked
 
     // Dynamics
-    let pressureDynamics: PressureDynamics
+    var pressureDynamics: PressureDynamics
 
     // Opacity
-    let opacity: Float
+    var opacity: Float
 
     // Stroke
-    let smoothing: Float      // Smoothing amount this brush starts with (0.0-1.0)
+    var smoothing: Float      // Smoothing amount this brush starts with (0.0-1.0)
 
     // Optional: fixed nib angle in radians for calligraphy-style brushes.
     // When set, the ribbon uses this fixed perpendicular direction instead of the
     // stroke-direction-based one, producing the classic thick/thin calligraphy effect.
-    let fixedNibAngle: Float?
+    var fixedNibAngle: Float?
 
     /// How the stroke is drawn.
     var rendering: BrushRendering = .ribbon(.procedural)
@@ -32,6 +34,16 @@ struct BrushDescriptor: Codable, Identifiable, Equatable {
     var tiltDynamics: TiltDynamics? = nil
     /// Response to the speed of the stroke; nil ignores it.
     var velocityDynamics: VelocityDynamics? = nil
+}
+
+extension BrushDescriptor {
+    /// The same brush under a different identity. (In an extension so the struct keeps its
+    /// memberwise initializer.)
+    init(copying other: BrushDescriptor, id: UUID, name: String) {
+        self = other
+        self.id = id
+        self.name = name
+    }
 }
 
 /// The two ways a stroke can be drawn.
@@ -59,7 +71,7 @@ enum RibbonShader: String, Codable {
 /// Settings for a brush drawn with dabs.
 struct StampSettings: Codable, Equatable {
     /// The shape of one dab.
-    enum Tip: String, Codable {
+    enum Tip: Equatable, Hashable {
         /// A disc whose edge softness comes from the brush's `hardness`.
         case round
         /// A rough-edged, blotchy disc, like the end of a stick of chalk.
@@ -67,6 +79,9 @@ struct StampSettings: Codable, Equatable {
         /// A disc with a ragged edge, the footprint of a loaded bristle brush. The bristle
         /// streaks themselves come from stroke-attached `bristles` grain.
         case bristle
+        /// An image from the brush library's textures folder, by file name. Its alpha
+        /// channel is the shape; an image without alpha uses its darkness.
+        case image(String)
     }
 
     /// How dabs add up within one stroke.
@@ -87,11 +102,14 @@ struct StampSettings: Codable, Equatable {
             /// valleys too. This is what makes graphite and chalk look dry.
             case height
         }
-        enum Texture: String, Codable {
+        enum Texture: Equatable, Hashable {
             /// The tooth of cold-press paper.
             case paper
             /// Streaks along the stroke, the marks of individual bristles.
             case bristles
+            /// An image from the brush library's textures folder, by file name; its
+            /// brightness is the height.
+            case image(String)
         }
         enum Attachment: String, Codable {
             /// Fixed to the canvas: every stroke meets the same texture, as with real paper.
@@ -512,5 +530,55 @@ extension BrushDescriptor {
     /// Look up a built-in brush (including the eraser) by its display name.
     static func builtIn(named name: String) -> BrushDescriptor? {
         (allDefaults + [eraser]).first { $0.name == name }
+    }
+}
+
+// MARK: - Tips and textures as strings
+
+/// Tips and grain textures are written as plain strings in brush files: the built-in
+/// ones by name, images as "image:<file name>".
+extension StampSettings.Tip: Codable {
+    init(from decoder: Decoder) throws {
+        let raw = try decoder.singleValueContainer().decode(String.self)
+        switch raw {
+        case "round": self = .round
+        case "chalk": self = .chalk
+        case "bristle": self = .bristle
+        case _ where raw.hasPrefix("image:"): self = .image(String(raw.dropFirst("image:".count)))
+        default:
+            throw DecodingError.dataCorrupted(.init(codingPath: decoder.codingPath, debugDescription: "Unknown tip \"\(raw)\""))
+        }
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.singleValueContainer()
+        switch self {
+        case .round: try container.encode("round")
+        case .chalk: try container.encode("chalk")
+        case .bristle: try container.encode("bristle")
+        case .image(let name): try container.encode("image:" + name)
+        }
+    }
+}
+
+extension StampSettings.Grain.Texture: Codable {
+    init(from decoder: Decoder) throws {
+        let raw = try decoder.singleValueContainer().decode(String.self)
+        switch raw {
+        case "paper": self = .paper
+        case "bristles": self = .bristles
+        case _ where raw.hasPrefix("image:"): self = .image(String(raw.dropFirst("image:".count)))
+        default:
+            throw DecodingError.dataCorrupted(.init(codingPath: decoder.codingPath, debugDescription: "Unknown texture \"\(raw)\""))
+        }
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.singleValueContainer()
+        switch self {
+        case .paper: try container.encode("paper")
+        case .bristles: try container.encode("bristles")
+        case .image(let name): try container.encode("image:" + name)
+        }
     }
 }

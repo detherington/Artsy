@@ -20,6 +20,18 @@
 			<key>LSTypeIsPackage</key>
 			<true/>
 		</dict>
+		<dict>
+			<key>CFBundleTypeIconSystemGenerated</key>
+			<integer>1</integer>
+			<key>CFBundleTypeName</key>
+			<string>Artsy Brush</string>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+			<key>LSItemContentTypes</key>
+			<array>
+				<string>com.artsy.brush</string>
+			</array>
+		</dict>
 	</array>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
@@ -70,6 +82,23 @@
 				<key>public.filename-extension</key>
 				<array>
 					<string>artsy</string>
+				</array>
+			</dict>
+		</dict>
+		<dict>
+			<key>UTTypeConformsTo</key>
+			<array>
+				<string>public.json</string>
+			</array>
+			<key>UTTypeDescription</key>
+			<string>Artsy Brush</string>
+			<key>UTTypeIdentifier</key>
+			<string>com.artsy.brush</string>
+			<key>UTTypeTagSpecification</key>
+			<dict>
+				<key>public.filename-extension</key>
+				<array>
+					<string>artsybrush</string>
 				</array>
 			</dict>
 		</dict>

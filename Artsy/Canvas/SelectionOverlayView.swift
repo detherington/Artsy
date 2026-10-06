@@ -30,11 +30,7 @@ class SelectionOverlayView: NSView {
         guard let vm = viewModel else { return }
 
         // Shared canvas → view transform
-        let cx = bounds.width / 2 + vm.transform.offset.x
-        let cy = bounds.height / 2 + vm.transform.offset.y
-        var transform = CGAffineTransform.identity
-        transform = transform.translatedBy(x: cx, y: cy)
-        transform = transform.scaledBy(x: vm.transform.scale, y: vm.transform.scale)
+        var transform = vm.transform.affineTransform(viewSize: bounds.size)
 
         // Draw symmetry guide lines (subtle dashed lines across the canvas center)
         if vm.symmetryMode.isOn {

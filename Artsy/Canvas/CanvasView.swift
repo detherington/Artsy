@@ -1206,6 +1206,17 @@ class CanvasView: MTKView {
         viewModel.transform.zoom(by: 1.0 + event.magnification, at: location, viewSize: bounds.size)
     }
 
+    /// Two-finger twist on the trackpad turns the canvas about the pointer.
+    override func rotate(with event: NSEvent) {
+        guard let viewModel = viewModel else { return }
+        let location = convert(event.locationInWindow, from: nil)
+        let delta = CGFloat(event.rotation) * .pi / 180
+        viewModel.transform.rotate(by: delta, at: location, viewSize: bounds.size)
+        if event.phase == .ended, abs(viewModel.transform.rotation) < 2 * .pi / 180 {
+            viewModel.transform.setRotation(0, at: location, viewSize: bounds.size)
+        }
+    }
+
     // MARK: - Keyboard
 
     override func keyDown(with event: NSEvent) {

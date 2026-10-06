@@ -100,6 +100,6 @@ final class AppPreferences: ObservableObject {
 
     /// Find the BrushDescriptor matching the saved name, falling back to .hardRound.
     var defaultBrush: BrushDescriptor {
-        BrushDescriptor.allDefaults.first { $0.name == defaultBrushName } ?? .hardRound
+        BrushLibrary.shared.brush(named: defaultBrushName) ?? .hardRound
     }
 }
