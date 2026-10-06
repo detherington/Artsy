@@ -191,9 +191,15 @@ Done:
   set is saved for that pen and comes back whenever it is picked up. Without a pen the
   "default" curve applies. Tested with synthesized proximity events only.
 
+- **Imports.** Brush → Import Brush… takes Photoshop `.abr` files (versions 1, 2 and 6,
+  raw or PackBits; each sampled tip becomes a brush) and Procreate `.brush` and
+  `.brushset` files (shape and grain; each becomes a brush). Settings, dynamics and
+  names in those formats are not read. Neither format is published; the readers follow
+  what GIMP, Krita and the Procreate community worked out, and were tested only on files
+  built from those descriptions, not on real exports.
+
 Still to do:
 
-- Photoshop `.abr` and Procreate `.brush` imports (shape and grain only).
 - A dual tip, once the editor can expose it.
 
 ### 5. Wet media (large)
