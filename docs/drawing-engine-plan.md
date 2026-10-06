@@ -170,9 +170,8 @@ Done:
 - **A brush library.** `BrushLibrary` keeps the user's brushes as one file each in
   `~/Library/Application Support/Artsy/Brushes/`, with their images in `Textures/`. The
   palette and the default-brush setting list built-ins and user brushes together.
-- **Brush menu:** Duplicate (a copy to change without touching the original), Delete,
-  Import, Export, Import Tip or Grain Image, Show Brushes Folder. Until the editor exists,
-  a duplicated brush is changed by editing its JSON.
+- **Brush menu:** Brush Studio, Duplicate, Delete, Import, Export, Import Tip or Grain
+  Image, Show Brushes Folder.
 - **Image tips and grain.** A `.stamp` brush can use `image:<name>` for its tip (alpha is
   the shape; a flat image's darkness is) or grain (brightness is height). PNG, JPEG, TIFF
   and GIMP `.gbr` are imported; a missing image falls back to a round tip or paper.
@@ -180,9 +179,14 @@ Done:
   Left/Right (⌥⌘[ ⌥⌘]) to 15° marks, Reset Rotation (⌥⌘0), Flip Canvas View (⌥⌘F). The
   status bar shows both. Strokes land under the pen whatever the view is doing.
 
+- **Brush Studio** (Brush → Brush Studio…, ⇧⌘B): a panel that edits the canvas's current
+  brush with a live preview drawn by the engine in the current colour. Every change goes
+  to the canvas and the library at once; the first change to a built-in brush makes a
+  copy and switches to it. It covers shape (ribbon or dabs, tip, spacing, flow,
+  accumulation, resting spray), grain, jitter, pressure, tilt, speed and stroke settings.
+
 Still to do:
 
-- The editor: a panel for the current brush's settings with a live preview pad.
 - A pressure-curve editor; per-pen settings keyed on `NSEvent.uniqueID`.
 - Photoshop `.abr` and Procreate `.brush` imports (shape and grain only).
 - A dual tip, once the editor can expose it.

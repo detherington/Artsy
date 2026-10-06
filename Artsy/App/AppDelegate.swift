@@ -590,6 +590,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // Brush menu
         let brushMenuItem = NSMenuItem()
         let brushMenu = NSMenu(title: "Brush")
+        brushMenu.addItem(withTitle: "Brush Studio...", action: #selector(showBrushStudio), keyEquivalent: "B")
+        brushMenu.addItem(NSMenuItem.separator())
         brushMenu.addItem(withTitle: "Duplicate Brush", action: #selector(handleDuplicateBrush), keyEquivalent: "")
         brushMenu.addItem(withTitle: "Delete Brush", action: #selector(handleDeleteBrush), keyEquivalent: "")
         brushMenu.addItem(NSMenuItem.separator())
@@ -861,6 +863,37 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     // MARK: - Brush menu
+
+    private var brushStudioWindow: NSWindow?
+    private var brushStudioModel: BrushStudioModel?
+
+    /// Opens the studio on the active canvas's current brush. Reopening it binds it to
+    /// whichever canvas is active then.
+    @objc private func showBrushStudio() {
+        guard let store = activeStore else { return }
+        let model = BrushStudioModel(
+            viewModel: store.viewModel,
+            library: BrushLibrary.shared,
+            previewRenderer: try? BrushPreview(context: metalContext)
+        )
+        brushStudioModel = model
+
+        let window = brushStudioWindow ?? {
+            let window = NSWindow(
+                contentRect: NSRect(x: 0, y: 0, width: 440, height: 760),
+                styleMask: [.titled, .closable, .resizable],
+                backing: .buffered,
+                defer: false
+            )
+            window.title = "Brush Studio"
+            window.isReleasedWhenClosed = false
+            window.center()
+            return window
+        }()
+        window.contentView = NSHostingView(rootView: BrushStudioView(model: model, library: BrushLibrary.shared))
+        brushStudioWindow = window
+        window.makeKeyAndOrderFront(nil)
+    }
 
     /// A copy of the current brush, saved to the library and selected, so it can be
     /// changed without touching the original.
