@@ -8,6 +8,10 @@ final class TextureManager {
         self.device = device
     }
 
+    /// Memory the GPU can work with comfortably, per Metal; what layers, undo history and
+    /// scratch textures have to share.
+    var memoryBudget: Int { Int(device.recommendedMaxWorkingSetSize) }
+
     func makeCanvasTexture(width: Int, height: Int, label: String? = nil) throws -> MTLTexture {
         let desc = MTLTextureDescriptor.texture2DDescriptor(
             pixelFormat: .rgba16Float,

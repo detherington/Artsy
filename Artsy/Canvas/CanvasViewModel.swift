@@ -104,6 +104,20 @@ final class CanvasViewModel: ObservableObject {
     /// True when there are unsaved changes.
     @Published var isDirty: Bool = false
 
+    /// Texture memory this canvas holds: its layers (and their thickness), the undo history
+    /// and the renderer's scratch textures.
+    var memoryUseBytes: Int {
+        let pixels = Int(canvasSize.width) * Int(canvasSize.height)
+        var bytes = 0
+        for layer in layerStack?.layers ?? [] {
+            bytes += pixels * (layer.heightTexture == nil ? 8 : 10)
+        }
+        // Composite, blend scratch, two stroke textures and the composite height map
+        bytes += pixels * (8 * 4 + 2)
+        bytes += undoManager.textureBytes
+        return bytes
+    }
+
     func markDirty() { isDirty = true }
     func markClean() { isDirty = false }
 

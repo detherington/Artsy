@@ -22,8 +22,13 @@ final class CanvasUndoManager {
     /// Whole-stack snapshots are large, so memory is the real limit: history may use what
     /// this many of them would. Strokes store a small rectangle each and so go much deeper.
     let wholeStackSnapshotsInBudget = 25
+    /// But never more than this, whatever the canvas: a big canvas with many layers would
+    /// otherwise be allowed tens of gigabytes. The renderer sets it from the GPU's budget.
+    var memoryCap = 2 << 30
     /// Size of one whole-stack snapshot of the canvas, as last seen.
     private var stackBytes = 0
+    /// Snapshot work still on the GPU; tests wait for it.
+    private let pending = DispatchGroup()
 
     struct LayerSnapshot {
         let id: UUID
@@ -37,11 +42,32 @@ final class CanvasUndoManager {
         let height: MTLTexture?
     }
 
-    struct StackSnapshot {
-        let layers: [LayerSnapshot]
+    /// A class, so that layers found unchanged since the previous snapshot can be pointed
+    /// at its copies once the GPU has compared them — from the GPU's completion thread,
+    /// hence the lock.
+    final class StackSnapshot {
+        private var storage: [LayerSnapshot]
+        private let lock = NSLock()
         let activeLayerIndex: Int
         let selectionPath: CGPath?
         let description: String
+
+        init(layers: [LayerSnapshot], activeLayerIndex: Int, selectionPath: CGPath?, description: String) {
+            self.storage = layers
+            self.activeLayerIndex = activeLayerIndex
+            self.selectionPath = selectionPath
+            self.description = description
+        }
+
+        var layers: [LayerSnapshot] {
+            lock.lock(); defer { lock.unlock() }
+            return storage
+        }
+
+        func replaceLayer(at index: Int, with layer: LayerSnapshot) {
+            lock.lock(); defer { lock.unlock() }
+            storage[index] = layer
+        }
     }
 
     /// The pixels of one rectangle of one layer.
@@ -59,11 +85,25 @@ final class CanvasUndoManager {
     var canUndo: Bool { !undoStack.isEmpty }
     var canRedo: Bool { !redoStack.isEmpty }
 
-    /// Save the full layer stack state BEFORE performing an action.
+    /// Save the full layer stack state BEFORE performing an action. Layers that have not
+    /// changed since the last whole-stack snapshot end up sharing its copies.
     func saveSnapshot(layerStack: LayerStack, selectionPath: CGPath?, context: MetalContext, description: String) {
-        guard let snapshot = captureStack(layerStack: layerStack, selectionPath: selectionPath, context: context, description: description) else { return }
+        guard let snapshot = captureStack(layerStack: layerStack, selectionPath: selectionPath, context: context,
+                                          description: description, sharingWith: lastStackSnapshot) else { return }
         noteStackSize(layerStack)
         push(.stack(snapshot))
+    }
+
+    private var lastStackSnapshot: StackSnapshot? {
+        for entry in undoStack.reversed() {
+            if case .stack(let snapshot) = entry { return snapshot }
+        }
+        return nil
+    }
+
+    /// Block until the GPU has finished every snapshot copy and comparison so far.
+    func waitForPendingWork() {
+        pending.wait()
     }
 
     /// Save one rectangle of a layer BEFORE a stroke is merged into it.
@@ -94,10 +134,9 @@ final class CanvasUndoManager {
         redoStack.removeAll()
 
         // Drop the oldest steps once there are too many or they hold too much memory.
-        let budget = stackBytes * wholeStackSnapshotsInBudget
-        var used = undoStack.reduce(0) { $0 + Self.bytes(of: $1) }
-        while undoStack.count > 1, undoStack.count > maxUndoLevels || used > budget {
-            used -= Self.bytes(of: undoStack.removeFirst())
+        let budget = min(stackBytes * wholeStackSnapshotsInBudget, memoryCap)
+        while undoStack.count > 1, undoStack.count > maxUndoLevels || Self.bytes(of: undoStack) > budget {
+            undoStack.removeFirst()
         }
     }
 
@@ -124,7 +163,8 @@ final class CanvasUndoManager {
     private func apply(_ entry: Entry, layerStack: LayerStack, viewModel: CanvasViewModel, context: MetalContext) -> Entry? {
         switch entry {
         case .stack(let snapshot):
-            let current = captureStack(layerStack: layerStack, selectionPath: viewModel.selectionPath, context: context, description: snapshot.description)
+            let current = captureStack(layerStack: layerStack, selectionPath: viewModel.selectionPath, context: context,
+                                       description: snapshot.description, sharingWith: snapshot)
             restoreStack(snapshot: snapshot, layerStack: layerStack, context: context)
             viewModel.selectionPath = snapshot.selectionPath
             return current.map(Entry.stack)
@@ -200,16 +240,30 @@ final class CanvasUndoManager {
 
     /// Bytes of texture memory held by the undo and redo stacks.
     var textureBytes: Int {
-        (undoStack + redoStack).reduce(0) { $0 + Self.bytes(of: $1) }
+        Self.bytes(of: undoStack + redoStack)
     }
 
-    private static func bytes(of entry: Entry) -> Int {
-        switch entry {
-        case .stack(let snapshot):
-            return snapshot.layers.reduce(0) { $0 + $1.texture.width * $1.texture.height * ($1.height == nil ? 8 : 10) }
-        case .region(let snapshot):
-            return snapshot.texture.width * snapshot.texture.height * (snapshot.height == nil ? 8 : 10)
+    /// Texture memory held by `entries`, counting a texture that snapshots share once.
+    private static func bytes(of entries: [Entry]) -> Int {
+        var seen = Set<ObjectIdentifier>()
+        var total = 0
+        func count(_ texture: MTLTexture?) {
+            guard let texture, seen.insert(ObjectIdentifier(texture)).inserted else { return }
+            total += texture.width * texture.height * (texture.pixelFormat == .r16Float ? 2 : 8)
         }
+        for entry in entries {
+            switch entry {
+            case .stack(let snapshot):
+                for layer in snapshot.layers {
+                    count(layer.texture)
+                    count(layer.height)
+                }
+            case .region(let snapshot):
+                count(snapshot.texture)
+                count(snapshot.height)
+            }
+        }
+        return total
     }
 
     // MARK: - Snapshot Capture & Restore
@@ -243,7 +297,12 @@ final class CanvasUndoManager {
         return RegionSnapshot(layerID: layer.id, region: region, texture: pixels, height: height, description: description)
     }
 
-    private func captureStack(layerStack: LayerStack, selectionPath: CGPath?, context: MetalContext, description: String) -> StackSnapshot? {
+    /// Copy every layer. With `previous`, the copies are then compared on the GPU with that
+    /// snapshot's, and a layer found unchanged shares the previous copy instead: most
+    /// actions change one layer or none, so a history of whole-stack snapshots costs
+    /// little more than the layers that actually changed.
+    private func captureStack(layerStack: LayerStack, selectionPath: CGPath?, context: MetalContext,
+                              description: String, sharingWith previous: StackSnapshot? = nil) -> StackSnapshot? {
         var layerSnapshots: [LayerSnapshot] = []
 
         for layer in layerStack.layers {
@@ -260,12 +319,58 @@ final class CanvasUndoManager {
             ))
         }
 
-        return StackSnapshot(
+        let snapshot = StackSnapshot(
             layers: layerSnapshots,
             activeLayerIndex: layerStack.activeLayerIndex,
             selectionPath: selectionPath?.copy(),
             description: description
         )
+        if let previous { shareUnchangedLayers(of: snapshot, with: previous, context: context) }
+        return snapshot
+    }
+
+    private func shareUnchangedLayers(of snapshot: StackSnapshot, with previous: StackSnapshot, context: MetalContext) {
+        // Candidates: the same layer in both, the same size, and either both or neither thick
+        var candidates: [(index: Int, texture: MTLTexture, height: MTLTexture?)] = []
+        for (index, layer) in snapshot.layers.enumerated() {
+            guard let match = previous.layers.first(where: { $0.id == layer.id }),
+                  match.texture.width == layer.texture.width, match.texture.height == layer.texture.height,
+                  (match.height == nil) == (layer.height == nil) else { continue }
+            candidates.append((index, match.texture, match.height))
+        }
+        guard !candidates.isEmpty,
+              let flags = context.device.makeBuffer(length: candidates.count * 4, options: .storageModeShared),
+              let commandBuffer = context.commandQueue.makeCommandBuffer(),
+              let encoder = commandBuffer.makeComputeCommandEncoder() else { return }
+        memset(flags.contents(), 0, candidates.count * 4)
+        encoder.setComputePipelineState(context.texturesDifferPipelineState)
+        for (slot, candidate) in candidates.enumerated() {
+            let layer = snapshot.layers[candidate.index]
+            for (a, b) in [(layer.texture, candidate.texture)] + (layer.height.flatMap { h in candidate.height.map { [(h, $0)] } } ?? []) {
+                encoder.setTexture(a, index: 0)
+                encoder.setTexture(b, index: 1)
+                encoder.setBuffer(flags, offset: slot * 4, index: 0)
+                encoder.dispatchThreads(MTLSize(width: a.width, height: a.height, depth: 1),
+                                        threadsPerThreadgroup: MTLSize(width: 16, height: 16, depth: 1))
+            }
+        }
+        encoder.endEncoding()
+
+        pending.enter()
+        commandBuffer.addCompletedHandler { [pending] _ in
+            let differ = flags.contents().bindMemory(to: UInt32.self, capacity: candidates.count)
+            let layers = snapshot.layers
+            for (slot, candidate) in candidates.enumerated() where differ[slot] == 0 {
+                let layer = layers[candidate.index]
+                snapshot.replaceLayer(at: candidate.index, with: LayerSnapshot(
+                    id: layer.id, name: layer.name, isVisible: layer.isVisible, isLocked: layer.isLocked,
+                    opacity: layer.opacity, blendMode: layer.blendMode,
+                    texture: candidate.texture, height: candidate.height
+                ))
+            }
+            pending.leave()
+        }
+        commandBuffer.commit()
     }
 
     private func restoreStack(snapshot: StackSnapshot, layerStack: LayerStack, context: MetalContext) {

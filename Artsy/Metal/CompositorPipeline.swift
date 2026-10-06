@@ -435,7 +435,8 @@ final class CompositorPipeline {
 
         guard let encoder = commandBuffer.makeRenderCommandEncoder(descriptor: passDesc) else { return }
 
-        encoder.setRenderPipelineState(context.displayPipelineState)
+        encoder.setRenderPipelineState(drawable.pixelFormat == .rgba16Float ? context.display16PipelineState
+                                                                          : context.displayPipelineState)
 
         // Generate canvas quad vertices in canvas coordinates
         let canvasW = Float(composite.width)

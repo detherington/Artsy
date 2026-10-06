@@ -9,7 +9,23 @@ final class LayerStack: ObservableObject {
     private let canvasWidth: Int
     private let canvasHeight: Int
 
-    static let maxLayers = 8
+    /// The most layers any canvas may have.
+    static let maxLayers = 32
+    /// Memory to size the layer limit by, in place of the device's; for tests.
+    var memoryBudgetOverride: Int?
+
+    /// Layers this canvas may have: up to `maxLayers`, fewer when more would not fit in
+    /// memory. A layer costs 8 bytes a pixel (plus 2 for thick paint), and undo history and
+    /// the stroke textures need room beside the layers.
+    var layerLimit: Int {
+        Self.layerLimit(forCanvasPixels: canvasWidth * canvasHeight,
+                        memoryBudget: memoryBudgetOverride ?? textureManager.memoryBudget)
+    }
+
+    static func layerLimit(forCanvasPixels pixels: Int, memoryBudget: Int) -> Int {
+        // Half the budget for the layers themselves
+        max(2, min(maxLayers, memoryBudget / 2 / (pixels * 10)))
+    }
 
     var activeLayer: Layer? {
         guard activeLayerIndex >= 0, activeLayerIndex < layers.count else { return nil }
@@ -35,8 +51,8 @@ final class LayerStack: ObservableObject {
     }
 
     func addLayer(above index: Int, name: String? = nil) throws -> Int {
-        guard layers.count < LayerStack.maxLayers else {
-            throw LayerError.maxLayersReached
+        guard layers.count < layerLimit else {
+            throw LayerError.maxLayersReached(layerLimit)
         }
         let layerName = name ?? "Layer \(layers.count)"
         let layer = try makeLayer(name: layerName)
@@ -138,12 +154,15 @@ final class LayerStack: ObservableObject {
 }
 
 enum LayerError: LocalizedError {
-    case maxLayersReached
+    case maxLayersReached(Int)
     case flattenFailed
 
     var errorDescription: String? {
         switch self {
-        case .maxLayersReached: return "Maximum of \(LayerStack.maxLayers) layers reached"
+        case .maxLayersReached(let limit):
+            return limit < LayerStack.maxLayers
+                ? "A canvas this size can have \(limit) layers in this Mac's memory"
+                : "Maximum of \(limit) layers reached"
         case .flattenFailed: return "Failed to flatten layers"
         }
     }

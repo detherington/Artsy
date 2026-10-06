@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		910557AE248C5E6C2EB1180D /* ScaleTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 906151D16DF5DF8303645279 /* ScaleTests.swift */; };
 		9F4B6E72ED36054E23D3B6D8 /* ImpastoTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C620C18B57AC3DF098EA49AB /* ImpastoTests.swift */; };
 		7DFD6E819B5DE80A59AD991E /* WetMediaTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FE6CCE7FADFE87962124F696 /* WetMediaTests.swift */; };
 		AD2F98BF9620B34D6940D8B0 /* PigmentMixingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A9EB61B4A10FA48DDFBBA0FD /* PigmentMixingTests.swift */; };
@@ -116,6 +117,7 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		906151D16DF5DF8303645279 /* ScaleTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScaleTests.swift; sourceTree = "<group>"; };
 		C620C18B57AC3DF098EA49AB /* ImpastoTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImpastoTests.swift; sourceTree = "<group>"; };
 		FE6CCE7FADFE87962124F696 /* WetMediaTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WetMediaTests.swift; sourceTree = "<group>"; };
 		A9EB61B4A10FA48DDFBBA0FD /* PigmentMixingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PigmentMixingTests.swift; sourceTree = "<group>"; };
@@ -366,6 +368,7 @@
 		B48AF066E85C8962CFFD499C /* ArtsyTests */ = {
 			isa = PBXGroup;
 			children = (
+				906151D16DF5DF8303645279 /* ScaleTests.swift */,
 				C620C18B57AC3DF098EA49AB /* ImpastoTests.swift */,
 				FE6CCE7FADFE87962124F696 /* WetMediaTests.swift */,
 				A9EB61B4A10FA48DDFBBA0FD /* PigmentMixingTests.swift */,
@@ -690,6 +693,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				910557AE248C5E6C2EB1180D /* ScaleTests.swift in Sources */,
 				9F4B6E72ED36054E23D3B6D8 /* ImpastoTests.swift in Sources */,
 				7DFD6E819B5DE80A59AD991E /* WetMediaTests.swift in Sources */,
 				AD2F98BF9620B34D6940D8B0 /* PigmentMixingTests.swift in Sources */,

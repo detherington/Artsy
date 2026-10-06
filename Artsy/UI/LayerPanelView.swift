@@ -19,7 +19,7 @@ struct LayerPanelView: View {
                 }
                 .buttonStyle(.plain)
                 .foregroundColor(.white)
-                .disabled(layerStack.layers.count >= LayerStack.maxLayers)
+                .disabled(layerStack.layers.count >= layerStack.layerLimit)
                 .help("Add layer")
 
                 Button(action: deleteLayer) {

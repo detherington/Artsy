@@ -6,11 +6,12 @@ import CoreGraphics
 final class ImageExporter {
 
     /// The canvas as it looks on screen: every visible layer composited, over white, thick
-    /// paint lit. 8-bit BGRA, CPU-readable, the size of the canvas.
-    static func litCanvas(renderer: CanvasRenderer) -> MTLTexture? {
+    /// paint lit. CPU-readable, the size of the canvas: 8-bit BGRA, or half floats for
+    /// `bitsPerChannel` 16.
+    static func litCanvas(renderer: CanvasRenderer, bitsPerChannel: Int = 8) -> MTLTexture? {
         let width = Int(renderer.canvasSize.width), height = Int(renderer.canvasSize.height)
         let desc = MTLTextureDescriptor.texture2DDescriptor(
-            pixelFormat: .bgra8Unorm, width: width, height: height, mipmapped: false
+            pixelFormat: bitsPerChannel == 16 ? .rgba16Float : .bgra8Unorm, width: width, height: height, mipmapped: false
         )
         desc.usage = [.renderTarget, .shaderRead]
         #if arch(arm64)
@@ -51,9 +52,10 @@ final class ImageExporter {
         return imageData(from: canvas, format: .png)
     }
 
-    /// Export the canvas to PNG file.
-    static func exportPNG(renderer: CanvasRenderer, to url: URL) throws {
-        guard let data = exportForAI(renderer: renderer, maxDimension: 0) else {
+    /// Export the canvas to a PNG file, with 8 or 16 bits per channel.
+    static func exportPNG(renderer: CanvasRenderer, to url: URL, bitsPerChannel: Int = 8) throws {
+        guard let canvas = litCanvas(renderer: renderer, bitsPerChannel: bitsPerChannel),
+              let data = imageData(from: canvas, format: .png) else {
             throw ExportError.exportFailed
         }
         try data.write(to: url)
@@ -75,22 +77,44 @@ final class ImageExporter {
         case jpeg(quality: CGFloat)
     }
 
-    /// Encode a CPU-readable 8-bit BGRA texture.
+    /// Encode a CPU-readable texture from `litCanvas`: 8-bit BGRA, or half floats as 16-bit
+    /// PNG. Tagged Display P3, the colour space the canvas is drawn in.
     private static func imageData(from texture: MTLTexture, format: ImageFormat) -> Data? {
         let width = texture.width, height = texture.height
-        var bgra = [UInt8](repeating: 0, count: width * height * 4)
-        texture.getBytes(
-            &bgra,
-            bytesPerRow: width * 4,
-            from: MTLRegion(origin: .init(x: 0, y: 0, z: 0), size: .init(width: width, height: height, depth: 1)),
-            mipmapLevel: 0
-        )
-        guard let colorSpace = CGColorSpace(name: CGColorSpace.sRGB),
-              let ctx = CGContext(data: &bgra, width: width, height: height,
-                                  bitsPerComponent: 8, bytesPerRow: width * 4,
-                                  space: colorSpace,
-                                  bitmapInfo: CGImageAlphaInfo.noneSkipFirst.rawValue | CGBitmapInfo.byteOrder32Little.rawValue),
-              let cgImage = ctx.makeImage() else { return nil }
+        guard let colorSpace = CGColorSpace(name: CGColorSpace.displayP3) else { return nil }
+        let cgImage: CGImage?
+        if texture.pixelFormat == .rgba16Float {
+            var half = [UInt16](repeating: 0, count: width * height * 4)
+            half.withUnsafeMutableBytes {
+                texture.getBytes($0.baseAddress!, bytesPerRow: width * 8,
+                                 from: MTLRegion(origin: .init(x: 0, y: 0, z: 0), size: .init(width: width, height: height, depth: 1)),
+                                 mipmapLevel: 0)
+            }
+            let wide: [UInt16] = half.map { UInt16((max(0, min(1, Float(Float16(bitPattern: $0)))) * 65535).rounded()) }
+            let data = wide.withUnsafeBufferPointer { Data(buffer: $0) }
+            guard let provider = CGDataProvider(data: data as CFData) else { return nil }
+            cgImage = CGImage(
+                width: width, height: height, bitsPerComponent: 16, bitsPerPixel: 64, bytesPerRow: width * 8,
+                space: colorSpace,
+                bitmapInfo: CGBitmapInfo(rawValue: CGImageAlphaInfo.noneSkipLast.rawValue | CGBitmapInfo.byteOrder16Little.rawValue),
+                provider: provider, decode: nil, shouldInterpolate: false, intent: .defaultIntent
+            )
+        } else {
+            var bgra = [UInt8](repeating: 0, count: width * height * 4)
+            texture.getBytes(
+                &bgra,
+                bytesPerRow: width * 4,
+                from: MTLRegion(origin: .init(x: 0, y: 0, z: 0), size: .init(width: width, height: height, depth: 1)),
+                mipmapLevel: 0
+            )
+            guard let ctx = CGContext(data: &bgra, width: width, height: height,
+                                      bitsPerComponent: 8, bytesPerRow: width * 4,
+                                      space: colorSpace,
+                                      bitmapInfo: CGImageAlphaInfo.noneSkipFirst.rawValue | CGBitmapInfo.byteOrder32Little.rawValue)
+            else { return nil }
+            cgImage = ctx.makeImage()
+        }
+        guard let cgImage else { return nil }
 
         let rep = NSBitmapImageRep(cgImage: cgImage)
         switch format {
