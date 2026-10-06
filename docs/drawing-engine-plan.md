@@ -1,7 +1,7 @@
 # Drawing engine plan
 
 Goal: make drawing and painting the first-class feature of Artsy. Written 2026-10-05 from a
-code audit of v0.6.1 plus outside research. Step 1 is merged; step 2 is under way.
+code audit of v0.6.1 plus outside research. Steps 1 and 2 are merged; step 3 is under way.
 
 **Direction:** keep the current ribbon renderer for inking pens, and build a stamp (dab)
 engine beside it for everything meant to be paint or dry media. Fix feel and correctness
@@ -63,7 +63,7 @@ Sizes are relative to each other.
 - **Pen-up fix.** Samples that arrived after the last displayed frame were never drawn, so
   strokes ended up to a frame short. `finalizeStroke()` now draws them before merging.
 
-### 2. Feel (medium) — in progress
+### 2. Feel (medium) — done, untested with a pen
 
 Done:
 
@@ -111,12 +111,42 @@ Still to do:
 - **Tune with a pen.** The smoothing amounts, the pressure time constant and the ease
   length (2.5 brush widths, 8–160 px) are reasoned defaults, not ones anyone has drawn with.
 
-### 3. Stamp engine (large)
+### 3. Stamp engine (large) — in progress
 
-- Instanced dabs with tip textures, spacing, and flow versus opacity (wash and build-up modes).
-- Scatter and jitter; tilt, rotation and velocity dynamics; moving and static grain.
-- Re-author pencil, chalk, pastel, airbrush, marker, acrylic and oil on stamps.
-- Select the shader by a field on the brush, not by its name.
+Done:
+
+- **Two ways to draw a stroke**, chosen by `BrushDescriptor.rendering` rather than by the
+  brush's name: `.ribbon` (pens and inks, plus the old watercolour, acrylic and oil
+  shaders for now) and `.stamp`.
+- **Dabs.** `DabPlacer` lays copies of the tip along the path at a fraction of the dab's
+  diameter, with per-dab size, opacity and angle jitter and scatter. Jitter comes from the
+  dab's index and a per-stroke seed, so a replay gets the same dabs. Dabs are drawn as
+  instanced quads and blend source-over into the stroke texture.
+- **Incremental like ribbons.** Dabs on settled path are laid once; the rest are redrawn
+  each frame from a copy of the placer. The tail layers over the committed dabs when the
+  stroke is composited (ribbons still take the maximum).
+- **Wash and build-up.** A wash builds towards the stroke's opacity and stops there, so
+  going back over it without lifting adds nothing. A build-up brush has no cap.
+- **Paper grain** fixed to the canvas, so every stroke meets the same tooth. `multiply`
+  tints the dab; `height` lets light pressure reach only the paper's peaks and firmer
+  pressure fill the valleys, which is what makes graphite and chalk look dry. The grain
+  texture is generated (tileable gradient noise, heights spread evenly) rather than shipped.
+- **Tips**: a round tip with the brush's hardness, and a generated chalk tip.
+- **A tap leaves a dot** as dense as the middle of a stroke, since one dab of a low-flow
+  brush is nearly invisible.
+- **Re-authored on stamps:** Soft Round and Airbrush (plain dabs; wash and build-up),
+  Pencil and Graphite Stick (height grain), Conté and Chalk (chalk tip, height grain),
+  Pastel (chalk tip, multiply grain).
+
+Still to do:
+
+- Tilt, rotation and velocity dynamics.
+- Grain that moves with the stroke; a second (dual) tip.
+- Marker, Watercolor, Acrylic and Oil are still ribbons. The wet ones are best redone
+  together with step 5's smudge and wet mix.
+- Tips and grain from image files (with step 4's import).
+- An airbrush that keeps spraying while held still.
+- The values in the seven re-authored brushes are a first pass judged from test renders.
 
 ### 4. Brush Studio and canvas handling (medium)
 

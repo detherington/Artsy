@@ -73,12 +73,97 @@ final class StrokeRenderer {
         return drawn
     }
 
+    /// Mirrors `StampParams` in Shaders.metal.
+    private struct StampParams {
+        var color: SIMD4<Float>
+        var hardness: Float
+        var tipIsTexture: Int32
+        var grainMode: Int32
+        var grainScale: Float
+        var grainDepth: Float
+    }
+
+    /// Draw dabs into an open render pass on a stroke texture, once per entry in `mirrors`
+    /// (symmetry). Dabs blend source-over, in the order given.
+    ///
+    /// - Parameter opacityScale: multiplies every dab's opacity.
+    /// - Returns: the canvas-space bounds of each copy.
+    @discardableResult
+    func encode(
+        dabs: [Dab],
+        brush: BrushDescriptor,
+        settings: StampSettings,
+        color: StrokeColor,
+        opacityScale: Float,
+        mirrors: [(CGPoint) -> CGPoint],
+        encoder: MTLRenderCommandEncoder,
+        canvasSize: CGSize
+    ) -> [CGRect] {
+        guard !dabs.isEmpty, let paper = context.brushTextures.paperGrain else { return [] }
+
+        var transform = orthographicProjection(
+            left: 0, right: Float(canvasSize.width),
+            bottom: 0, top: Float(canvasSize.height),
+            near: -1, far: 1
+        )
+        let tipTexture = context.brushTextures.tipTexture(for: settings.tip)
+        var params = StampParams(
+            color: color.simd,
+            hardness: brush.hardness,
+            tipIsTexture: tipTexture == nil ? 0 : 1,
+            grainMode: { switch settings.grain?.mode { case .multiply: return 1; case .height: return 2; case nil: return 0 } }(),
+            grainScale: settings.grain?.scale ?? 1,
+            grainDepth: settings.grain?.depth ?? 0
+        )
+
+        encoder.setRenderPipelineState(context.stampPipelineState)
+        encoder.setVertexBytes(&transform, length: MemoryLayout<float4x4>.size, index: 1)
+        encoder.setFragmentBytes(&params, length: MemoryLayout<StampParams>.stride, index: 0)
+        // Both slots need a texture even when the shader won't sample one of them.
+        encoder.setFragmentTexture(tipTexture ?? paper, index: 0)
+        encoder.setFragmentTexture(paper, index: 1)
+        encoder.setFragmentSamplerState(context.tipSampler, index: 0)
+        encoder.setFragmentSamplerState(context.grainSampler, index: 1)
+
+        var drawn: [CGRect] = []
+        for mirror in mirrors {
+            // Seven floats per dab, matching `StampInstance` in Shaders.metal
+            var instances: [Float] = []
+            instances.reserveCapacity(dabs.count * 7)
+            var bounds = CGRect.null
+
+            for dab in dabs {
+                let center = mirror(dab.center)
+                // A mirror turns the tip as well as moving it.
+                let ahead = mirror(CGPoint(x: dab.center.x + CGFloat(cos(dab.angle)),
+                                           y: dab.center.y + CGFloat(sin(dab.angle))))
+                let angle = Float(atan2(ahead.y - center.y, ahead.x - center.x))
+                instances += [Float(center.x), Float(center.y), dab.size, angle,
+                              dab.opacity * opacityScale, dab.seed, dab.reach]
+
+                // Half the diagonal covers the quad at any rotation
+                let reach = CGFloat(dab.size) * 0.7072
+                bounds = bounds.union(CGRect(x: center.x - reach, y: center.y - reach, width: reach * 2, height: reach * 2))
+            }
+
+            guard let buffer = makeBuffer(instances) else { continue }
+            encoder.setVertexBuffer(buffer, offset: 0, index: 0)
+            encoder.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: 6, instanceCount: dabs.count)
+            drawn.append(bounds)
+        }
+        return drawn
+    }
+
     // MARK: - Pipeline Selection
 
+    private func ribbonShader(of brush: BrushDescriptor) -> RibbonShader {
+        if case .ribbon(let shader) = brush.rendering { return shader }
+        return .procedural
+    }
+
     private func ribbonPipelineState(brush: BrushDescriptor) -> MTLRenderPipelineState {
-        switch brush.shaderType {
+        switch ribbonShader(of: brush) {
         case .procedural: return context.strokeProceduralPipelineState
-        case .pencil: return context.strokePencilPipelineState
         case .watercolor: return context.strokeWatercolorPipelineState
         case .acrylic: return context.strokeAcrylicPipelineState
         case .oil: return context.strokeOilPipelineState
@@ -86,8 +171,7 @@ final class StrokeRenderer {
     }
 
     private func radialCapPipelineState(brush: BrushDescriptor) -> MTLRenderPipelineState {
-        switch brush.shaderType {
-        case .pencil: return context.strokeRadialPencilPipelineState
+        switch ribbonShader(of: brush) {
         case .watercolor: return context.strokeRadialWatercolorPipelineState
         case .acrylic: return context.strokeRadialAcrylicPipelineState
         case .oil: return context.strokeRadialOilPipelineState

@@ -105,7 +105,8 @@ final class StrokePath {
                 pressure: mapped,
                 width: style.dynamics.size(for: mapped) * style.brushSize,
                 opacity: style.dynamics.opacity(for: mapped),
-                angle: b.angle
+                angle: b.angle,
+                distance: b.distance
             ))
         }
 

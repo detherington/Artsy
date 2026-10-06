@@ -22,8 +22,10 @@ final class CanvasRenderer: NSObject, MTKViewDelegate {
     private var hasInitializedTransform = false
 
     // In-progress stroke. Regions are texture pixels (origin top-left).
-    /// Index of the last path point whose geometry is in `activeStrokeTexture`.
+    /// Ribbon brushes: index of the last path point whose geometry is in `activeStrokeTexture`.
     private var committedThrough: Int?
+    /// Stamp brushes: where along the path the next settled dab goes.
+    private var dabPlacer: DabPlacer?
     private var renderedRevision = 0
     /// Where the tail was drawn last frame.
     private var tailRegions: [MTLScissorRect] = []
@@ -115,7 +117,6 @@ final class CanvasRenderer: NSObject, MTKViewDelegate {
     /// Separate from `draw(in:)` so a frame can be rendered without a view (tests, stroke replay).
     func encodeFrame(into commandBuffer: MTLCommandBuffer) {
         guard let viewModel = viewModel, let layerStack = viewModel.layerStack else { return }
-        let isErasing = viewModel.currentBrush.category == .utility
 
         encodeActiveStroke(into: commandBuffer)
 
@@ -135,10 +136,7 @@ final class CanvasRenderer: NSObject, MTKViewDelegate {
             textureManager.clearTexture(compositeTexture, commandBuffer: commandBuffer)
         }
 
-        let stroke = viewModel.isDrawing
-            ? CompositorPipeline.StrokeOverlay(committed: activeStrokeTexture, tail: strokeTailTexture,
-                                               opacity: viewModel.brushOpacity, erase: isErasing)
-            : nil
+        let stroke = viewModel.isDrawing ? strokeOverlay(for: viewModel) : nil
 
         for (i, layer) in layerStack.layers.enumerated() {
             guard layer.isVisible else { continue }
@@ -243,28 +241,86 @@ final class CanvasRenderer: NSObject, MTKViewDelegate {
         // merged, so the colour is irrelevant.
         let color = brush.category == .utility ? StrokeColor.white : viewModel.currentColor
         let mirrors = SymmetryTransform.transforms(mode: viewModel.symmetryMode, canvasSize: canvasSize)
-        let nothingCommitted = committedThrough == nil
-        let from = committedThrough ?? 0
+        let renderer = strokeRenderer
+        let size = canvasSize
 
-        // 1. Newly settled points. Stop one short of the last settled point so the ribbon's
-        //    edge where this piece ends is computed from settled neighbours on both sides —
-        //    the next piece then starts from exactly the same edge.
-        let settleThrough = finishing ? points.count - 1 : path.settledCount - 2
+        // What goes into each stroke texture this frame: closures that draw into an open
+        // render pass and return the canvas bounds they covered.
+        typealias Draw = (MTLRenderCommandEncoder) -> [CGRect]
+        var drawSettled: Draw?
+        var drawTail: Draw?
+
+        switch brush.rendering {
+        case .ribbon:
+            let nothingCommitted = committedThrough == nil
+            let from = committedThrough ?? 0
+            // Stop one short of the last settled point so the ribbon's edge where this piece
+            // ends is computed from settled neighbours on both sides — the next piece then
+            // starts from exactly the same edge.
+            let settleThrough = finishing ? points.count - 1 : path.settledCount - 2
+            if finishing || settleThrough > from {
+                drawSettled = { encoder in
+                    renderer.encode(points: points, range: from...settleThrough, brush: brush, color: color,
+                                    startCap: nothingCommitted, endCap: finishing,
+                                    mirrors: mirrors, encoder: encoder, canvasSize: size)
+                }
+                committedThrough = settleThrough
+            }
+            if !finishing {
+                let tailStart = committedThrough ?? 0
+                let tailHasStartCap = committedThrough == nil
+                drawTail = { encoder in
+                    renderer.encode(points: points, range: tailStart...(points.count - 1), brush: brush, color: color,
+                                    startCap: tailHasStartCap, endCap: true,
+                                    mirrors: mirrors, encoder: encoder, canvasSize: size)
+                }
+            }
+
+        case .stamp(let settings):
+            // A build-up brush has no cap on the stroke, so the brush's and the slider's
+            // opacity go into every dab; a wash applies them once, when the stroke merges.
+            let dabScale = settings.accumulation == .buildUp ? brush.opacity * viewModel.brushOpacity : 1
+            let pathEnd = points[points.count - 1].distance
+            var placer = dabPlacer ?? DabPlacer(strokeSeed: Self.strokeSeed(for: path))
+
+            // Dabs that sit on settled path are final: lay them for good.
+            let settledEnd = finishing ? pathEnd : (path.settledCount > 0 ? points[path.settledCount - 1].distance : nil)
+            if let settledEnd {
+                let dabs = placer.dabs(along: points, upTo: settledEnd, brush: brush, settings: settings)
+                if !dabs.isEmpty {
+                    drawSettled = { encoder in
+                        renderer.encode(dabs: dabs, brush: brush, settings: settings, color: color, opacityScale: dabScale,
+                                        mirrors: mirrors, encoder: encoder, canvasSize: size)
+                    }
+                }
+            }
+            dabPlacer = placer
+
+            // The rest are laid with a copy of the placer, so next frame starts over from
+            // the same place.
+            if !finishing {
+                var tailPlacer = placer
+                let dabs = tailPlacer.dabs(along: points, upTo: pathEnd, brush: brush, settings: settings)
+                if !dabs.isEmpty {
+                    drawTail = { encoder in
+                        renderer.encode(dabs: dabs, brush: brush, settings: settings, color: color, opacityScale: dabScale,
+                                        mirrors: mirrors, encoder: encoder, canvasSize: size)
+                    }
+                }
+            }
+        }
+
+        // 1. Newly settled parts go into the stroke texture, once.
         var committedRegions: [MTLScissorRect] = []
-        if finishing || settleThrough > from {
+        if let drawSettled {
             let pass = MTLRenderPassDescriptor()
             pass.colorAttachments[0].texture = activeStrokeTexture
             pass.colorAttachments[0].loadAction = .load
             pass.colorAttachments[0].storeAction = .store
             if let encoder = commandBuffer.makeRenderCommandEncoder(descriptor: pass) {
-                committedRegions = strokeRenderer.encode(
-                    points: points, range: from...settleThrough, brush: brush, color: color,
-                    startCap: nothingCommitted, endCap: finishing,
-                    mirrors: mirrors, encoder: encoder, canvasSize: canvasSize
-                ).compactMap(region(for:))
+                committedRegions = drawSettled(encoder).compactMap(region(for:))
                 encoder.endEncoding()
             }
-            committedThrough = settleThrough
             for region in committedRegions {
                 strokeRegion = strokeRegion.map { Self.union($0, region) } ?? region
             }
@@ -272,20 +328,15 @@ final class CanvasRenderer: NSObject, MTKViewDelegate {
 
         // 2. The tail: erase last frame's, draw this frame's.
         var newTailRegions: [MTLScissorRect] = []
-        if !tailRegions.isEmpty || !finishing {
+        if !tailRegions.isEmpty || drawTail != nil {
             let pass = MTLRenderPassDescriptor()
             pass.colorAttachments[0].texture = strokeTailTexture
             pass.colorAttachments[0].loadAction = .load
             pass.colorAttachments[0].storeAction = .store
             if let encoder = commandBuffer.makeRenderCommandEncoder(descriptor: pass) {
                 compositor.encodeClear(regions: tailRegions, in: encoder, of: strokeTailTexture)
-                if !finishing {
-                    newTailRegions = strokeRenderer.encode(
-                        points: points, range: (committedThrough ?? 0)...(points.count - 1),
-                        brush: brush, color: color,
-                        startCap: committedThrough == nil, endCap: true,
-                        mirrors: mirrors, encoder: encoder, canvasSize: canvasSize
-                    ).compactMap(region(for:))
+                if let drawTail {
+                    newTailRegions = drawTail(encoder).compactMap(region(for:))
                 }
                 encoder.endEncoding()
             }
@@ -293,6 +344,29 @@ final class CanvasRenderer: NSObject, MTKViewDelegate {
 
         pendingRegions += committedRegions + tailRegions + newTailRegions
         tailRegions = newTailRegions
+    }
+
+    /// A number that differs from stroke to stroke but is the same when a stroke is replayed.
+    private static func strokeSeed(for path: StrokePath) -> UInt64 {
+        guard let first = path.samples.first else { return 0 }
+        let x = UInt64(bitPattern: Int64((first.position.x * 16).rounded()))
+        let y = UInt64(bitPattern: Int64((first.position.y * 16).rounded()))
+        return x &* 0x9E3779B97F4A7C15 ^ y &* 0xC2B2AE3D27D4EB4F
+    }
+
+    /// How the stroke in progress combines with the layer it is on.
+    private func strokeOverlay(for viewModel: CanvasViewModel) -> CompositorPipeline.StrokeOverlay {
+        let brush = viewModel.currentBrush
+        var opacity = viewModel.brushOpacity
+        var accumulates = false
+        if case .stamp(let settings) = brush.rendering {
+            accumulates = true
+            opacity = settings.accumulation == .wash ? brush.opacity * viewModel.brushOpacity : 1
+        }
+        return CompositorPipeline.StrokeOverlay(
+            committed: activeStrokeTexture, tail: strokeTailTexture,
+            opacity: opacity, erase: brush.category == .utility, accumulates: accumulates
+        )
     }
 
     // MARK: - Regions
@@ -803,6 +877,7 @@ final class CanvasRenderer: NSObject, MTKViewDelegate {
 
     private func resetStrokeState() {
         committedThrough = nil
+        dabPlacer = nil
         renderedRevision = 0
         tailRegions = []
         strokeRegion = nil
@@ -833,15 +908,16 @@ final class CanvasRenderer: NSObject, MTKViewDelegate {
             )
             viewModel.markDirty()
 
+            let opacity = strokeOverlay(for: viewModel).opacity
             if isErasing {
                 compositor.erase(
                     source: activeStrokeTexture, from: activeLayer.texture,
-                    opacity: viewModel.brushOpacity, regions: [strokeRegion], commandBuffer: commandBuffer
+                    opacity: opacity, regions: [strokeRegion], commandBuffer: commandBuffer
                 )
             } else {
                 compositor.compositeNormal(
                     source: activeStrokeTexture, onto: activeLayer.texture,
-                    opacity: viewModel.brushOpacity, regions: [strokeRegion], commandBuffer: commandBuffer
+                    opacity: opacity, regions: [strokeRegion], commandBuffer: commandBuffer
                 )
             }
             compositor.clear(activeStrokeTexture, regions: [strokeRegion], commandBuffer: commandBuffer)
