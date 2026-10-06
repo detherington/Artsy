@@ -192,11 +192,25 @@ Done:
   "default" curve applies. Tested with synthesized proximity events only.
 
 - **Imports.** Brush → Import Brush… takes Photoshop `.abr` files (versions 1, 2 and 6,
-  raw or PackBits; each sampled tip becomes a brush) and Procreate `.brush` and
-  `.brushset` files (shape and grain; each becomes a brush). Settings, dynamics and
-  names in those formats are not read. Neither format is published; the readers follow
-  what GIMP, Krita and the Procreate community worked out, and were tested only on files
-  built from those descriptions, not on real exports.
+  raw or PackBits; each sampled tip becomes a brush, named as the file names it) and
+  Procreate `.brush` and `.brushset` files (shape, grain and a dual brush's second
+  shape; each becomes a brush, named and set up as its archive says: spacing, scatter,
+  rotation, jitter, pressure, size, grain depth). Neither format is published; the
+  readers follow what GIMP, Krita and the Procreate community worked out.
+
+  Checked against files from the wild (a 31-tip Photoshop 7 set from Krita's test data,
+  a CC0 Procreate set of six inkers, a single `.brush`; none redistributable here, so
+  `BrushImportTests.testRealBrushFilesFromDisk` runs over whatever directory
+  `ARTSY_REAL_BRUSHES` names and writes each brush's stroke out to look at). What that
+  found and fixed: sampled tips store coverage, white paints — the reader had them
+  inverted, so every tip painted its whole square; a real `.brush` keeps `Signature`
+  and `QuickLook` folders beside its files, which the reader took for the brush folders
+  and found no brush; a set keeps each brush's defaults in a `Reset` folder and a dual
+  brush's second half in `Sub01`, which became brushes of their own; names live in the
+  `desc` section of an `.abr` and in `Brush.archive`; a shape can sit on a dark-grey
+  rather than black background, which painted a faint square around every dab. Spacing
+  is read as the square root of `plotSpacing` (a 5% brush stores 0.0025) and size as
+  nijiGPen reads it; both are readings of an unpublished format.
 
 - **Second tip.** A stamp brush can mask each dab with a second tip (chalk, bristle or an
   imported image) at its own size and random rotation: wherever the second tip is clear

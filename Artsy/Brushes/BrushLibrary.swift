@@ -121,25 +121,70 @@ final class BrushLibrary: ObservableObject {
             let found = try ProcreateBrushFile.brushes(in: Data(contentsOf: source), fileName: stem)
             return try found.map { imported in
                 var settings = StampSettings(spacing: 0.1, flow: 0.7)
+                let read = imported.settings ?? ProcreateBrushFile.Settings()
                 if let shape = imported.shape {
-                    let (pixels, width, height) = try Self.brightness(of: shape)
+                    var (pixels, width, height) = try Self.brightness(of: shape)
+                    if read.shapeInverted { pixels = pixels.map { 255 - $0 } }
+                    pixels = Self.withoutBackground(pixels, width: width, height: height)
                     settings.tip = .image(try saveTexture(coverage: pixels, width: width, height: height, basedOn: imported.name + " shape"))
                 }
-                if let grain = imported.grain {
-                    let (pixels, width, height) = try Self.brightness(of: grain)
-                    let name = try saveTexture(height: pixels, width: width, height: height, basedOn: imported.name + " grain")
-                    settings.grain = .init(mode: .multiply, texture: .image(name), attachment: .canvas, scale: 1, depth: 0.5)
+                if let second = imported.secondShape {
+                    // A dual brush's second brush, as the second tip that masks each dab
+                    let (pixels, width, height) = try Self.brightness(of: second)
+                    let name = try saveTexture(coverage: pixels, width: width, height: height, basedOn: imported.name + " second")
+                    settings.secondTip = .init(tip: .image(name), scale: 1)
                 }
+                if let grain = imported.grain {
+                    var (pixels, width, height) = try Self.brightness(of: grain)
+                    if read.grainInverted { pixels = pixels.map { 255 - $0 } }
+                    let name = try saveTexture(height: pixels, width: width, height: height, basedOn: imported.name + " grain")
+                    settings.grain = .init(mode: .multiply, texture: .image(name), attachment: .canvas, scale: 1,
+                                           depth: read.grainDepth.map { Self.unit($0) } ?? 0.5)
+                }
+                // What the archive says, where it maps onto a stamp brush
+                if let spacing = read.spacing { settings.spacing = min(max(sqrt(max(spacing, 0)), 0.02), 1) }
+                if let scatter = read.scatter { settings.scatter = Self.unit(scatter) }
+                if let rotation = read.rotation { settings.followsDirection = rotation >= 0.5 }
+                if read.randomRotation { settings.angleJitter = 1 }
+                if let jitter = read.sizeJitter { settings.sizeJitter = Self.unit(jitter) }
+                if let jitter = read.opacityJitter { settings.opacityJitter = Self.unit(jitter) }
+
                 var brush = BrushDescriptor(copying: .hardRound, id: UUID(), name: untakenName(basedOn: imported.name, copy: false))
                 brush.category = .painting
                 brush.hardness = 1
                 brush.rendering = .stamp(settings)
+                if read.pressureSize != nil || read.pressureOpacity != nil {
+                    brush.pressureDynamics = PressureDynamics(
+                        sizeRange: (1 - Self.unit(read.pressureSize ?? 0))...1,
+                        opacityRange: (1 - Self.unit(read.pressureOpacity ?? 0))...1
+                    )
+                }
+                // The size slider's fraction, as nijiGPen reads it; clamped to a usable size
+                if let size = read.size { brush.baseSize = min(max((500 * size).rounded(), 3), 120) }
                 try save(brush)
                 return brush
             }
         default:
             return [try importBrush(from: source)]
         }
+    }
+
+    private static func unit(_ value: Float) -> Float { value.isNaN ? 0 : min(max(value, 0), 1) }
+
+    /// A shape whose background is dark grey rather than black (files from the wild have
+    /// them) would paint a faint square around every dab. The border's typical value is
+    /// taken as the background and the rest rescaled above it; a bright border is a shape
+    /// that really fills its square (a textured tip) and is left alone.
+    static func withoutBackground(_ pixels: [UInt8], width: Int, height: Int) -> [UInt8] {
+        guard width > 2, height > 2 else { return pixels }
+        var border: [UInt8] = []
+        border.reserveCapacity(2 * (width + height))
+        for x in 0..<width { border.append(pixels[x]); border.append(pixels[(height - 1) * width + x]) }
+        for y in 1..<(height - 1) { border.append(pixels[y * width]); border.append(pixels[y * width + width - 1]) }
+        let background = Int(border.sorted()[border.count / 2])
+        guard background > 0, background < 64 else { return pixels }
+        let span = 255 - background
+        return pixels.map { UInt8(max(0, Int($0) - background) * 255 / span) }
     }
 
     /// Write 8-bit coverage as a PNG whose alpha channel is the shape, named after `basedOn`.
