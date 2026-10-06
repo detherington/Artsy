@@ -667,6 +667,20 @@ kernel void maskedCutKernel(
 }
 
 // Masked clear: sets pixels to transparent where mask > 0.5
+/// Write `colour` into `target` wherever `mask` (the size of the region at `origin`) is set:
+/// a bucket fill landing, which must leave every other pixel as it is now, not as it was
+/// when the fill read the layer.
+kernel void maskedFillKernel(
+    texture2d<half, access::write> target [[texture(0)]],
+    texture2d<float, access::read> mask [[texture(1)]],
+    constant float4 &colour [[buffer(0)]],
+    constant uint2 &origin [[buffer(1)]],
+    uint2 gid [[thread_position_in_grid]]
+) {
+    if (gid.x >= mask.get_width() || gid.y >= mask.get_height()) return;
+    if (mask.read(gid).r > 0.5) target.write(half4(colour), origin + gid);
+}
+
 kernel void maskedClearKernel(
     texture2d<half, access::read_write> source [[texture(0)]],
     texture2d<float, access::read> mask [[texture(1)]],

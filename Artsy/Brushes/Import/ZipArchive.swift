@@ -81,6 +81,8 @@ struct ZipArchive {
             return Data(compressed)
         case 8:
             guard entry.uncompressedSize > 0 else { return Data() }
+            // A brush's images are a few megabytes; the header's size is untrusted
+            guard entry.uncompressedSize <= 256 << 20 else { throw ZipError.corrupt(entry.name) }
             var output = Data(count: entry.uncompressedSize)
             let written = output.withUnsafeMutableBytes { out -> Int in
                 compressed.withUnsafeBytes { input -> Int in

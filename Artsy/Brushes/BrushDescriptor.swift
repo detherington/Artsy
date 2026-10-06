@@ -88,13 +88,14 @@ extension BrushDescriptor {
         id = try c.decode(UUID.self, forKey: .id)
         name = try c.decode(String.self, forKey: .name)
         category = try c.decode(BrushCategory.self, forKey: .category)
-        hardness = try c.decode(Float.self, forKey: .hardness)
-        baseSize = try c.decode(Float.self, forKey: .baseSize)
+        // A file can say anything; the engine divides by some of these
+        hardness = Self.unit(try c.decode(Float.self, forKey: .hardness))
+        baseSize = min(max(try c.decode(Float.self, forKey: .baseSize), 1), 2000)
         pressureDynamics = try c.decode(PressureDynamics.self, forKey: .pressureDynamics)
-        opacity = try c.decode(Float.self, forKey: .opacity)
-        smoothing = try c.decode(Float.self, forKey: .smoothing)
+        opacity = Self.unit(try c.decode(Float.self, forKey: .opacity))
+        smoothing = Self.unit(try c.decode(Float.self, forKey: .smoothing))
         fixedNibAngle = try c.decodeIfPresent(Float.self, forKey: .fixedNibAngle)
-        rendering = try c.decodeIfPresent(BrushRendering.self, forKey: .rendering) ?? .ribbon(.procedural)
+        rendering = (try c.decodeIfPresent(BrushRendering.self, forKey: .rendering) ?? .ribbon(.procedural)).validated
         tiltDynamics = try c.decodeIfPresent(TiltDynamics.self, forKey: .tiltDynamics)
         velocityDynamics = try c.decodeIfPresent(VelocityDynamics.self, forKey: .velocityDynamics)
         if let mixing = try c.decodeIfPresent(PaintMixing.self, forKey: .mixing) {
@@ -104,6 +105,27 @@ extension BrushDescriptor {
             mixing = try legacy.decodeIfPresent(Bool.self, forKey: .mixesPigments) == true ? .pigment : .light
         }
         wet = try c.decodeIfPresent(Wet.self, forKey: .wet)
+    }
+}
+
+extension BrushDescriptor {
+    /// `value` within 0...1; a value that is not a number becomes 0.
+    static func unit(_ value: Float) -> Float {
+        value.isNaN ? 0 : min(max(value, 0), 1)
+    }
+}
+
+extension BrushRendering {
+    /// Stamp values kept where the dab placer can use them: spacing above zero, flow and
+    /// thickness in range.
+    var validated: BrushRendering {
+        guard case .stamp(var settings) = self else { return self }
+        settings.spacing = settings.spacing.isNaN ? 0.01 : max(settings.spacing, 0.01)
+        settings.flow = BrushDescriptor.unit(settings.flow)
+        if let thickness = settings.impasto?.thickness {
+            settings.impasto?.thickness = thickness.isNaN ? 0 : max(thickness, 0)
+        }
+        return .stamp(settings)
     }
 }
 

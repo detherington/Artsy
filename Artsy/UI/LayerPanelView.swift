@@ -5,6 +5,8 @@ struct LayerPanelView: View {
     @ObservedObject var viewModel: CanvasViewModel
     @ObservedObject var layerStack: LayerStack
     @State private var draggingLayerID: UUID?
+    /// Whether this drag has saved its "Reorder Layers" step yet.
+    @State private var reorderStepSaved = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -42,10 +44,14 @@ struct LayerPanelView: View {
                         isActive: index == layerStack.activeLayerIndex,
                         isDragging: draggingLayerID == layer.id,
                         onSelect: { layerStack.activeLayerIndex = index },
-                        onToggleVisibility: { layer.isVisible.toggle() }
+                        onToggleVisibility: {
+                            saveUndoSnapshot(description: layer.isVisible ? "Hide Layer" : "Show Layer")
+                            layer.isVisible.toggle()
+                        }
                     )
                     .onDrag {
                         draggingLayerID = layer.id
+                        reorderStepSaved = false
                         return NSItemProvider(object: layer.id.uuidString as NSString)
                     }
                     .onDrop(
@@ -54,7 +60,13 @@ struct LayerPanelView: View {
                             targetLayerID: layer.id,
                             layerStack: layerStack,
                             draggingLayerID: $draggingLayerID,
-                            onDrop: { saveUndoSnapshot(description: "Reorder Layers") }
+                            // The order changes as the drag passes rows; the step is saved
+                            // before the first of those, once per drag
+                            onBeforeFirstMove: {
+                                guard !reorderStepSaved else { return }
+                                reorderStepSaved = true
+                                saveUndoSnapshot(description: "Reorder Layers")
+                            }
                         )
                     )
                 }
@@ -66,7 +78,11 @@ struct LayerPanelView: View {
                 SectionLabel("Blend Mode")
                 Picker("", selection: Binding(
                     get: { activeLayer.blendMode },
-                    set: { activeLayer.blendMode = $0 }
+                    set: { mode in
+                        guard mode != activeLayer.blendMode else { return }
+                        saveUndoSnapshot(description: "Blend Mode")
+                        activeLayer.blendMode = mode
+                    }
                 )) {
                     ForEach(LayerBlendMode.allCases) { mode in
                         Text(mode.displayName).tag(mode)
@@ -82,7 +98,10 @@ struct LayerPanelView: View {
                     Slider(value: Binding(
                         get: { activeLayer.opacity },
                         set: { activeLayer.opacity = $0 }
-                    ), in: 0...1)
+                    ), in: 0...1, onEditingChanged: { began in
+                        // One step for the whole drag
+                        if began { saveUndoSnapshot(description: "Layer Opacity") }
+                    })
                     Text("\(Int(activeLayer.opacity * 100))%")
                         .font(.system(size: 10, design: .monospaced))
                         .foregroundColor(Color(white: 0.55))
@@ -97,6 +116,8 @@ struct LayerPanelView: View {
     private func saveUndoSnapshot(description: String) {
         if let appDelegate = NSApp.delegate as? AppDelegate,
            let store = appDelegate.activeStorePublic {
+            // A transform in progress lands on its layer before the layer list changes
+            store.canvasView.commitPendingEdits()
             // Layer order, settings, adding and deleting: no pixels change
             viewModel.saveUndoSnapshot(renderer: store.canvasView.renderer, description: description, changing: .nothing)
         }
@@ -124,7 +145,7 @@ struct LayerDropDelegate: DropDelegate {
     let targetLayerID: UUID
     let layerStack: LayerStack
     @Binding var draggingLayerID: UUID?
-    let onDrop: () -> Void
+    let onBeforeFirstMove: () -> Void
 
     func validateDrop(info: DropInfo) -> Bool {
         guard let draggingID = draggingLayerID, draggingID != targetLayerID else { return false }
@@ -137,6 +158,7 @@ struct LayerDropDelegate: DropDelegate {
               let toIndex = layerStack.layers.firstIndex(where: { $0.id == targetLayerID }) else { return }
 
         if fromIndex != toIndex {
+            onBeforeFirstMove()
             withAnimation(.easeInOut(duration: 0.2)) {
                 layerStack.moveLayer(from: fromIndex, to: toIndex)
             }
@@ -144,7 +166,6 @@ struct LayerDropDelegate: DropDelegate {
     }
 
     func performDrop(info: DropInfo) -> Bool {
-        onDrop()
         draggingLayerID = nil
         return true
     }

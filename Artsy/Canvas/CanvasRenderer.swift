@@ -103,16 +103,14 @@ final class CanvasRenderer: NSObject, MTKViewDelegate {
             canvasWidth: Int(canvasSize.width),
             canvasHeight: Int(canvasSize.height)
         )
+        layerStack.commandQueue = context.commandQueue
         guard let commandBuffer = context.commandQueue.makeCommandBuffer() else { return }
         try layerStack.createInitialLayer(commandBuffer: commandBuffer)
         commandBuffer.commit()
         commandBuffer.waitUntilCompleted()
         viewModel.layerStack = layerStack
 
-        // Generate initial thumbnails
-        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-            self?.updateAllThumbnails(in: layerStack)
-        }
+        updateAllThumbnails(in: layerStack)
     }
 
     // MARK: - MTKViewDelegate
@@ -169,15 +167,17 @@ final class CanvasRenderer: NSObject, MTKViewDelegate {
             return
         }
         lastFrameRecomposited = true
+        let contentChanged = viewModel.contentVersion != compositedContentVersion
         compositedSignature = signature
         compositedContentVersion = viewModel.contentVersion
         compositedAt = now
 
         // While the pen is down, only the pixels the stroke touched since the last frame can
-        // have changed — provided nothing else about the scene did. Otherwise redo all of it.
+        // have changed — provided nothing else about the scene did, and no tool wrote pixels
+        // meanwhile (a fill finishing in the background). Otherwise redo all of it.
         let strokeOnly = viewModel.isDrawing && viewModel.transformSession == nil && viewModel.floatingTexture == nil
         let regions: [MTLScissorRect]? =
-            strokeOnly && signature == compositeSignature ? Self.disjoint(pendingRegions) : nil
+            strokeOnly && signature == compositeSignature && !contentChanged ? Self.disjoint(pendingRegions) : nil
         compositeSignature = strokeOnly ? signature : nil
         pendingRegions.removeAll()
 
@@ -226,6 +226,18 @@ final class CanvasRenderer: NSObject, MTKViewDelegate {
                         opacity: layer.opacity,
                         commandBuffer: commandBuffer
                     )
+                    // Its thickness goes along, lit where it is now
+                    if let sourceHeight = session.sourceHeight {
+                        compositor.compositeWithAffineTransform(
+                            source: sourceHeight,
+                            sourceRect: session.sourceBounds,
+                            onto: compositeHeightTexture,
+                            canvasSize: canvasSize,
+                            transform: session.currentTransform,
+                            opacity: layer.opacity,
+                            commandBuffer: commandBuffer
+                        )
+                    }
                 }
 
                 // Composite floating selection content if being moved, with its thickness
@@ -346,7 +358,10 @@ final class CanvasRenderer: NSObject, MTKViewDelegate {
                 pass.colorAttachments[0].loadAction = .load
                 pass.colorAttachments[0].storeAction = .store
                 if let encoder = commandBuffer.makeRenderCommandEncoder(descriptor: pass) {
-                    let regions = renderer.encodeHeight(dabs: dabs, brush: brush, settings: settings, opacityScale: dabScale,
+                    // A wash's opacity applies when the colour merges; its thickness has to
+                    // take it here, so thinned paint piles less
+                    let thickness = brush.opacity * viewModel.brushOpacity
+                    let regions = renderer.encodeHeight(dabs: dabs, brush: brush, settings: settings, opacityScale: thickness,
                                                         mirrors: mirrors, encoder: encoder, canvasSize: size)
                         .compactMap(region(for:))
                     encoder.endEncoding()
@@ -453,7 +468,7 @@ final class CanvasRenderer: NSObject, MTKViewDelegate {
         return CompositorPipeline.StrokeOverlay(
             committed: activeStrokeTexture, tail: strokeTailTexture,
             opacity: opacity, erase: brush.category == .utility, accumulates: accumulates,
-            mixing: brush.mixing, wet: brush.wet
+            mixing: brush.mixing, wet: brush.category == .utility ? nil : brush.wet
         )
     }
 
@@ -682,7 +697,7 @@ final class CanvasRenderer: NSObject, MTKViewDelegate {
             }
         }
 
-        guard let colorSpace = CGColorSpace(name: CGColorSpace.sRGB),
+        guard let colorSpace = CGColorSpace(name: CGColorSpace.displayP3),
               let ctx = CGContext(
                 data: &rgba, width: srcW, height: srcH,
                 bitsPerComponent: 8, bytesPerRow: srcW * 4,
@@ -718,18 +733,41 @@ final class CanvasRenderer: NSObject, MTKViewDelegate {
         return (sign == 1 ? -1.0 : 1.0) * (1.0 + Float(mant) / 1024.0) * pow(2.0, Float(exp) - 15.0)
     }
 
-    /// Update the thumbnail for the given layer. Call after strokes / moves / deletes.
+    /// Thumbnails are made one after another off the main thread: each waits for the GPU,
+    /// and the command buffers ahead of it, which the main thread must not.
+    private let thumbnailQueue = DispatchQueue(label: "Artsy.thumbnails", qos: .userInitiated)
+
+    /// Update the thumbnail for the given layer, in the background. Call after strokes /
+    /// moves / deletes, from any thread.
     func updateThumbnail(for layer: Layer) {
-        let thumb = generateThumbnail(for: layer)
-        DispatchQueue.main.async {
-            layer.thumbnail = thumb
+        thumbnailQueue.async { [weak self] in
+            guard let self else { return }
+            let thumb = self.generateThumbnail(for: layer)
+            DispatchQueue.main.async {
+                layer.thumbnail = thumb
+            }
         }
     }
 
-    /// Update thumbnails for all layers. Call on initial load.
+    /// Update thumbnails for all of `layerStack`'s layers. Call on the main thread, which
+    /// owns the layer list; the work itself happens in the background.
     func updateAllThumbnails(in layerStack: LayerStack) {
         for layer in layerStack.layers {
             updateThumbnail(for: layer)
+        }
+    }
+
+    /// Every visible layer flattened onto `destination`, each with its blend mode and
+    /// opacity as the canvas shows them, without the stroke in progress or a tool's preview.
+    func flattenLayers(onto destination: MTLTexture, commandBuffer: MTLCommandBuffer) {
+        guard let layers = viewModel?.layerStack?.layers else { return }
+        for (index, layer) in layers.enumerated() where layer.isVisible {
+            compositor.compositeLayer(
+                source: layer.texture, onto: destination, opacity: layer.opacity,
+                // The bottom layer has nothing under it to blend with
+                blendMode: index == 0 ? .normal : layer.blendMode,
+                stroke: nil, tempTexture: blendTempTexture, commandBuffer: commandBuffer
+            )
         }
     }
 
@@ -1135,9 +1173,6 @@ final class CanvasRenderer: NSObject, MTKViewDelegate {
         commandBuffer.commit()
         resetStrokeState()
 
-        // Update thumbnail off the main thread to avoid blocking drawing
-        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-            self?.updateThumbnail(for: activeLayer)
-        }
+        updateThumbnail(for: activeLayer)
     }
 }

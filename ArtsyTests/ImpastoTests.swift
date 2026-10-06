@@ -289,4 +289,38 @@ final class ImpastoTests: XCTestCase {
         }
         XCTAssertLessThan(harness.context.device.currentAllocatedSize - allocated, 1 << 20, "no texture per frame")
     }
+
+    /// The transform tool shows the paint it holds with its relief, before it is put down.
+    func testATransformInProgressKeepsItsRelief() throws {
+        let harness = try canvasWithAStroke()
+        let lit = harness.shown(relief: 1), flat = harness.shown(relief: 0)
+        XCTAssertGreaterThan(worst(lit, flat), 0.1, "the relief shows")
+
+        let session = try XCTUnwrap(TransformSession.begin(
+            targetLayer: harness.drawingLayer, canvasSize: harness.viewModel.canvasSize, selectionPath: nil,
+            context: harness.context, textureManager: harness.renderer.textureManager
+        ))
+        harness.viewModel.transformSession = session
+        XCTAssertLessThan(worst(harness.shown(relief: 1), lit), 0.03, "lit the same while the tool holds it")
+
+        session.currentTransform = CGAffineTransform(translationX: 0, y: -30)
+        XCTAssertGreaterThan(worst(harness.shown(relief: 1), harness.shown(relief: 0)), 0.1, "and where it is dragged to")
+        harness.viewModel.transformSession = nil
+    }
+
+    /// Thinned paint (a lower opacity) piles less.
+    func testThinnerPaintPilesLess() throws {
+        let full = try canvasWithAStroke()
+        let thin = try EngineHarness(width: 200, height: 120)
+        thin.select(.oil)
+        thin.viewModel.brushSize = 40
+        thin.viewModel.currentColor = ochre
+        thin.viewModel.brushOpacity = 0.5
+        thin.draw(StrokeFixtures.line(from: CGPoint(x: 30, y: 60), to: CGPoint(x: 170, y: 60), pressure: 1...1))
+
+        let fullHeight = full.heights(of: full.drawingLayer).at(x: 100, y: 60).x
+        let thinHeight = thin.heights(of: thin.drawingLayer).at(x: 100, y: 60).x
+        XCTAssertGreaterThan(fullHeight, 0.3)
+        XCTAssertEqual(thinHeight, fullHeight / 2, accuracy: fullHeight * 0.1)
+    }
 }

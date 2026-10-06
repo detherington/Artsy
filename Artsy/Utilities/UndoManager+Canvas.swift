@@ -76,12 +76,17 @@ final class CanvasUndoManager {
         let activeLayerIndex: Int
         let selectionPath: CGPath?
         let description: String
+        /// Distinguishes this step from every other, including ones since freed.
+        let serial: Int
+        private static var nextSerial = 1
 
         init(layers: [LayerSnapshot], activeLayerIndex: Int, selectionPath: CGPath?, description: String) {
             self.storage = layers
             self.activeLayerIndex = activeLayerIndex
             self.selectionPath = selectionPath
             self.description = description
+            self.serial = Self.nextSerial
+            Self.nextSerial += 1
         }
 
         var layers: [LayerSnapshot] {
@@ -161,11 +166,33 @@ final class CanvasUndoManager {
     private func push(_ entry: Entry) {
         undoStack.append(entry)
         redoStack.removeAll()
+        trim()
+    }
 
-        // Drop the oldest steps once there are too many or they hold too much memory.
+    /// Drop steps once there are too many or they hold too much memory: the furthest redo
+    /// steps first, then the oldest undo steps, keeping at least one of those.
+    private func trim() {
         let budget = min(stackBytes * wholeStackSnapshotsInBudget, memoryCap)
-        while undoStack.count > 1, undoStack.count > maxUndoLevels || Self.bytes(of: undoStack) > budget {
-            undoStack.removeFirst()
+        func overBudget() -> Bool { Self.bytes(of: undoStack + redoStack) > budget }
+        while undoStack.count > maxUndoLevels { undoStack.removeFirst() }
+        while !redoStack.isEmpty, overBudget() { redoStack.removeFirst() }
+        while undoStack.count > 1, overBudget() { undoStack.removeFirst() }
+    }
+
+    /// Names the step saved most recently, for `popLastSnapshot(if:)` and `holds(_:)`;
+    /// nil when the last step is a stroke.
+    var lastStepToken: Int? {
+        if case .stack(let snapshot)? = undoStack.last { return snapshot.serial }
+        return nil
+    }
+
+    /// Whether the step `token` names is still there to be undone: not undone, popped or
+    /// dropped for memory. (A step that was undone and redone is a new step.)
+    func holds(_ token: Int?) -> Bool {
+        guard let token else { return false }
+        return undoStack.contains {
+            if case .stack(let snapshot) = $0 { return snapshot.serial == token }
+            return false
         }
     }
 
@@ -178,6 +205,7 @@ final class CanvasUndoManager {
         if let inverse = apply(entry, layerStack: layerStack, viewModel: viewModel, context: context) {
             redoStack.append(inverse)
         }
+        trim()
     }
 
     /// Redo: restore the state that was undone.
@@ -186,6 +214,7 @@ final class CanvasUndoManager {
         if let inverse = apply(entry, layerStack: layerStack, viewModel: viewModel, context: context) {
             undoStack.append(inverse)
         }
+        trim()
     }
 
     /// Restore `entry` and return an entry that reverses the restore.
@@ -264,9 +293,11 @@ final class CanvasUndoManager {
         redoStack.removeAll()
     }
 
-    /// Discard the most recent undo entry without restoring it. Used by tools that
-    /// save a snapshot speculatively (e.g. Transform) but then cancel with no net change.
-    func popLastSnapshot() {
+    /// Discard the step `token` names without restoring it, if it is still the most recent
+    /// one: a tool that saved a snapshot speculatively (Transform) and then cancelled with
+    /// no net change. Steps saved since, by anything else, stay.
+    func popLastSnapshot(if token: Int?) {
+        guard let token, lastStepToken == token else { return }
         _ = undoStack.popLast()
     }
 
@@ -427,12 +458,12 @@ final class CanvasUndoManager {
                 if snap.isCopy {
                     blitCopy(from: snap.texture, to: existing.texture, context: context)
                     restoreHeight(snap.height, to: existing, context: context)
-                } else if existing.texture !== snap.texture {
-                    // The layer object outlived its pixels (a merge gave it new ones): the
-                    // referenced textures are the ones from back then, still as they were
-                    existing.texture = snap.texture
-                    existing.heightTexture = snap.height
                 }
+                // A referenced layer that still exists already has the right pixels: every
+                // later change to it has been undone first, into whatever texture it has now.
+                // (That may not be the referenced one, if the layer was deleted and came back
+                // from a copy — and the referenced one may then be stale. A reference only
+                // ever rebuilds a layer that is gone.)
                 newLayers.append(existing)
             } else if !snap.isCopy {
                 // The layer was deleted; its textures are still as they were when it went

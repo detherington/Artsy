@@ -64,11 +64,17 @@ final class CanvasDocument {
             throw DocumentError.noLayers
         }
 
-        let bundleURL = url
+        // Everything goes into a fresh bundle on the document's volume, which takes the
+        // document's place only once all of it is there: a save that fails or is cut short
+        // leaves the last one whole, and nothing from an earlier save lingers (a height
+        // map of a layer since flattened, which would attach to whatever layer took its
+        // place in the list).
         let fm = FileManager.default
-        try fm.createDirectory(at: bundleURL, withIntermediateDirectories: true)
+        let stagingDir = try fm.url(for: .itemReplacementDirectory, in: .userDomainMask, appropriateFor: url, create: true)
+        let bundleURL = stagingDir.appendingPathComponent(url.lastPathComponent)
         let layersDir = bundleURL.appendingPathComponent("layers")
         try fm.createDirectory(at: layersDir, withIntermediateDirectories: true)
+        func discardStaging() { try? fm.removeItem(at: stagingDir) }
 
         // 1. Write JSON metadata (tiny, synchronous)
         let layerInfos: [DocumentData.LayerInfo] = layerStack.layers.map { layer in
@@ -90,58 +96,59 @@ final class CanvasDocument {
             guides: viewModel.guides
         )
         let jsonData = try JSONEncoder().encode(doc)
-        try jsonData.write(to: bundleURL.appendingPathComponent("document.json"))
+        do {
+            try jsonData.write(to: bundleURL.appendingPathComponent("document.json"))
+        } catch {
+            discardStaging()
+            throw error
+        }
 
         // 2. Allocate shared (CPU-readable) textures for every layer + composite,
         //    and run ALL GPU work in a single command buffer with a single wait.
+        //    A layer that cannot be read back cannot be left out of the file.
         let textureManager = renderer.textureManager
         var readables: [MTLTexture] = []
-        readables.reserveCapacity(layerStack.layers.count)
-        for layer in layerStack.layers {
-            guard let t = try? textureManager.makeSharedTexture(
-                width: layer.texture.width,
-                height: layer.texture.height,
-                label: "SaveLayer"
-            ) else { continue }
-            readables.append(t)
-        }
-
-        // Height maps, for the layers that have one
         var heightReadables: [(index: Int, texture: MTLTexture)] = []
-        for (i, layer) in layerStack.layers.enumerated() {
-            guard let height = layer.heightTexture,
-                  let t = try? textureManager.makeHeightTexture(width: height.width, height: height.height,
-                                                               label: "SaveHeight", shared: true) else { continue }
-            heightReadables.append((i, t))
-        }
-
-        guard let composite = renderer.compositeTexture,
-              let compositeReadable = try? textureManager.makeSharedTexture(
-                width: composite.width, height: composite.height, label: "SaveComposite"
-              ),
-              let cmdBuf = renderer.context.commandQueue.makeCommandBuffer() else {
-            throw DocumentError.loadFailed
-        }
-
-        // Re-composite into the renderer's composite texture (reflects current state).
-        textureManager.clearTexture(composite, commandBuffer: cmdBuf,
-                                    color: MTLClearColor(red: 1, green: 1, blue: 1, alpha: 1))
-        for layer in layerStack.layers where layer.isVisible {
-            renderer.compositor.compositeNormal(
-                source: layer.texture, onto: composite,
-                opacity: layer.opacity, commandBuffer: cmdBuf
+        let compositeReadable: MTLTexture
+        let cmdBuf: MTLCommandBuffer
+        do {
+            readables.reserveCapacity(layerStack.layers.count)
+            for layer in layerStack.layers {
+                readables.append(try textureManager.makeSharedTexture(
+                    width: layer.texture.width, height: layer.texture.height, label: "SaveLayer"
+                ))
+            }
+            // Height maps, for the layers that have one
+            for (i, layer) in layerStack.layers.enumerated() {
+                guard let height = layer.heightTexture else { continue }
+                heightReadables.append((i, try textureManager.makeHeightTexture(
+                    width: height.width, height: height.height, label: "SaveHeight", shared: true
+                )))
+            }
+            compositeReadable = try textureManager.makeSharedTexture(
+                width: Int(viewModel.canvasSize.width), height: Int(viewModel.canvasSize.height), label: "SaveComposite"
             )
+            guard let buffer = renderer.context.commandQueue.makeCommandBuffer() else { throw DocumentError.saveFailed }
+            cmdBuf = buffer
+        } catch {
+            discardStaging()
+            throw error
         }
+
+        // The thumbnail: the layers as the canvas shows them, over white. Flattened into the
+        // readable itself, so the live composite (and what is on screen) is left alone.
+        textureManager.clearTexture(compositeReadable, commandBuffer: cmdBuf,
+                                    color: MTLClearColor(red: 1, green: 1, blue: 1, alpha: 1))
+        renderer.flattenLayers(onto: compositeReadable, commandBuffer: cmdBuf)
 
         // Single blit encoder with all copies batched.
         if let blit = cmdBuf.makeBlitCommandEncoder() {
-            for (i, layer) in layerStack.layers.enumerated() where i < readables.count {
+            for (i, layer) in layerStack.layers.enumerated() {
                 blit.copy(from: layer.texture, to: readables[i])
             }
             for (i, readable) in heightReadables {
                 blit.copy(from: layerStack.layers[i].heightTexture!, to: readable)
             }
-            blit.copy(from: composite, to: compositeReadable)
             #if !arch(arm64)
             for readable in readables + heightReadables.map(\.texture) + [compositeReadable] {
                 blit.synchronize(resource: readable)
@@ -171,6 +178,7 @@ final class CanvasDocument {
                     }
                 }
                 if let firstError = parallelErrors.compactMap({ $0 }).first {
+                    discardStaging()
                     DispatchQueue.main.async { completion(.failure(firstError)) }
                     return
                 }
@@ -178,6 +186,7 @@ final class CanvasDocument {
                     do {
                         try writeHeightPNG(readable, to: layersDir.appendingPathComponent("layer-\(i)-height.png"))
                     } catch {
+                        discardStaging()
                         DispatchQueue.main.async { completion(.failure(error)) }
                         return
                     }
@@ -196,6 +205,19 @@ final class CanvasDocument {
                     try? writeCGImageAsPNG(scaled, to: thumbnailURL)
                 }
 
+                // 4. All of it is there: it takes the document's place
+                do {
+                    if fm.fileExists(atPath: url.path) {
+                        _ = try fm.replaceItemAt(url, withItemAt: bundleURL, backupItemName: nil, options: [])
+                    } else {
+                        try fm.moveItem(at: bundleURL, to: url)
+                    }
+                } catch {
+                    discardStaging()
+                    DispatchQueue.main.async { completion(.failure(error)) }
+                    return
+                }
+                try? fm.removeItem(at: stagingDir)
                 DispatchQueue.main.async { completion(.success(())) }
             }
         }
@@ -217,6 +239,10 @@ final class CanvasDocument {
 
         let jsonData = try Data(contentsOf: docURL)
         let doc = try JSONDecoder().decode(DocumentData.self, from: jsonData)
+        guard (1...LayerStack.maxCanvasSide).contains(doc.canvasWidth),
+              (1...LayerStack.maxCanvasSide).contains(doc.canvasHeight) else {
+            throw DocumentError.invalidFormat
+        }
 
         let canvasSize = CGSize(width: doc.canvasWidth, height: doc.canvasHeight)
         let viewModel = CanvasViewModel(canvasSize: canvasSize)
@@ -244,6 +270,12 @@ final class CanvasDocument {
             guard let texture = try? textureManager.makeCanvasTexture(
                 width: doc.canvasWidth, height: doc.canvasHeight, label: layerInfo.name
             ) else { continue }
+            // A new texture holds whatever its memory held before; a layer whose file is
+            // missing must still be empty. Committed before the file's pixels go in.
+            if let clear = metalContext.commandQueue.makeCommandBuffer() {
+                textureManager.clearTexture(texture, commandBuffer: clear)
+                clear.commit()
+            }
 
             let layer = Layer(
                 id: UUID(uuidString: layerInfo.id) ?? UUID(),
@@ -257,11 +289,8 @@ final class CanvasDocument {
 
             // Load PNG into the layer's texture
             let layerFile = layersDir.appendingPathComponent("layer-\(i).png")
-            if fm.fileExists(atPath: layerFile.path),
-               let pngData = try? Data(contentsOf: layerFile),
-               let nsImage = NSImage(data: pngData),
-               let cgImage = nsImage.cgImage(forProposedRect: nil, context: nil, hints: nil) {
-                loadCGImageIntoTexture(cgImage: cgImage, texture: texture, context: metalContext)
+            if fm.fileExists(atPath: layerFile.path) {
+                loadLayerPNG(from: layerFile, into: texture, context: metalContext)
             }
 
             // And its thickness, if it was saved with any
@@ -280,6 +309,16 @@ final class CanvasDocument {
         if let guides = doc.guides { viewModel.guides = guides }
 
         return (viewModel, canvasView)
+    }
+
+    /// A layer's own PNG into its texture. Its pixels are the canvas's Display P3 components
+    /// as they were saved, whatever profile the file carries (files from before the
+    /// profile was right say sRGB), so they are taken as they are, not converted.
+    private static func loadLayerPNG(from url: URL, into texture: MTLTexture, context: MetalContext) {
+        guard let source = CGImageSourceCreateWithURL(url as CFURL, nil),
+              let image = CGImageSourceCreateImageAtIndex(source, 0, nil) else { return }
+        let asP3 = CGColorSpace(name: CGColorSpace.displayP3).flatMap { image.copy(colorSpace: $0) } ?? image
+        loadCGImageIntoTexture(cgImage: asP3, texture: texture, context: context)
     }
 
     // MARK: - Height maps
@@ -364,7 +403,7 @@ final class CanvasDocument {
             )
         }
 
-        guard let colorSpace = CGColorSpace(name: CGColorSpace.sRGB),
+        guard let colorSpace = CGColorSpace(name: CGColorSpace.displayP3),
               let provider = CGDataProvider(data: srcData as CFData) else {
             return nil
         }
@@ -410,7 +449,7 @@ final class CanvasDocument {
     /// Scale a CGImage to a new size via CoreGraphics.
     private static func scaleCGImage(_ image: CGImage, to size: CGSize) -> CGImage? {
         let w = Int(size.width), h = Int(size.height)
-        guard let colorSpace = CGColorSpace(name: CGColorSpace.sRGB),
+        guard let colorSpace = CGColorSpace(name: CGColorSpace.displayP3),
               let ctx = CGContext(
                 data: nil, width: w, height: h,
                 bitsPerComponent: 8, bytesPerRow: w * 4,
@@ -423,153 +462,13 @@ final class CanvasDocument {
     }
 
     /// High-quality downscale of RGBA8 pixels via vImage.
-    private static func scaleRGBA8(
-        _ src: Data, srcWidth: Int, srcHeight: Int,
-        dstWidth: Int, dstHeight: Int
-    ) -> Data {
-        if srcWidth == dstWidth && srcHeight == dstHeight { return src }
-        var srcMutable = src
-        var dst = Data(count: dstWidth * dstHeight * 4)
-        srcMutable.withUnsafeMutableBytes { srcRaw in
-            dst.withUnsafeMutableBytes { dstRaw in
-                var srcBuf = vImage_Buffer(
-                    data: srcRaw.baseAddress!,
-                    height: vImagePixelCount(srcHeight),
-                    width: vImagePixelCount(srcWidth),
-                    rowBytes: srcWidth * 4
-                )
-                var dstBuf = vImage_Buffer(
-                    data: dstRaw.baseAddress!,
-                    height: vImagePixelCount(dstHeight),
-                    width: vImagePixelCount(dstWidth),
-                    rowBytes: dstWidth * 4
-                )
-                vImageScale_ARGB8888(&srcBuf, &dstBuf, nil, vImage_Flags(kvImageHighQualityResampling))
-            }
-        }
-        return dst
-    }
-
-    /// Write RGBA8 bytes as PNG via ImageIO (faster + less memory copying than NSBitmapImageRep).
-    private static func writeRGBA8PNG(_ rgba8: Data, width: Int, height: Int, to url: URL) throws {
-        guard let provider = CGDataProvider(data: rgba8 as CFData),
-              let colorSpace = CGColorSpace(name: CGColorSpace.sRGB) else {
-            throw DocumentError.loadFailed
-        }
-        let bitmapInfo = CGBitmapInfo(rawValue: CGImageAlphaInfo.premultipliedLast.rawValue)
-        guard let cgImage = CGImage(
-            width: width, height: height,
-            bitsPerComponent: 8, bitsPerPixel: 32,
-            bytesPerRow: width * 4,
-            space: colorSpace,
-            bitmapInfo: bitmapInfo,
-            provider: provider,
-            decode: nil,
-            shouldInterpolate: false,
-            intent: .defaultIntent
-        ) else { throw DocumentError.loadFailed }
-
-        let type = UTType.png.identifier as CFString
-        guard let dest = CGImageDestinationCreateWithURL(url as CFURL, type, 1, nil) else {
-            throw DocumentError.loadFailed
-        }
-        CGImageDestinationAddImage(dest, cgImage, nil)
-        if !CGImageDestinationFinalize(dest) {
-            throw DocumentError.loadFailed
-        }
-    }
-
-    // MARK: - Legacy helpers (kept for thumbnail fallback path reference)
-
-    private static func textureToRGBA8PNG(texture: MTLTexture, renderer: CanvasRenderer) -> Data? {
-        let width = texture.width
-        let height = texture.height
-
-        guard let readableTexture = try? renderer.textureManager.makeSharedTexture(
-            width: width, height: height, label: "Export"
-        ) else { return nil }
-
-        guard let commandBuffer = renderer.context.commandQueue.makeCommandBuffer(),
-              let blitEncoder = commandBuffer.makeBlitCommandEncoder() else { return nil }
-
-        blitEncoder.copy(from: texture, to: readableTexture)
-        blitEncoder.endEncoding()
-        commandBuffer.commit()
-        commandBuffer.waitUntilCompleted()
-
-        // Read float16 pixels
-        let bytesPerPixel = 8
-        let bytesPerRow = width * bytesPerPixel
-        var pixelData = [UInt8](repeating: 0, count: height * bytesPerRow)
-        readableTexture.getBytes(&pixelData, bytesPerRow: bytesPerRow,
-            from: MTLRegion(origin: .init(x: 0, y: 0, z: 0), size: .init(width: width, height: height, depth: 1)),
-            mipmapLevel: 0)
-
-        // Convert to RGBA8
-        let pixelCount = width * height
-        var rgba = [UInt8](repeating: 255, count: pixelCount * 4)
-        pixelData.withUnsafeBytes { raw in
-            let f16 = raw.bindMemory(to: UInt16.self)
-            for i in 0..<pixelCount {
-                rgba[i*4+0] = clampByte(float16ToFloat(f16[i*4+0]))
-                rgba[i*4+1] = clampByte(float16ToFloat(f16[i*4+1]))
-                rgba[i*4+2] = clampByte(float16ToFloat(f16[i*4+2]))
-                rgba[i*4+3] = clampByte(float16ToFloat(f16[i*4+3]))
-            }
-        }
-
-        guard let colorSpace = CGColorSpace(name: CGColorSpace.sRGB),
-              let ctx = CGContext(data: &rgba, width: width, height: height,
-                                 bitsPerComponent: 8, bytesPerRow: width * 4,
-                                 space: colorSpace,
-                                 bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue),
-              let cgImage = ctx.makeImage() else { return nil }
-
-        let rep = NSBitmapImageRep(cgImage: cgImage)
-        return rep.representation(using: .png, properties: [:])
-    }
-
-    private static func generateThumbnail(renderer: CanvasRenderer, maxSize: Int) -> Data? {
-        guard let composite = renderer.compositeTexture else { return nil }
-
-        // Re-composite to get current state
-        guard let commandBuffer = renderer.context.commandQueue.makeCommandBuffer() else { return nil }
-        renderer.textureManager.clearTexture(composite, commandBuffer: commandBuffer,
-            color: MTLClearColor(red: 1, green: 1, blue: 1, alpha: 1))
-        if let viewModel = renderer.viewModel, let layerStack = viewModel.layerStack {
-            for layer in layerStack.layers where layer.isVisible {
-                renderer.compositor.compositeNormal(
-                    source: layer.texture, onto: composite,
-                    opacity: layer.opacity, commandBuffer: commandBuffer)
-            }
-        }
-        commandBuffer.commit()
-        commandBuffer.waitUntilCompleted()
-
-        guard let fullPNG = textureToRGBA8PNG(texture: composite, renderer: renderer),
-              let nsImage = NSImage(data: fullPNG) else { return nil }
-
-        // Scale down
-        let w = nsImage.size.width
-        let h = nsImage.size.height
-        let scale = min(CGFloat(maxSize) / w, CGFloat(maxSize) / h, 1.0)
-        let thumbSize = NSSize(width: w * scale, height: h * scale)
-
-        let thumb = NSImage(size: thumbSize)
-        thumb.lockFocus()
-        nsImage.draw(in: NSRect(origin: .zero, size: thumbSize))
-        thumb.unlockFocus()
-
-        guard let tiffData = thumb.tiffRepresentation,
-              let rep = NSBitmapImageRep(data: tiffData) else { return nil }
-        return rep.representation(using: .png, properties: [:])
-    }
-
+    /// Draw `cgImage` over the whole of `texture`, converted into the canvas's colour space
+    /// (Display P3) from whatever the image is in.
     static func loadCGImageIntoTexture(cgImage: CGImage, texture: MTLTexture, context: MetalContext) {
         let width = texture.width
         let height = texture.height
 
-        guard let colorSpace = CGColorSpace(name: CGColorSpace.sRGB),
+        guard let colorSpace = CGColorSpace(name: CGColorSpace.displayP3),
               let ctx = CGContext(data: nil, width: width, height: height,
                                  bitsPerComponent: 8, bytesPerRow: width * 4,
                                  space: colorSpace,
@@ -630,18 +529,6 @@ final class CanvasDocument {
     /// share the same precomputed table.
     static let u8ToF16LUTPublic: [UInt16] = u8ToF16LUT
 
-    private static func float16ToFloat(_ h: UInt16) -> Float {
-        let sign = (h >> 15) & 0x1
-        let exp = (h >> 10) & 0x1F
-        let mant = h & 0x3FF
-        if exp == 0 {
-            if mant == 0 { return sign == 1 ? -0.0 : 0.0 }
-            return (sign == 1 ? -1.0 : 1.0) * Float(mant) / 1024.0 * pow(2.0, -14.0)
-        }
-        if exp == 31 { return mant == 0 ? (sign == 1 ? -.infinity : .infinity) : .nan }
-        return (sign == 1 ? -1.0 : 1.0) * (1.0 + Float(mant) / 1024.0) * pow(2.0, Float(exp) - 15.0)
-    }
-
     private static func floatToFloat16(_ f: Float) -> UInt16 {
         let bits = f.bitPattern
         let sign = (bits >> 31) & 0x1
@@ -655,21 +542,20 @@ final class CanvasDocument {
         return UInt16(sign << 15) | (hExp << 10) | hMant
     }
 
-    private static func clampByte(_ f: Float) -> UInt8 {
-        UInt8(max(0, min(255, f * 255)))
-    }
 }
 
 enum DocumentError: LocalizedError {
     case noLayers
     case invalidFormat
     case loadFailed
+    case saveFailed
 
     var errorDescription: String? {
         switch self {
         case .noLayers: return "No layers to save"
         case .invalidFormat: return "Not a valid .artsy file"
         case .loadFailed: return "Failed to load document"
+        case .saveFailed: return "Failed to save document"
         }
     }
 }

@@ -136,6 +136,7 @@ class CanvasView: MTKView {
 
             // If clicking inside an existing selection, cut and start moving content
             if let path = viewModel.selectionPath, path.contains(canvasPoint) {
+                if viewModel.layerStack?.activeLayer?.isLocked == true { NSSound.beep(); return }
                 isMovingSelection = true
                 moveLastCanvasPoint = canvasPoint
                 viewModel.saveUndoSnapshot(renderer: renderer, description: "Move Selection", changing: .layer(viewModel.layerStack?.activeLayer))
@@ -165,6 +166,7 @@ class CanvasView: MTKView {
             handleDrawingMouseDown(event)
 
         case .shape:
+            if viewModel.layerStack?.activeLayer?.isLocked == true { NSSound.beep(); return }
             let viewPoint = convert(event.locationInWindow, from: nil)
             let canvasPoint = viewModel.transform.viewToCanvas(viewPoint, viewSize: bounds.size)
             shapeAnchor = canvasPoint
@@ -425,6 +427,15 @@ class CanvasView: MTKView {
 
     // MARK: - Transform Tool
 
+    /// The undo step the transform session saved when it began, which a cancel takes back.
+    private var transformStepToken: Int?
+
+    /// Finish whatever a tool is in the middle of, so the layers hold everything the canvas
+    /// shows: before a save, an export, or a change to the layer list.
+    func commitPendingEdits() {
+        commitTransformIfNeeded()
+    }
+
     /// Ensure a TransformSession exists for the active layer. Starts one if
     /// missing. If a selection is active, only its pixels get transformed;
     /// otherwise the whole layer is transformed.
@@ -436,6 +447,7 @@ class CanvasView: MTKView {
 
         let selectionPath = viewModel.selectionPath
         viewModel.saveUndoSnapshot(renderer: renderer, description: "Transform", changing: .layer(layer))
+        transformStepToken = viewModel.undoManager.lastStepToken
 
         viewModel.transformSession = TransformSession.begin(
             targetLayer: layer,
@@ -572,6 +584,7 @@ class CanvasView: MTKView {
         )
         viewModel.noteContentChanged()
         viewModel.transformSession = nil
+        transformStepToken = nil
         if let layer = viewModel.layerStack?.activeLayer {
             renderer.updateThumbnail(for: layer)
         }
@@ -583,7 +596,7 @@ class CanvasView: MTKView {
     /// handle-drag history (cancelling the session on exhaustion). Otherwise
     /// performs a normal canvas undo.
     func performUndoAction() {
-        guard let viewModel = viewModel, let renderer = renderer else { return }
+        guard let viewModel = viewModel, let renderer = renderer, !viewModel.isDrawing else { return }
         if let session = viewModel.transformSession {
             if session.undoLastDrag() {
                 viewModel.objectWillChange.send()
@@ -599,7 +612,7 @@ class CanvasView: MTKView {
 
     /// Session-aware redo.
     func performRedoAction() {
-        guard let viewModel = viewModel, let renderer = renderer else { return }
+        guard let viewModel = viewModel, let renderer = renderer, !viewModel.isDrawing else { return }
         if let session = viewModel.transformSession {
             if session.redoLastDrag() {
                 viewModel.objectWillChange.send()
@@ -675,6 +688,9 @@ class CanvasView: MTKView {
         } else {
             guard let cmdBuf = renderer.context.commandQueue.makeCommandBuffer() else { return }
             renderer.textureManager.clearTexture(layer.texture, commandBuffer: cmdBuf)
+            if let height = layer.heightTexture {
+                renderer.textureManager.clearTexture(height, commandBuffer: cmdBuf)
+            }
             cmdBuf.commit()
             // Don't wait — the next frame picks up the cleared texture.
         }
@@ -715,19 +731,25 @@ class CanvasView: MTKView {
         // origin (0,0)), falls back to centered placement.
         let origin: CGPoint? = inPlace ? ClipboardManager.readOrigin() : nil
 
-        // Pasting adds a layer; nothing already there changes
-        viewModel.saveUndoSnapshot(
-            renderer: renderer,
-            description: inPlace ? "Paste in Place" : "Paste",
-            changing: .nothing
-        )
+        guard layerStack.layers.count < layerStack.layerLimit else { NSSound.beep(); return }
 
         let W = Int(viewModel.canvasSize.width)
         let H = Int(viewModel.canvasSize.height)
 
         guard let texture = try? renderer.textureManager.makeCanvasTexture(
             width: W, height: H, label: "Pasted"
-        ) else { return }
+        ), let clear = renderer.context.commandQueue.makeCommandBuffer() else { return }
+        // The upload writes only the image's rectangle; the rest must be empty
+        renderer.textureManager.clearTexture(texture, commandBuffer: clear)
+        clear.commit()
+
+        // Pasting adds a layer; nothing already there changes
+        viewModel.saveUndoSnapshot(
+            renderer: renderer,
+            description: inPlace ? "Paste in Place" : "Paste",
+            changing: .nothing
+        )
+        let pasteStep = viewModel.undoManager.lastStepToken
 
         let pasted = Layer(name: "Pasted", texture: texture)
         layerStack.layers.insert(pasted, at: layerStack.activeLayerIndex + 1)
@@ -736,8 +758,18 @@ class CanvasView: MTKView {
         let context = renderer.context
         let canvasSize = viewModel.canvasSize
         let textureManager = renderer.textureManager
-        DispatchQueue.global(qos: .userInitiated).async { [weak renderer, weak pasted] in
-            guard let image = ClipboardManager.readImage() else { return }
+        DispatchQueue.global(qos: .userInitiated).async { [weak renderer, weak pasted, weak viewModel] in
+            guard let image = ClipboardManager.readImage() else {
+                // Nothing to paste after all: take the empty layer and its step back
+                DispatchQueue.main.async { [weak viewModel, weak pasted] in
+                    guard let viewModel, let layerStack = viewModel.layerStack, let pasted,
+                          let index = layerStack.layers.firstIndex(where: { $0 === pasted }) else { return }
+                    layerStack.removeLayer(at: index)
+                    layerStack.activeLayerIndex = max(0, min(index - 1, layerStack.layers.count - 1))
+                    viewModel.undoManager.popLastSnapshot(if: pasteStep)
+                }
+                return
+            }
             Self.uploadPastedImage(
                 image,
                 origin: origin,
@@ -816,8 +848,9 @@ class CanvasView: MTKView {
         let clippedH = min(regionH, texture.height - clippedY)
         guard clippedW > 0, clippedH > 0 else { return }
 
-        // 1. Draw the image into a region-sized RGBA8 context.
-        guard let colorSpace = CGColorSpace(name: CGColorSpace.sRGB),
+        // 1. Draw the image into a region-sized RGBA8 context, in the canvas's colour space
+        //    (an image from another app is converted into it here).
+        guard let colorSpace = CGColorSpace(name: CGColorSpace.displayP3),
               let ctx = CGContext(
                 data: nil, width: regionW, height: regionH,
                 bitsPerComponent: 8, bytesPerRow: regionW * 4,
@@ -878,49 +911,11 @@ class CanvasView: MTKView {
         cmdBuf.commit()
     }
 
-    // (Legacy paste helpers kept below only because other files may still
-    // reference them; the fast path now goes through `uploadPastedImage`.)
-
-    private static func pasteboardImageCenteredInCanvas(_ image: NSImage, canvasSize: CGSize) -> CGImage? {
-        let W = Int(canvasSize.width), H = Int(canvasSize.height)
-        guard let colorSpace = CGColorSpace(name: CGColorSpace.sRGB),
-              let ctx = CGContext(
-                data: nil, width: W, height: H,
-                bitsPerComponent: 8, bytesPerRow: W * 4,
-                space: colorSpace,
-                bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
-              ) else { return nil }
-
-        var imgRect = CGRect(x: 0, y: 0, width: image.size.width, height: image.size.height)
-        guard let srcCG = image.cgImage(forProposedRect: &imgRect, context: nil, hints: nil) else {
-            return nil
-        }
-
-        // Fit-to-canvas preserving aspect ratio (downscale only).
-        let srcAspect = imgRect.width / imgRect.height
-        let dstAspect = CGFloat(W) / CGFloat(H)
-        var drawW = imgRect.width
-        var drawH = imgRect.height
-        if drawW > CGFloat(W) || drawH > CGFloat(H) {
-            if srcAspect > dstAspect {
-                drawW = CGFloat(W)
-                drawH = drawW / srcAspect
-            } else {
-                drawH = CGFloat(H)
-                drawW = drawH * srcAspect
-            }
-        }
-        let drawX = (CGFloat(W) - drawW) / 2
-        let drawY = (CGFloat(H) - drawH) / 2
-        ctx.draw(srcCG, in: CGRect(x: drawX, y: drawY, width: drawW, height: drawH))
-        return ctx.makeImage()
-    }
-
+    /// Ask every sibling overlay view (selection marquee, transform handles) to
+    /// redraw immediately, instead of waiting for their internal animation timer.
     /// The guide line being ⌘-dragged, if any.
     private var draggingGuide: CanvasGuides.Line?
 
-    /// Ask every sibling overlay view (selection marquee, transform handles) to
-    /// redraw immediately, instead of waiting for their internal animation timer.
     func redrawOverlays() {
         superview?.subviews.forEach { $0.needsDisplay = true }
     }
@@ -937,7 +932,10 @@ class CanvasView: MTKView {
             compositor: renderer.compositor
         )
         viewModel.transformSession = nil
-        viewModel.undoManager.popLastSnapshot()
+        // Only the step the session itself saved; anything saved since stays
+        viewModel.undoManager.popLastSnapshot(if: transformStepToken)
+        transformStepToken = nil
+        viewModel.noteContentChanged()
         if let layer = viewModel.layerStack?.activeLayer {
             renderer.updateThumbnail(for: layer)
         }
@@ -1010,6 +1008,7 @@ class CanvasView: MTKView {
 
         // Snapshot BEFORE dispatching async work so redo/undo captures pre-fill state.
         viewModel.saveUndoSnapshot(renderer: renderer, description: "Fill", changing: .layer(viewModel.layerStack?.activeLayer))
+        let fillStep = viewModel.undoManager.lastStepToken
 
         // Run fill in the background — returns immediately so the UI stays responsive.
         BucketFill.fillAsync(
@@ -1019,7 +1018,13 @@ class CanvasView: MTKView {
             canvasSize: cs,
             fillColor: viewModel.currentColor,
             tolerance: viewModel.fillTolerance,
-            selectionPath: viewModel.selectionPath
+            selectionPath: viewModel.selectionPath,
+            shouldApply: { [weak viewModel, weak layer] in
+                // Not if the fill was undone before it finished, or its layer is gone
+                guard let viewModel, let layer, viewModel.undoManager.holds(fillStep),
+                      viewModel.layerStack?.layers.contains(where: { $0 === layer }) == true else { return false }
+                return true
+            }
         ) { [weak renderer, weak layer] in
             guard let renderer = renderer, let layer = layer else { return }
             renderer.updateThumbnail(for: layer)
@@ -1331,12 +1336,17 @@ class CanvasView: MTKView {
         if event.keyCode == 51 || event.keyCode == 117 {
             if let path = viewModel.selectionPath,
                let activeLayer = viewModel.layerStack?.activeLayer {
+                if activeLayer.isLocked { NSSound.beep(); return }
                 viewModel.saveUndoSnapshot(renderer: renderer, description: "Delete Selection", changing: .layer(activeLayer))
                 renderer.clearInsideSelection(path: path, layer: activeLayer, context: renderer.context)
                 renderer.updateThumbnail(for: activeLayer)
             }
             return
         }
+
+        // A stroke in progress keeps its tool, brush and colours: the renderer reads them
+        // every frame, and a tool change mid-stroke would leave the stroke unfinished
+        if viewModel.isDrawing { return }
 
         switch event.charactersIgnoringModifiers {
         case " ":

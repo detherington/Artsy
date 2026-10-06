@@ -184,4 +184,15 @@ final class PigmentMixingTests: XCTestCase {
         try older.write(to: olderFile, atomically: true, encoding: .utf8)
         XCTAssertEqual(try library.importBrush(from: olderFile).mixing, .light)
     }
+
+    /// The model's white reflects a little over 1; a mix must still stay within the canvas's range.
+    func testAMixNeverGoesPastWhite() {
+        let white = SIMD3<Float>(1, 1, 1), red = SIMD3<Float>(1, 0, 0)
+        for mixed in context.mixPigments([(red, white, 0.5), (white, white, 0.5), (red, white, 0.9), (white, red, 0.02)]) {
+            for i in 0..<3 {
+                XCTAssertLessThanOrEqual(mixed[i], 1)
+                XCTAssertGreaterThanOrEqual(mixed[i], 0)
+            }
+        }
+    }
 }

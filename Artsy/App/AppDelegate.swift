@@ -417,66 +417,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         do {
-            // Parse the document metadata first
-            let jsonData = try Data(contentsOf: docJSON)
-            let doc = try JSONDecoder().decode(CanvasDocument.DocumentData.self, from: jsonData)
-
-            let canvasSize = CGSize(width: doc.canvasWidth, height: doc.canvasHeight)
-            let viewModel = CanvasViewModel(canvasSize: canvasSize)
-
-            let canvasView = CanvasView(
-                frame: NSRect(x: 0, y: 0, width: 800, height: 600),
-                device: metalContext.device
-            )
-            try canvasView.configure(context: metalContext, viewModel: viewModel)
-
-            guard let layerStack = viewModel.layerStack else {
-                throw DocumentError.loadFailed
-            }
-
-            // Replace default layers with saved ones
-            layerStack.layers.removeAll()
-            layerStack.activeLayerIndex = 0
-
-            let textureManager = TextureManager(device: metalContext.device)
-            let layersDir = url.appendingPathComponent("layers")
-
-            for (i, layerInfo) in doc.layers.enumerated() {
-                guard let texture = try? textureManager.makeCanvasTexture(
-                    width: doc.canvasWidth, height: doc.canvasHeight, label: layerInfo.name
-                ) else { continue }
-
-                let layer = Layer(
-                    id: UUID(uuidString: layerInfo.id) ?? UUID(),
-                    name: layerInfo.name,
-                    texture: texture
-                )
-                layer.isVisible = layerInfo.isVisible
-                layer.isLocked = layerInfo.isLocked
-                layer.opacity = layerInfo.opacity
-                layer.blendMode = LayerBlendMode(rawValue: layerInfo.blendMode) ?? .normal
-
-                let layerFile = layersDir.appendingPathComponent("layer-\(i).png")
-                if fm.fileExists(atPath: layerFile.path),
-                   let pngData = try? Data(contentsOf: layerFile),
-                   let nsImage = NSImage(data: pngData),
-                   let cgImage = nsImage.cgImage(forProposedRect: nil, context: nil, hints: nil) {
-                    CanvasDocument.loadCGImageIntoTexture(cgImage: cgImage, texture: texture, context: metalContext)
-                }
-
-                layerStack.layers.append(layer)
-            }
-
-            // Ensure at least one layer exists
-            if layerStack.layers.isEmpty {
-                let fallback = try textureManager.makeCanvasTexture(
-                    width: doc.canvasWidth, height: doc.canvasHeight, label: "Layer 1"
-                )
-                layerStack.layers.append(Layer(name: "Layer 1", texture: fallback))
-            }
-
-            if doc.activeLayerIndex < layerStack.layers.count {
-                layerStack.activeLayerIndex = doc.activeLayerIndex
+            // The one loader, the same one the tests exercise: layers, their thickness, guides
+            let (viewModel, canvasView) = try CanvasDocument.load(from: url, metalContext: metalContext)
+            if let layerStack = viewModel.layerStack {
+                canvasView.renderer.updateAllThumbnails(in: layerStack)
             }
 
             // Create window
@@ -1079,7 +1023,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         panel.nameFieldStringValue = "canvas.png"
         panel.begin { response in
             guard response == .OK, let url = panel.url else { return }
-            try? ImageExporter.exportPNG(renderer: store.canvasView.renderer, to: url)
+            store.canvasView.commitPendingEdits()
+            do { try ImageExporter.exportPNG(renderer: store.canvasView.renderer, to: url) }
+            catch { NSAlert(error: error).runModal() }
         }
     }
 
@@ -1090,7 +1036,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         panel.nameFieldStringValue = "canvas-16bit.png"
         panel.begin { response in
             guard response == .OK, let url = panel.url else { return }
-            try? ImageExporter.exportPNG(renderer: store.canvasView.renderer, to: url, bitsPerChannel: 16)
+            store.canvasView.commitPendingEdits()
+            do { try ImageExporter.exportPNG(renderer: store.canvasView.renderer, to: url, bitsPerChannel: 16) }
+            catch { NSAlert(error: error).runModal() }
         }
     }
 
@@ -1101,7 +1049,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         panel.nameFieldStringValue = "canvas.jpg"
         panel.begin { response in
             guard response == .OK, let url = panel.url else { return }
-            try? ImageExporter.exportJPEG(renderer: store.canvasView.renderer, to: url)
+            store.canvasView.commitPendingEdits()
+            do { try ImageExporter.exportJPEG(renderer: store.canvasView.renderer, to: url) }
+            catch { NSAlert(error: error).runModal() }
         }
     }
 
@@ -1117,6 +1067,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         targetWindow: NSWindow?,
         completion: ((Bool) -> Void)?
     ) {
+        // A transform in progress goes onto its layer first, or the file would lack it
+        store.canvasView.commitPendingEdits()
         if let existingURL = store.viewModel.fileURL {
             // Save in place
             CanvasDocument.saveAsync(

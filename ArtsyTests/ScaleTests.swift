@@ -162,4 +162,10 @@ final class ScaleTests: XCTestCase {
         XCTAssertGreaterThan(reds16.count, reds8.count * 2, "more distinct reds in 16 bits: \(reds16.count) vs \(reds8.count)")
         XCTAssertGreaterThan(reds8.count, 100, "a soft stroke from 0.2 to 1.0 spans most of 8 bits")
     }
+
+    /// A device that reports no working-set size is not short of memory, just silent.
+    func testADeviceWithoutABudgetGetsTheFullLayerCount() {
+        XCTAssertEqual(LayerStack.layerLimit(forCanvasPixels: 8192 * 8192, memoryBudget: 0), LayerStack.maxLayers)
+        XCTAssertEqual(LayerStack.layerLimit(forCanvasPixels: 64 * 64, memoryBudget: 0), LayerStack.maxLayers)
+    }
 }

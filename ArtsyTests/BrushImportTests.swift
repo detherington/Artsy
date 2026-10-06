@@ -216,4 +216,64 @@ final class BrushImportTests: XCTestCase {
         XCTAssertEqual(String(decoding: try XCTUnwrap(archive.contents(of: "greeting.txt")), as: UTF8.self), "hello hello hello")
         XCTAssertNil(try archive.contents(of: "missing"))
     }
+
+    /// A sample record of size zero would never move the reader on.
+    func testADamagedPhotoshopFileIsRefusedNotLoopedOver() {
+        let samp: [UInt8] = Array("8BIM".utf8) + Array("samp".utf8) + be32(8) + be32(0) + be32(0)
+        XCTAssertThrowsError(try PhotoshopBrushFile.tips(in: Data(be16(6) + be16(2) + samp)))
+    }
+
+    /// A brush file can say anything; the engine divides by some of it.
+    func testBrushFileValuesAreKeptWhereTheEngineCanUseThem() throws {
+        var brush = BrushDescriptor.oil
+        guard case .stamp(var settings) = brush.rendering else { return XCTFail("Oil is a stamp brush") }
+        settings.spacing = 0
+        settings.flow = 3
+        settings.impasto = .init(thickness: -1)
+        brush.rendering = .stamp(settings)
+        brush.opacity = 7
+        brush.hardness = -2
+        brush.baseSize = 0
+
+        let decoded = try JSONDecoder().decode(BrushDescriptor.self, from: JSONEncoder().encode(brush))
+        guard case .stamp(let kept) = decoded.rendering else { return XCTFail("still a stamp brush") }
+        XCTAssertEqual(kept.spacing, 0.01)
+        XCTAssertEqual(kept.flow, 1)
+        XCTAssertEqual(kept.impasto?.thickness, 0)
+        XCTAssertEqual(decoded.opacity, 1)
+        XCTAssertEqual(decoded.hardness, 0)
+        XCTAssertEqual(decoded.baseSize, 1)
+
+        // And a tap with the values as they came still lays a dot rather than trapping
+        let harness = try EngineHarness(width: 64, height: 64)
+        harness.select(brush)
+        harness.viewModel.brushSize = 20
+        harness.draw(StrokeFixtures.dot(at: CGPoint(x: 32, y: 32)))
+        XCTAssertGreaterThan(harness.pixels(of: harness.drawingLayer.texture).at(x: 32, y: 32).w, 0.1)
+    }
+
+    /// A deflated entry whose header promises gigabytes is not believed.
+    func testAZipEntryClaimingGigabytesIsRefused() throws {
+        let name = Array("Shape.png".utf8), payload: [UInt8] = [1, 2, 3], claimed = 0xFFFF_FFF0
+        var out: [UInt8] = le32(0x04034b50) + le16(20) + le16(0) + le16(8) + le16(0) + le16(0) + le32(0)
+            + le32(payload.count) + le32(claimed) + le16(name.count) + le16(0) + name + payload
+        let centralOffset = out.count
+        let central: [UInt8] = le32(0x02014b50) + le16(20) + le16(20) + le16(0) + le16(8) + le16(0) + le16(0) + le32(0)
+            + le32(payload.count) + le32(claimed) + le16(name.count) + le16(0) + le16(0) + le16(0) + le16(0)
+            + le32(0) + le32(0) + name
+        out += central
+        out += le32(0x06054b50) + le16(0) + le16(0) + le16(1) + le16(1) + le32(central.count) + le32(centralOffset) + le16(0)
+        let archive = try ZipArchive(data: Data(out))
+        let entry = try XCTUnwrap(archive.entries.first)
+        XCTAssertThrowsError(try archive.contents(of: entry))
+    }
+
+    /// A sampled tip bigger than the texture library loads is halved until it fits.
+    func testAnOversizedTipIsShrunkToFit() {
+        let (pixels, width, height) = BrushLibrary.fitted([UInt8](repeating: 200, count: 9000 * 10), width: 9000, height: 10)
+        XCTAssertEqual(width, 2250)
+        XCTAssertEqual(height, 2)
+        XCTAssertEqual(pixels.count, width * height)
+        XCTAssertEqual(pixels[0], 200)
+    }
 }

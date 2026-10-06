@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		D4E17C6C4906E90B56BD12F0 /* DocumentTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CA3DF7BB7FA179E9534B1FD7 /* DocumentTests.swift */; };
 		C5F4839F84498DB5C8013344 /* DocumentGoldenTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BFB3CCC3EB2A6CE3D03F9613 /* DocumentGoldenTests.swift */; };
 		0AF5E469308D76940B2A94AF /* StressTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 46D6D5AFBB21620CEA04407B /* StressTests.swift */; };
 		CB824FD0DB9106466BCA7FC6 /* EveryBrushTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E03667028038B9FF443B1C0E /* EveryBrushTests.swift */; };
@@ -124,6 +125,7 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		CA3DF7BB7FA179E9534B1FD7 /* DocumentTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DocumentTests.swift; sourceTree = "<group>"; };
 		BFB3CCC3EB2A6CE3D03F9613 /* DocumentGoldenTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DocumentGoldenTests.swift; sourceTree = "<group>"; };
 		46D6D5AFBB21620CEA04407B /* StressTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StressTests.swift; sourceTree = "<group>"; };
 		E03667028038B9FF443B1C0E /* EveryBrushTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EveryBrushTests.swift; sourceTree = "<group>"; };
@@ -382,6 +384,7 @@
 		B48AF066E85C8962CFFD499C /* ArtsyTests */ = {
 			isa = PBXGroup;
 			children = (
+				CA3DF7BB7FA179E9534B1FD7 /* DocumentTests.swift */,
 				BFB3CCC3EB2A6CE3D03F9613 /* DocumentGoldenTests.swift */,
 				46D6D5AFBB21620CEA04407B /* StressTests.swift */,
 				E03667028038B9FF443B1C0E /* EveryBrushTests.swift */,
@@ -716,6 +719,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				D4E17C6C4906E90B56BD12F0 /* DocumentTests.swift in Sources */,
 				C5F4839F84498DB5C8013344 /* DocumentGoldenTests.swift in Sources */,
 				0AF5E469308D76940B2A94AF /* StressTests.swift in Sources */,
 				CB824FD0DB9106466BCA7FC6 /* EveryBrushTests.swift in Sources */,

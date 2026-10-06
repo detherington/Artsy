@@ -14,6 +14,9 @@ final class LayerStack: ObservableObject {
     /// Memory to size the layer limit by, in place of the device's; for tests.
     var memoryBudgetOverride: Int?
 
+    /// The largest canvas, per side: what the new-canvas dialog allows and a file may say.
+    static let maxCanvasSide = 8192
+
     /// Layers this canvas may have: up to `maxLayers`, fewer when more would not fit in
     /// memory. A layer costs 8 bytes a pixel (plus 2 for thick paint), and undo history and
     /// the stroke textures need room beside the layers.
@@ -23,9 +26,15 @@ final class LayerStack: ObservableObject {
     }
 
     static func layerLimit(forCanvasPixels pixels: Int, memoryBudget: Int) -> Int {
+        // A device that reports no budget is not short of memory, just silent about it
+        guard memoryBudget > 0 else { return maxLayers }
         // Half the budget for the layers themselves
-        max(2, min(maxLayers, memoryBudget / 2 / (pixels * 10)))
+        return max(2, min(maxLayers, memoryBudget / 2 / (pixels * 10)))
     }
+
+    /// Where new layers' textures are cleared. Set by whoever renders this stack; a new
+    /// texture holds whatever its memory held before.
+    var commandQueue: MTLCommandQueue?
 
     var activeLayer: Layer? {
         guard activeLayerIndex >= 0, activeLayerIndex < layers.count else { return nil }
@@ -92,10 +101,14 @@ final class LayerStack: ObservableObject {
         let lower = layers[index - 1]
 
         guard let commandBuffer = renderer.context.commandQueue.makeCommandBuffer() else { return false }
-        renderer.compositor.compositeNormal(
+        // As the canvas showed it: the upper layer's blend mode against what is under it
+        renderer.compositor.compositeLayer(
             source: upper.texture,
             onto: lower.texture,
             opacity: upper.opacity,
+            blendMode: upper.blendMode,
+            stroke: nil,
+            tempTexture: renderer.blendTempTexture,
             commandBuffer: commandBuffer
         )
         // Thick paint on top of thick paint adds up
@@ -125,11 +138,15 @@ final class LayerStack: ObservableObject {
         textureManager.clearTexture(result.texture, commandBuffer: commandBuffer,
             color: MTLClearColor(red: 1, green: 1, blue: 1, alpha: 1))
 
-        for layer in layers where layer.isVisible {
-            renderer.compositor.compositeNormal(
+        for (index, layer) in layers.enumerated() where layer.isVisible {
+            renderer.compositor.compositeLayer(
                 source: layer.texture,
                 onto: result.texture,
                 opacity: layer.opacity,
+                // The bottom layer has nothing under it to blend with
+                blendMode: index == 0 ? .normal : layer.blendMode,
+                stroke: nil,
+                tempTexture: renderer.blendTempTexture,
                 commandBuffer: commandBuffer
             )
             if let height = layer.heightTexture,
@@ -151,6 +168,10 @@ final class LayerStack: ObservableObject {
         let texture = try textureManager.makeCanvasTexture(
             width: canvasWidth, height: canvasHeight, label: name
         )
+        if let commandBuffer = commandQueue?.makeCommandBuffer() {
+            textureManager.clearTexture(texture, commandBuffer: commandBuffer)
+            commandBuffer.commit()
+        }
         return Layer(name: name, texture: texture)
     }
 }

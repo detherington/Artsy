@@ -96,6 +96,7 @@ enum PhotoshopBrushFile {
             var tips: [Tip] = []
             while reader.offset < end {
                 let size = Int(try reader.long())
+                guard size > 0 else { throw ABRError.damaged }   // or the loop would never move on
                 var next = reader.offset + size
                 while next % 4 != 0 { next += 1 }   // padded to four bytes
                 _ = try reader.bytes(37)             // the brush's key (an id string)

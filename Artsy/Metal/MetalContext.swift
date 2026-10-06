@@ -50,6 +50,7 @@ final class MetalContext {
     let texturesDifferPipelineState: MTLComputePipelineState
     let maskedCutPipelineState: MTLComputePipelineState
     let maskedClearPipelineState: MTLComputePipelineState
+    let maskedFillPipelineState: MTLComputePipelineState
 
     // Vertex descriptors
     let strokeVertexDescriptor: MTLVertexDescriptor
@@ -118,8 +119,8 @@ final class MetalContext {
 
         // Stamp brushes: instanced dabs, premultiplied source-over
         let stampDesc = MTLRenderPipelineDescriptor()
-        stampDesc.vertexFunction = library.makeFunction(name: "stampVertex")
-        stampDesc.fragmentFunction = library.makeFunction(name: "stampFragment")
+        stampDesc.vertexFunction = try Self.function("stampVertex", in: library)
+        stampDesc.fragmentFunction = try Self.function("stampFragment", in: library)
         stampDesc.colorAttachments[0].pixelFormat = .rgba16Float
         let stampAttachment = stampDesc.colorAttachments[0]!
         stampAttachment.isBlendingEnabled = true
@@ -132,7 +133,7 @@ final class MetalContext {
         self.stampPipelineState = try device.makeRenderPipelineState(descriptor: stampDesc)
 
         let stampHeightDesc = MTLRenderPipelineDescriptor()
-        stampHeightDesc.vertexFunction = library.makeFunction(name: "stampVertex")
+        stampHeightDesc.vertexFunction = try Self.function("stampVertex", in: library)
         guard let stampHeightFragment = library.makeFunction(name: "stampHeightFragment") else {
             throw MetalError.pipelineCreationFailed("stampHeightFragment not found")
         }
@@ -151,15 +152,15 @@ final class MetalContext {
         // Smudge deposit: the same quads, drawn straight onto the layer. The fragment reads
         // the layer from a copy of the patch under the dab and writes the mix itself.
         let smudgeDesc = MTLRenderPipelineDescriptor()
-        smudgeDesc.vertexFunction = library.makeFunction(name: "stampVertex")
-        smudgeDesc.fragmentFunction = library.makeFunction(name: "smudgeDepositFragment")
+        smudgeDesc.vertexFunction = try Self.function("stampVertex", in: library)
+        smudgeDesc.fragmentFunction = try Self.function("smudgeDepositFragment", in: library)
         smudgeDesc.colorAttachments[0].pixelFormat = .rgba16Float
         smudgeDesc.colorAttachments[0].isBlendingEnabled = false
         self.smudgeDepositPipelineState = try device.makeRenderPipelineState(descriptor: smudgeDesc)
 
         let pickupDesc = MTLRenderPipelineDescriptor()
-        pickupDesc.vertexFunction = library.makeFunction(name: "smudgePickupVertex")
-        pickupDesc.fragmentFunction = library.makeFunction(name: "smudgePickupFragment")
+        pickupDesc.vertexFunction = try Self.function("smudgePickupVertex", in: library)
+        pickupDesc.fragmentFunction = try Self.function("smudgePickupFragment", in: library)
         pickupDesc.colorAttachments[0].pixelFormat = .rgba16Float
         pickupDesc.colorAttachments[0].isBlendingEnabled = false
         self.smudgePickupPipelineState = try device.makeRenderPipelineState(descriptor: pickupDesc)
@@ -238,8 +239,8 @@ final class MetalContext {
 
         // Display
         let displayDesc = MTLRenderPipelineDescriptor()
-        displayDesc.vertexFunction = library.makeFunction(name: "compositeVertex")
-        displayDesc.fragmentFunction = library.makeFunction(name: "displayWhiteFragment")
+        displayDesc.vertexFunction = try Self.function("compositeVertex", in: library)
+        displayDesc.fragmentFunction = try Self.function("displayWhiteFragment", in: library)
         displayDesc.vertexDescriptor = compVD
         displayDesc.colorAttachments[0].pixelFormat = .bgra8Unorm
         self.displayPipelineState = try device.makeRenderPipelineState(descriptor: displayDesc)
@@ -257,6 +258,7 @@ final class MetalContext {
             throw MetalError.pipelineCreationFailed("maskedClearKernel not found")
         }
         self.maskedClearPipelineState = try device.makeComputePipelineState(function: maskedClearFunc)
+        self.maskedFillPipelineState = try device.makeComputePipelineState(function: Self.function("maskedFillKernel", in: library))
 
         guard let texturesDifferFunc = library.makeFunction(name: "texturesDifferKernel") else {
             throw MetalError.pipelineCreationFailed("texturesDifferKernel not found")
@@ -313,6 +315,15 @@ final class MetalContext {
 
     // MARK: - Pipeline Helpers
 
+    /// A shader function by name; a missing one is a build mistake worth stopping for,
+    /// not a pipeline that silently draws nothing.
+    private static func function(_ name: String, in library: MTLLibrary) throws -> MTLFunction {
+        guard let function = library.makeFunction(name: name) else {
+            throw MetalError.pipelineCreationFailed("\(name) not found")
+        }
+        return function
+    }
+
     private static func makeStrokePipeline(
         device: MTLDevice,
         library: MTLLibrary,
@@ -324,7 +335,7 @@ final class MetalContext {
             throw MetalError.pipelineCreationFailed("\(fragmentFunction) not found")
         }
         let desc = MTLRenderPipelineDescriptor()
-        desc.vertexFunction = library.makeFunction(name: "strokeVertex")
+        desc.vertexFunction = try Self.function("strokeVertex", in: library)
         desc.fragmentFunction = fragment
         desc.vertexDescriptor = vertexDescriptor
         desc.colorAttachments[0].pixelFormat = .rgba16Float
@@ -368,7 +379,7 @@ final class MetalContext {
             throw MetalError.pipelineCreationFailed("\(fragmentFunction) not found")
         }
         let desc = MTLRenderPipelineDescriptor()
-        desc.vertexFunction = library.makeFunction(name: "compositeVertex")
+        desc.vertexFunction = try Self.function("compositeVertex", in: library)
         desc.fragmentFunction = fragment
         desc.vertexDescriptor = vertexDescriptor
         desc.colorAttachments[0].pixelFormat = pixelFormat

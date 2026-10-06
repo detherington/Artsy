@@ -179,4 +179,45 @@ final class CanvasViewModelTests: XCTestCase {
             XCTAssertEqual(SymmetryMode(recordingKey: mode.recordingKey), mode)
         }
     }
+
+    /// A calligraphy stroke's mirror image is thick where the original is thin: the nib
+    /// goes through the mirror too.
+    func testACalligraphyStrokeIsMirroredNibAndAll() throws {
+        let harness = try EngineHarness(width: 300, height: 200)
+        harness.select(.calligraphy)
+        harness.viewModel.brushSize = 24
+        harness.viewModel.symmetryMode = .horizontal
+        harness.draw(StrokeFixtures.line(from: CGPoint(x: 40, y: 40), to: CGPoint(x: 130, y: 160), pressure: 1...1))
+        let layer = harness.pixels(of: harness.drawingLayer.texture)
+        func ink(_ xs: Range<Int>) -> Float {
+            var total: Float = 0
+            for y in 0..<200 { for x in xs { total += layer.at(x: x, y: y).w } }
+            return total
+        }
+        let left = ink(0..<150), right = ink(150..<300)
+        XCTAssertGreaterThan(left, 200)
+        XCTAssertEqual(right, left, accuracy: left * 0.05, "the same amount of ink on each side")
+    }
+
+    /// A tablet glitch can send a sample that is not a number; no stroke can use it.
+    func testSamplesThatAreNotNumbersAreDropped() throws {
+        let harness = try EngineHarness(width: 64, height: 64)
+        let viewModel = harness.viewModel
+        viewModel.beginStroke(point: StrokePoint(position: CGPoint(x: CGFloat.nan, y: 10), pressure: 0.5,
+                                                 tiltX: 0, tiltY: 0, rotation: 0, timestamp: 0))
+        XCTAssertFalse(viewModel.isDrawing)
+
+        let line = StrokeFixtures.line(from: CGPoint(x: 10, y: 10), to: CGPoint(x: 50, y: 50))
+        harness.renderer.beginStroke()
+        viewModel.beginStroke(point: line[0])
+        viewModel.continueStroke(point: line[1])
+        let count = viewModel.drawnPath?.samples.count
+        viewModel.continueStroke(point: StrokePoint(position: CGPoint(x: 20, y: CGFloat.infinity), pressure: Float.nan,
+                                                    tiltX: 0, tiltY: 0, rotation: 0, timestamp: 0.1))
+        XCTAssertEqual(viewModel.drawnPath?.samples.count, count, "dropped")
+        viewModel.continueStroke(point: line[2])
+        XCTAssertEqual(viewModel.drawnPath?.samples.count, count.map { $0 + 1 }, "the next good sample is taken")
+        harness.renderer.finalizeStroke()
+        viewModel.endStroke()
+    }
 }

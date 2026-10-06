@@ -45,11 +45,17 @@ final class UnsplashManager: ObservableObject {
             let data = try await service.downloadPhoto(photo, size: downloadSize)
 
             // Save undo snapshot before adding
+            store.canvasView.commitPendingEdits()
             store.viewModel.saveUndoSnapshot(renderer: store.canvasView.renderer, description: "Add Stock Image", changing: .nothing)
+            let step = store.viewModel.undoManager.lastStepToken
 
             // Create a new layer above the active layer
             let name = "Unsplash: \(photo.user.name)"
-            let idx = try layerStack.addLayer(above: layerStack.activeLayerIndex, name: name)
+            guard let idx = try? layerStack.addLayer(above: layerStack.activeLayerIndex, name: name) else {
+                // The layer limit: nothing happened, so nothing to undo
+                store.viewModel.undoManager.popLastSnapshot(if: step)
+                throw LayerError.maxLayersReached(layerStack.layerLimit)
+            }
             let layer = layerStack.layers[idx]
 
             // Fit-to-canvas rasterization + upload

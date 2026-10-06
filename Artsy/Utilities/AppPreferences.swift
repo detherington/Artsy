@@ -109,7 +109,7 @@ final class AppPreferences: ObservableObject {
 
         self.smoothingMode = defaults.string(forKey: Key.smoothingMode).flatMap(SmoothingMode.init(rawValue:)) ?? .oneEuro
         self.easeStrokesWithoutPressure = (defaults.object(forKey: Key.easeStrokesWithoutPressure) as? Bool) ?? true
-        self.paintRelief = (defaults.object(forKey: Key.paintRelief) as? Double) ?? 1.0
+        self.paintRelief = min(max((defaults.object(forKey: Key.paintRelief) as? Double) ?? 1.0, 0), 2)
         self.snapShapesOnHold = (defaults.object(forKey: Key.snapShapesOnHold) as? Bool) ?? true
         self.pressureCurves = defaults.data(forKey: Key.pressureCurves)
             .flatMap { try? JSONDecoder().decode([String: PressureCurve].self, from: $0) } ?? [:]

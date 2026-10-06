@@ -220,4 +220,40 @@ final class ShapeSnapTests: XCTestCase {
         harness.viewModel.performUndo(renderer: harness.renderer)
         XCTAssertEqual(harness.heights(of: harness.drawingLayer).at(x: Int(middle.x), y: Int(middle.y)).x, 0, accuracy: 0.001)
     }
+
+    /// A brush that thins with speed draws the snapped shape at the pace the stroke was
+    /// drawn, so a slow careful circle snaps to a circle as wide as the stroke.
+    func testASnappedShapeIsDrawnAtTheStrokesOwnPace() throws {
+        func ink(_ grid: PixelGrid) -> Float { stride(from: 3, to: grid.values.count, by: 4).reduce(0) { $0 + grid.values[$1] } }
+        let center = CGPoint(x: 200, y: 150), radius: CGFloat = 80
+        let positions = StrokeFixtures.circlePositions(center: center, radius: radius)
+
+        let snapped = try EngineHarness(width: 400, height: 300)
+        snapped.select(.inkBrush)
+        snapped.viewModel.brushSize = 14
+        snapped.draw(StrokeFixtures.held(StrokeFixtures.rough(positions, wobble: 8, duration: 4), for: 0.8))
+        let drawn = try EngineHarness(width: 400, height: 300)
+        drawn.select(.inkBrush)
+        drawn.viewModel.brushSize = 14
+        drawn.draw(StrokeFixtures.rough(positions, wobble: 0, duration: 4))
+
+        let snappedInk = ink(snapped.pixels(of: snapped.drawingLayer.texture))
+        let drawnInk = ink(drawn.pixels(of: drawn.drawingLayer.texture))
+        XCTAssertGreaterThan(drawnInk, 1000)
+        XCTAssertEqual(snappedInk, drawnInk, accuracy: drawnInk * 0.12, "as much ink as the circle drawn slowly")
+    }
+
+    /// An airbrush held still is spraying on purpose, not asking for a shape.
+    func testAnAirbrushHeldStillSpraysRatherThanSnapping() throws {
+        let harness = try canvas()
+        harness.select(.airbrush)
+        let rough = StrokeFixtures.rough(StrokeFixtures.circlePositions(center: CGPoint(x: 200, y: 150), radius: 80), wobble: 8)
+        let held = StrokeFixtures.held(rough, for: 0.8)
+        harness.renderer.beginStroke()
+        harness.viewModel.beginStroke(point: held[0])
+        for point in held.dropFirst() { harness.viewModel.continueStroke(point: point) }
+        XCTAssertNil(harness.viewModel.snappedShapeName)
+        harness.renderer.finalizeStroke()
+        harness.viewModel.endStroke()
+    }
 }

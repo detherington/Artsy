@@ -69,8 +69,17 @@ final class BrushEngine {
                 let perpX: Float
                 let perpY: Float
                 if let nibAngle {
-                    perpX = cos(nibAngle + point.rotation)
-                    perpY = sin(nibAngle + point.rotation)
+                    // The nib's direction, through the same mirror as the positions: a
+                    // mirrored stroke is thick where its original is thin
+                    let angle = nibAngle + point.rotation
+                    let raw = points[i].position
+                    let tip = CGPoint(x: raw.x + CGFloat(cos(angle)), y: raw.y + CGFloat(sin(angle)))
+                    let mirroredTip = transform?(tip) ?? tip
+                    let dx = Float(mirroredTip.x - center.x)
+                    let dy = Float(mirroredTip.y - center.y)
+                    let len = max(sqrt(dx * dx + dy * dy), 0.001)
+                    perpX = dx / len
+                    perpY = dy / len
                 } else {
                     // Perpendicular to the direction between the neighbours on either side
                     let before = position(max(i - 1, 0))

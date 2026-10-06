@@ -8,6 +8,12 @@ struct StrokePoint {
     let rotation: Float         // Barrel rotation in degrees
     let timestamp: TimeInterval // For velocity calculation
 
+    /// False for a sample a driver glitch made of NaN or infinity, which no stroke can use.
+    var isFinite: Bool {
+        position.x.isFinite && position.y.isFinite && pressure.isFinite && tiltX.isFinite && tiltY.isFinite
+            && rotation.isFinite && timestamp.isFinite
+    }
+
     static func velocity(from p1: StrokePoint, to p2: StrokePoint) -> Float {
         let dx = Float(p2.position.x - p1.position.x)
         let dy = Float(p2.position.y - p1.position.y)
