@@ -112,6 +112,18 @@ final class CanvasViewModel: ObservableObject {
     // Symmetry — mirrors each stroke around the canvas center.
     @Published var symmetryMode: SymmetryMode = .off
 
+    /// A grid and guide lines over the canvas, which the pen snaps to.
+    @Published var guides = CanvasGuides()
+
+    /// `point` pulled onto any guide within reach, at the current zoom.
+    private func snappedToGuides(_ point: StrokePoint) -> StrokePoint {
+        guard guides.snapsAnything else { return point }
+        let position = guides.snapped(point.position, zoom: transform.scale)
+        guard position != point.position else { return point }
+        return StrokePoint(position: position, pressure: point.pressure, tiltX: point.tiltX, tiltY: point.tiltY,
+                           rotation: point.rotation, timestamp: point.timestamp)
+    }
+
     // Transform tool — non-nil while transforming a layer.
     // Using objectWillChange publishing since TransformSession is a class.
     @Published var transformSession: TransformSession? = nil
@@ -159,9 +171,10 @@ final class CanvasViewModel: ObservableObject {
     }
 
     /// - Parameter hasPressure: false for a mouse or trackpad, whose "pressure" is a constant.
-    func beginStroke(point: StrokePoint, hasPressure: Bool = true) {
+    func beginStroke(point rawPoint: StrokePoint, hasPressure: Bool = true) {
         strokeHasPressure = hasPressure
-        recorder?.beginStroke(settingsFrom: self, firstPoint: point)
+        recorder?.beginStroke(settingsFrom: self, firstPoint: rawPoint)
+        let point = snappedToGuides(rawPoint)
         smoother.mode = smoothingMode
         smoother.strength = smoothingStrength
         smoother.zoom = transform.scale
@@ -215,9 +228,10 @@ final class CanvasViewModel: ObservableObject {
         }
     }
 
-    func continueStroke(point: StrokePoint) {
-        recorder?.append(point)
+    func continueStroke(point rawPoint: StrokePoint) {
+        recorder?.append(rawPoint)
         guard isDrawing else { return }
+        let point = snappedToGuides(rawPoint)
         lastInput = point
         activePath?.append(smoother.filter(point))
         checkShapeSnap()

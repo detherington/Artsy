@@ -40,10 +40,11 @@ final class CanvasViewTests: XCTestCase {
         viewModel = nil
     }
 
-    private func mouse(_ type: NSEvent.EventType, atCanvas point: CGPoint, time: TimeInterval) -> NSEvent {
+    private func mouse(_ type: NSEvent.EventType, atCanvas point: CGPoint, time: TimeInterval,
+                       modifiers: NSEvent.ModifierFlags = []) -> NSEvent {
         let inView = viewModel.transform.canvasToView(point, viewSize: view.bounds.size)
         return NSEvent.mouseEvent(
-            with: type, location: view.convert(inView, to: nil), modifierFlags: [], timestamp: time,
+            with: type, location: view.convert(inView, to: nil), modifierFlags: modifiers, timestamp: time,
             windowNumber: window.windowNumber, context: nil, eventNumber: 0, clickCount: 1, pressure: 1
         )!
     }
@@ -231,6 +232,31 @@ final class CanvasViewTests: XCTestCase {
         let tiny = BrushCursor.cursor(diameter: 2)
         XCTAssertFalse(tiny === cursor)
         XCTAssertTrue(tiny === BrushCursor.cursor(diameter: 5000), "too small or too large for a ring: a crosshair")
+    }
+
+    /// ⌘-dragging a guide moves it; dragging it off the canvas removes it. Without ⌘, a
+    /// drag near a guide is a stroke along it.
+    func testCommandDraggingMovesAGuide() throws {
+        viewModel.guides.verticals = [100]
+        view.mouseDown(with: mouse(.leftMouseDown, atCanvas: CGPoint(x: 103, y: 50), time: 0, modifiers: .command))
+        view.mouseDragged(with: mouse(.leftMouseDragged, atCanvas: CGPoint(x: 130, y: 60), time: 0.05, modifiers: .command))
+        XCTAssertEqual(viewModel.guides.verticals, [130], "follows the drag")
+        view.mouseUp(with: mouse(.leftMouseUp, atCanvas: CGPoint(x: 150, y: 70), time: 0.1, modifiers: .command))
+        XCTAssertEqual(viewModel.guides.verticals, [150])
+        XCTAssertFalse(viewModel.isDrawing, "no stroke was started")
+        XCTAssertEqual(composite().at(x: 128, y: 60).x, 1, accuracy: 0.01, "and nothing was drawn")
+
+        view.mouseDown(with: mouse(.leftMouseDown, atCanvas: CGPoint(x: 152, y: 100), time: 1, modifiers: .command))
+        view.mouseUp(with: mouse(.leftMouseUp, atCanvas: CGPoint(x: -40, y: 100), time: 1.1, modifiers: .command))
+        XCTAssertTrue(viewModel.guides.verticals.isEmpty, "dropped off the canvas")
+
+        viewModel.guides.verticals = [100]
+        view.mouseDown(with: mouse(.leftMouseDown, atCanvas: CGPoint(x: 103, y: 40), time: 2))
+        view.mouseDragged(with: mouse(.leftMouseDragged, atCanvas: CGPoint(x: 104, y: 120), time: 2.05))
+        view.mouseUp(with: mouse(.leftMouseUp, atCanvas: CGPoint(x: 103, y: 200), time: 2.1))
+        view.draw()
+        XCTAssertEqual(viewModel.guides.verticals, [100], "a plain drag leaves the guide be")
+        XCTAssertLessThan(composite().at(x: 100, y: 120).x, 0.3, "and draws a stroke, snapped onto it")
     }
 
     func testDraggingTheMouseDrawsAStrokeAndUndoRemovesIt() throws {

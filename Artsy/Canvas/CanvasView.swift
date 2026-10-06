@@ -114,6 +114,16 @@ class CanvasView: MTKView {
             return
         }
 
+        // ⌘-drag picks up a guide line
+        if event.modifierFlags.contains(.command) {
+            let viewPoint = convert(event.locationInWindow, from: nil)
+            let canvasPoint = viewModel.transform.viewToCanvas(viewPoint, viewSize: bounds.size)
+            if let line = viewModel.guides.line(near: canvasPoint, zoom: viewModel.transform.scale) {
+                draggingGuide = line
+                return
+            }
+        }
+
         switch viewModel.currentTool {
         case .pan:
             isPanning = true
@@ -176,6 +186,13 @@ class CanvasView: MTKView {
     override func mouseDragged(with event: NSEvent) {
         guard let viewModel = viewModel else { return }
 
+        if let line = draggingGuide {
+            let viewPoint = convert(event.locationInWindow, from: nil)
+            viewModel.guides.move(line, to: viewModel.transform.viewToCanvas(viewPoint, viewSize: bounds.size))
+            redrawOverlays()
+            return
+        }
+
         if isPanning {
             let currentPoint = event.locationInWindow
             let delta = CGPoint(
@@ -219,6 +236,20 @@ class CanvasView: MTKView {
 
     override func mouseUp(with event: NSEvent) {
         guard let viewModel = viewModel, let renderer = renderer else { return }
+
+        // A guide dragged off the canvas is gone
+        if let line = draggingGuide {
+            draggingGuide = nil
+            let viewPoint = convert(event.locationInWindow, from: nil)
+            let canvasPoint = viewModel.transform.viewToCanvas(viewPoint, viewSize: bounds.size)
+            if !CGRect(origin: .zero, size: viewModel.canvasSize).contains(canvasPoint) {
+                viewModel.guides.remove(line)
+            } else {
+                viewModel.guides.move(line, to: canvasPoint)
+            }
+            redrawOverlays()
+            return
+        }
 
         if isPanning {
             isPanning = false
@@ -878,9 +909,12 @@ class CanvasView: MTKView {
         return ctx.makeImage()
     }
 
+    /// The guide line being ⌘-dragged, if any.
+    private var draggingGuide: CanvasGuides.Line?
+
     /// Ask every sibling overlay view (selection marquee, transform handles) to
     /// redraw immediately, instead of waiting for their internal animation timer.
-    private func redrawOverlays() {
+    func redrawOverlays() {
         superview?.subviews.forEach { $0.needsDisplay = true }
     }
 

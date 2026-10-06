@@ -23,6 +23,8 @@ final class CanvasDocument {
         let canvasHeight: Int
         let layers: [LayerInfo]
         let activeLayerIndex: Int
+        /// Grid and guide lines; absent in documents from before they existed.
+        var guides: CanvasGuides? = nil
 
         struct LayerInfo: Codable {
             let id: String
@@ -84,7 +86,8 @@ final class CanvasDocument {
             canvasWidth: Int(viewModel.canvasSize.width),
             canvasHeight: Int(viewModel.canvasSize.height),
             layers: layerInfos,
-            activeLayerIndex: layerStack.activeLayerIndex
+            activeLayerIndex: layerStack.activeLayerIndex,
+            guides: viewModel.guides
         )
         let jsonData = try JSONEncoder().encode(doc)
         try jsonData.write(to: bundleURL.appendingPathComponent("document.json"))
@@ -274,6 +277,7 @@ final class CanvasDocument {
         if doc.activeLayerIndex < layerStack.layers.count {
             layerStack.activeLayerIndex = doc.activeLayerIndex
         }
+        if let guides = doc.guides { viewModel.guides = guides }
 
         return (viewModel, canvasView)
     }

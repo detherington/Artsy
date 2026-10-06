@@ -7,6 +7,8 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		1FE6C011A3347A69FF681D18 /* GuidesTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66990949D4C94FB6FA126B5D /* GuidesTests.swift */; };
+		1428EB1136CC133B92C6C705 /* CanvasGuides.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5F0F6EA17AA7C236F55F9EDE /* CanvasGuides.swift */; };
 		4A60AA9347B8C91E38A47345 /* ShapeSnapTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79B9FF41588D343B45C80EE9 /* ShapeSnapTests.swift */; };
 		3B54FDB1907F26B70192C2F5 /* ShapeRecognizer.swift in Sources */ = {isa = PBXBuildFile; fileRef = B503D129C02606F448133BAB /* ShapeRecognizer.swift */; };
 		910557AE248C5E6C2EB1180D /* ScaleTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 906151D16DF5DF8303645279 /* ScaleTests.swift */; };
@@ -119,6 +121,8 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		66990949D4C94FB6FA126B5D /* GuidesTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GuidesTests.swift; sourceTree = "<group>"; };
+		5F0F6EA17AA7C236F55F9EDE /* CanvasGuides.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CanvasGuides.swift; sourceTree = "<group>"; };
 		79B9FF41588D343B45C80EE9 /* ShapeSnapTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShapeSnapTests.swift; sourceTree = "<group>"; };
 		B503D129C02606F448133BAB /* ShapeRecognizer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShapeRecognizer.swift; sourceTree = "<group>"; };
 		906151D16DF5DF8303645279 /* ScaleTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScaleTests.swift; sourceTree = "<group>"; };
@@ -372,6 +376,7 @@
 		B48AF066E85C8962CFFD499C /* ArtsyTests */ = {
 			isa = PBXGroup;
 			children = (
+				66990949D4C94FB6FA126B5D /* GuidesTests.swift */,
 				79B9FF41588D343B45C80EE9 /* ShapeSnapTests.swift */,
 				906151D16DF5DF8303645279 /* ScaleTests.swift */,
 				C620C18B57AC3DF098EA49AB /* ImpastoTests.swift */,
@@ -473,6 +478,7 @@
 		FD0C637A3F3286C2D3F27B61 /* Drawing */ = {
 			isa = PBXGroup;
 			children = (
+				5F0F6EA17AA7C236F55F9EDE /* CanvasGuides.swift */,
 				B503D129C02606F448133BAB /* ShapeRecognizer.swift */,
 				D358C0D04AE1598A1E332FE0 /* StrokeRecording.swift */,
 				22EA3B8567263273990426D0 /* PressureCurve.swift */,
@@ -621,6 +627,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				1428EB1136CC133B92C6C705 /* CanvasGuides.swift in Sources */,
 				3B54FDB1907F26B70192C2F5 /* ShapeRecognizer.swift in Sources */,
 				6DA92A8D6FA9F9F203D1F23B /* SmudgeRenderer.swift in Sources */,
 				71057E79579C2004D1BB93F7 /* ProcreateBrushFile.swift in Sources */,
@@ -700,6 +707,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				1FE6C011A3347A69FF681D18 /* GuidesTests.swift in Sources */,
 				4A60AA9347B8C91E38A47345 /* ShapeSnapTests.swift in Sources */,
 				910557AE248C5E6C2EB1180D /* ScaleTests.swift in Sources */,
 				9F4B6E72ED36054E23D3B6D8 /* ImpastoTests.swift in Sources */,
