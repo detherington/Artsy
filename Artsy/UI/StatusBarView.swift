@@ -33,6 +33,12 @@ struct StatusBarView: View {
                     .font(.system(size: 11, design: .monospaced))
             }
 
+            if let shape = viewModel.snappedShapeName {
+                Text("Shape: \(shape)")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundColor(.accentColor)
+            }
+
             if let path = viewModel.selectionPath {
                 let bounds = path.boundingBox
                 Text("Selection: \(Int(bounds.width))×\(Int(bounds.height))")

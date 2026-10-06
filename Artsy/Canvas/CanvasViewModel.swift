@@ -62,6 +62,24 @@ final class CanvasViewModel: ObservableObject {
     // Active stroke being drawn
     private(set) var activePath: StrokePath?
     var isDrawing = false
+    /// The stroke snapped to the shape it was going for, while the pen holds still at its
+    /// end. Drawn in place of `activePath` until the pen moves on or lifts.
+    private(set) var snappedPath: StrokePath?
+    /// What the stroke snapped to, for the status bar.
+    @Published private(set) var snappedShapeName: String?
+    /// Where the pen was when the stroke snapped; moving on from there snaps back.
+    private var snapAnchor: CGPoint?
+    /// The path the renderer draws: the snapped shape when there is one.
+    var drawnPath: StrokePath? { snappedPath ?? activePath }
+    /// Hold the pen still at the end of a stroke to snap it to a line, circle, rectangle or
+    /// polygon. Follows the preference unless set explicitly.
+    var snapsShapesOnHold: Bool {
+        get { snapsShapesOverride ?? AppPreferences.shared.snapShapesOnHold }
+        set { snapsShapesOverride = newValue }
+    }
+    private var snapsShapesOverride: Bool?
+    /// How long the pen holds still before the stroke snaps.
+    static let shapeSnapHold: TimeInterval = 0.6
 
     // Layer stack (set up by renderer)
     var layerStack: LayerStack!
@@ -202,6 +220,38 @@ final class CanvasViewModel: ObservableObject {
         guard isDrawing else { return }
         lastInput = point
         activePath?.append(smoother.filter(point))
+        checkShapeSnap()
+    }
+
+    /// Snap the stroke to a shape once the pen has held still long enough at its end; snap
+    /// back to the stroke as drawn once the pen moves on, and keep drawing it.
+    private func checkShapeSnap() {
+        guard snapsShapesOnHold, currentBrush.smudgeSettings == nil, let path = activePath,
+              let end = path.samples.last?.position else { return }
+        if snappedPath != nil {
+            if let anchor = snapAnchor, hypot(end.x - anchor.x, end.y - anchor.y) > 6 {
+                snappedPath = nil
+                snappedShapeName = nil
+                snapAnchor = nil
+            }
+            return
+        }
+        guard path.holdDuration >= Self.shapeSnapHold, path.samples.count >= 8,
+              let shape = ShapeRecognizer.recognize(path.samples.map(\.position)) else { return }
+
+        // The shape at the stroke's usual pressure, drawn as a stroke itself
+        let pressures = path.samples.map(\.pressure).sorted()
+        let pressure = pressures[pressures.count / 2]
+        var style = path.style
+        style.easeLength = 0
+        let snapped = StrokePath(style: style)
+        for (index, position) in shape.points(spacing: 2).enumerated() {
+            snapped.append(StrokePoint(position: position, pressure: pressure, tiltX: 0, tiltY: 0, rotation: 0,
+                                       timestamp: Double(index) * 0.002))
+        }
+        snappedPath = snapped
+        snappedShapeName = shape.name
+        snapAnchor = end
     }
 
     /// Call after the renderer has finalized the stroke — it still needs the points.
@@ -209,6 +259,9 @@ final class CanvasViewModel: ObservableObject {
         smoother.end()
         recorder?.endStroke()
         activePath = nil
+        snappedPath = nil
+        snappedShapeName = nil
+        snapAnchor = nil
         isDrawing = false
     }
 

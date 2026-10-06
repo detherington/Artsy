@@ -32,7 +32,7 @@ final class StrokePath {
     /// How long the pen has rested at the end of the stroke, in seconds.
     private(set) var holdDuration: TimeInterval = 0
     private var restingSince: TimeInterval = 0
-    private let style: Style
+    let style: Style
 
     /// A pause with the pen down.
     struct Rest: Equatable {

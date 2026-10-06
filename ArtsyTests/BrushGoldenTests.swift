@@ -55,6 +55,26 @@ final class BrushGoldenTests: XCTestCase {
         Golden.assertMatches(harness.shown(relief: 1), named: "thick-paint-relief")
     }
 
+    /// Rough shapes held at the end, snapped: a circle, a rectangle, a line and a triangle,
+    /// each drawn with the pen held still for a moment before lifting.
+    func testShapeSnap() throws {
+        let harness = try EngineHarness()
+        harness.select(.technicalPen)
+        harness.viewModel.brushSize = 6
+        harness.viewModel.currentColor = ink
+        let shapes: [[CGPoint]] = [
+            StrokeFixtures.circlePositions(center: CGPoint(x: 100, y: 190), radius: 60),
+            StrokeFixtures.polygonPositions([CGPoint(x: 200, y: 130), CGPoint(x: 340, y: 140),
+                                             CGPoint(x: 335, y: 250), CGPoint(x: 195, y: 240)]),
+            (0...80).map { CGPoint(x: 380 + CGFloat($0) * 1.3, y: 120 + CGFloat($0) * 1.8) },
+            StrokeFixtures.polygonPositions([CGPoint(x: 60, y: 30), CGPoint(x: 240, y: 40), CGPoint(x: 150, y: 110)]),
+        ]
+        for (index, shape) in shapes.enumerated() {
+            harness.draw(StrokeFixtures.held(StrokeFixtures.rough(shape, wobble: 8, seed: UInt64(index + 1)), for: 0.8))
+        }
+        Golden.assertMatches(harness.displayed(), named: "shape-snap")
+    }
+
     /// Light paint over dark: the case the default white canvas hides.
     func testSoftBrushesOverDarkPaint() throws {
         let harness = try EngineHarness()
