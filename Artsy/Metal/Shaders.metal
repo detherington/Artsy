@@ -1,4 +1,5 @@
 #include <metal_stdlib>
+#include "Spectral.h"
 using namespace metal;
 
 // --- Stroke Rendering ---
@@ -31,6 +32,35 @@ vertex StrokeVertexOut strokeVertex(
 static inline float4 premultiplied(float3 rgb, float alpha) {
     alpha = saturate(alpha);
     return float4(rgb * alpha, alpha);
+}
+
+// --- Pigment mixing ---
+//
+// A brush that mixes pigments combines its paint with what is under it the way paints mix
+// (Kubelka-Munk; see Spectral.h) rather than by averaging light, so yellow over blue makes
+// green. Coverage still adds up as it does for any stroke; only the colour of the mixture
+// is different.
+
+/// The straight colour of a premultiplied pixel.
+static inline float3 straight(float4 p) { return p.a > 1e-5 ? p.rgb / p.a : float3(0.0); }
+
+/// `src` over `dst`, both premultiplied, the overlap's colour mixed as pigments.
+static inline float4 pigmentOver(float4 src, float4 dst) {
+    float outA = src.a + dst.a * (1.0 - src.a);
+    if (src.a <= 1e-5) return dst;
+    if (dst.a <= 1e-5 || outA <= 1e-5) return src;
+    // The new paint's share of what is there afterwards
+    float t = src.a / outA;
+    return float4(spectral::mixP3(straight(dst), straight(src), t) * outA, outA);
+}
+
+/// mix(dst, paint, k) for premultiplied pixels, the colour mixed as pigments.
+static inline float4 pigmentLerp(float4 dst, float4 paint, float k) {
+    float a = mix(dst.a, paint.a, k);
+    float wp = paint.a * k, wd = dst.a * (1.0 - k);
+    if (wp <= 1e-5) return dst * (1.0 - k);
+    if (wd <= 1e-5) return paint * k;
+    return float4(spectral::mixP3(straight(dst), straight(paint), wp / (wp + wd)) * a, a);
 }
 
 // Round tip: uses 2D radial distance from the center of the quad.
@@ -262,13 +292,8 @@ struct SmudgeParams {
     int    tipIsTexture;
     float  colorRate;        // how much of the brush's own colour goes in with the carried paint
     float2 carryTexels;      // texels of the carry texture in use, from the last pickup
-};
-
-// The dab's quad is drawn with `stampVertex`. Dual-source blending: the layer pixel becomes
-// mix(layer, paint, k) for the k written to the second output.
-struct SmudgeDepositOut {
-    float4 paint  [[color(0), index(0)]];
-    float4 weight [[color(0), index(1)]];
+    uint2  backdropOrigin;   // where the backdrop's copy of the layer starts, in layer pixels
+    int    mixPigments;
 };
 
 static inline float tipCoverage(float2 uv, float hardness, int tipIsTexture,
@@ -282,23 +307,30 @@ static inline float tipCoverage(float2 uv, float hardness, int tipIsTexture,
     return 1.0 - smoothstep(hardness, 1.0, dist);
 }
 
-fragment SmudgeDepositOut smudgeDepositFragment(
+// The dab's quad is drawn with `stampVertex` straight onto the layer, with no blending:
+// the layer pixel comes in through `backdrop`, a copy of the patch under the dab, and the
+// fragment writes mix(layer, paint, k) itself, alpha included.
+fragment float4 smudgeDepositFragment(
     StampVertexOut in [[stage_in]],
     texture2d<float> tip [[texture(0)]],
     texture2d<float> carry [[texture(1)]],
+    texture2d<float> backdrop [[texture(2)]],
     sampler tipSampler [[sampler(0)]],
     sampler carrySampler [[sampler(1)]],
     constant SmudgeParams &params [[buffer(0)]]
 ) {
     float k = tipCoverage(in.uv, params.hardness, params.tipIsTexture, tip, tipSampler) * in.opacity;
+    float4 layer = backdrop.read(uint2(in.position.xy) - params.backdropOrigin);
     // Sample from texel centre to texel centre so nothing outside the picked-up area bleeds in
     float2 texel = 0.5 + in.uv * (params.carryTexels - 1.0);
     float4 paint = carry.sample(carrySampler, texel / float2(carry.get_width(), carry.get_height()));
-    paint = mix(paint, premultiplied(params.color.rgb, params.color.a), params.colorRate);
-    SmudgeDepositOut out;
-    out.paint = paint * k;
-    out.weight = float4(k);
-    return out;
+    float4 own = premultiplied(params.color.rgb, params.color.a);
+    if (params.mixPigments != 0) {
+        paint = pigmentLerp(paint, own, params.colorRate);
+        return pigmentLerp(layer, paint, k);
+    }
+    paint = mix(paint, own, params.colorRate);
+    return mix(layer, paint, k);
 }
 
 struct SmudgePickupParams {
@@ -432,6 +464,7 @@ struct StrokeMergeParams {
     float opacity;      // caps the whole stroke
     int   erase;        // 0 = paint over the layer, 1 = erase from it
     int   accumulates;  // 0 = ribbon (the textures' maximum), 1 = dabs (tail over committed)
+    int   mixPigments;  // 1 = the stroke's colour mixes with the layer's as paint would
 };
 
 static inline float4 layerWithStroke(float4 layer, float4 committed, float4 tail, StrokeMergeParams params) {
@@ -439,8 +472,20 @@ static inline float4 layerWithStroke(float4 layer, float4 committed, float4 tail
     // maximum. Dabs in the tail were laid after the committed ones and sit on top of them.
     float4 combined = params.accumulates != 0 ? tail + committed * (1.0 - tail.a) : max(committed, tail);
     float4 stroke = combined * params.opacity;
-    return params.erase != 0 ? layer * (1.0 - stroke.a)
-                             : stroke + layer * (1.0 - stroke.a);
+    if (params.erase != 0) return layer * (1.0 - stroke.a);
+    return params.mixPigments != 0 ? pigmentOver(stroke, layer) : stroke + layer * (1.0 - stroke.a);
+}
+
+// Merges a finished stroke into its layer with pigment mixing; the result replaces the
+// layer pixel (rendered to a scratch texture and copied back, since it reads the layer).
+fragment float4 compositePigmentMerge(
+    CompositeVertexOut in [[stage_in]],
+    texture2d<float> strokeTex [[texture(0)]],
+    texture2d<float> layerTex [[texture(1)]],
+    sampler s [[sampler(0)]],
+    constant float &opacity [[buffer(0)]]
+) {
+    return pigmentOver(strokeTex.sample(s, in.texCoord) * opacity, layerTex.sample(s, in.texCoord));
 }
 
 fragment float4 compositeNormalWithStroke(
@@ -594,4 +639,17 @@ fragment float4 displayWhiteFragment(
     // The composite is premultiplied
     float3 result = color.rgb + float3(1.0) * (1.0 - color.a);
     return float4(result, 1.0);
+}
+
+// --- Pigment mixing on its own ---
+
+// Mixes pairs of linear Display P3 colours as pigments: `pairs[2i]` and `pairs[2i + 1]`,
+// the share of the second in `pairs[2i].w`. For tests and tools, not for painting.
+kernel void mixPigmentsKernel(
+    constant float4 *pairs [[buffer(0)]],
+    device float4 *results [[buffer(1)]],
+    uint id [[thread_position_in_grid]]
+) {
+    float4 a = pairs[2 * id], b = pairs[2 * id + 1];
+    results[id] = float4(spectral::mixP3(a.rgb, b.rgb, a.w), 1.0);
 }

@@ -41,6 +41,8 @@ final class CompositorPipeline {
         /// True for dabs, which layer (tail over committed); false for a ribbon, whose two
         /// halves are combined by taking their maximum.
         let accumulates: Bool
+        /// The stroke's colour mixes with the layer's as paint would.
+        let mixesPigments: Bool
     }
 
     /// Mirrors `StrokeMergeParams` in Shaders.metal.
@@ -48,6 +50,7 @@ final class CompositorPipeline {
         var opacity: Float
         var erase: Int32
         var accumulates: Int32
+        var mixPigments: Int32
     }
 
     /// Draw the full-canvas quad once, or once per scissor rect when `regions` is given.
@@ -96,7 +99,8 @@ final class CompositorPipeline {
         var layerOpacity = opacity
         var identity = float4x4(diagonal: SIMD4<Float>(1, 1, 1, 1))
         var strokeParams = StrokeMergeParams(opacity: stroke?.opacity ?? 0, erase: stroke?.erase == true ? 1 : 0,
-                                             accumulates: stroke?.accumulates == true ? 1 : 0)
+                                             accumulates: stroke?.accumulates == true ? 1 : 0,
+                                             mixPigments: stroke?.mixesPigments == true ? 1 : 0)
 
         func bindCommon(_ encoder: MTLRenderCommandEncoder) {
             encoder.setVertexBuffer(quadVertexBuffer, offset: 0, index: 0)
@@ -153,7 +157,43 @@ final class CompositorPipeline {
         drawQuad(encoder, regions: regions)
         encoder.endEncoding()
 
-        // Copy the result back to destination
+        copyBack(from: tempTexture, to: destination, regions: regions, commandBuffer: commandBuffer)
+    }
+
+    /// Merge a finished stroke into `destination` with its colour mixed into the layer's as
+    /// pigments. Reads the layer, so it renders into `tempTexture` and copies back.
+    func mergePigments(
+        source: MTLTexture,
+        onto destination: MTLTexture,
+        opacity: Float,
+        tempTexture: MTLTexture,
+        regions: [MTLScissorRect]? = nil,
+        commandBuffer: MTLCommandBuffer
+    ) {
+        if let regions, regions.isEmpty { return }
+        var strokeOpacity = opacity
+        var identity = float4x4(diagonal: SIMD4<Float>(1, 1, 1, 1))
+
+        let passDesc = MTLRenderPassDescriptor()
+        passDesc.colorAttachments[0].texture = tempTexture
+        passDesc.colorAttachments[0].loadAction = .dontCare
+        passDesc.colorAttachments[0].storeAction = .store
+        guard let encoder = commandBuffer.makeRenderCommandEncoder(descriptor: passDesc) else { return }
+        encoder.setRenderPipelineState(context.compositePigmentMergePipelineState)
+        encoder.setVertexBuffer(quadVertexBuffer, offset: 0, index: 0)
+        encoder.setVertexBytes(&identity, length: MemoryLayout<float4x4>.size, index: 1)
+        encoder.setFragmentTexture(source, index: 0)
+        encoder.setFragmentTexture(destination, index: 1)
+        encoder.setFragmentSamplerState(context.linearSampler, index: 0)
+        encoder.setFragmentBytes(&strokeOpacity, length: MemoryLayout<Float>.size, index: 0)
+        drawQuad(encoder, regions: regions)
+        encoder.endEncoding()
+
+        copyBack(from: tempTexture, to: destination, regions: regions, commandBuffer: commandBuffer)
+    }
+
+    private func copyBack(from tempTexture: MTLTexture, to destination: MTLTexture, regions: [MTLScissorRect]?,
+                          commandBuffer: MTLCommandBuffer) {
         guard let blit = commandBuffer.makeBlitCommandEncoder() else { return }
         let whole = MTLScissorRect(x: 0, y: 0, width: destination.width, height: destination.height)
         for region in regions ?? [whole] {

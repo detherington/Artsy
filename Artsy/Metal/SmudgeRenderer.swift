@@ -18,6 +18,8 @@ final class SmudgeRenderer {
         var texels: SIMD2<Float>?
     }
     private var carries: [Carry] = []
+    /// A copy of the layer under the dab being laid, for the deposit pass to read.
+    private var backdrop: MTLTexture?
 
     init(context: MetalContext) {
         self.context = context
@@ -35,6 +37,8 @@ final class SmudgeRenderer {
         var tipIsTexture: Int32
         var colorRate: Float
         var carryTexels: SIMD2<Float>
+        var backdropOrigin: SIMD2<UInt32>
+        var mixPigments: Int32
     }
 
     /// Mirrors `SmudgePickupParams` in Shaders.metal.
@@ -94,8 +98,11 @@ final class SmudgeRenderer {
                 let reach = CGFloat(dab.size * max(dab.aspect, 1)) * 0.7072
                 bounds = bounds.union(CGRect(x: center.x - reach, y: center.y - reach, width: reach * 2, height: reach * 2))
 
-                // 1. Lay down what the brush carries. Nothing to lay on the first dab.
-                if let texels = carries[index].texels {
+                // 1. Lay down what the brush carries. Nothing to lay on the first dab. The
+                // fragment reads the layer from a copy of the patch under the dab, since a
+                // render pass cannot read its own target.
+                if let texels = carries[index].texels,
+                   let patch = layerPatch(around: center, reach: reach, layer: layer, commandBuffer: commandBuffer) {
                     let pass = MTLRenderPassDescriptor()
                     pass.colorAttachments[0].texture = layer
                     pass.colorAttachments[0].loadAction = .load
@@ -106,13 +113,16 @@ final class SmudgeRenderer {
                                              dab.opacity * opacityScale * fraction, dab.seed, dab.reach, dab.aspect,
                                              dab.pathDistance, dab.secondAngle]
                     var params = DepositParams(color: color.simd, hardness: brush.hardness, tipIsTexture: tipIsTexture,
-                                               colorRate: smudge.colorRate, carryTexels: texels)
+                                               colorRate: smudge.colorRate, carryTexels: texels,
+                                               backdropOrigin: SIMD2(UInt32(patch.x), UInt32(patch.y)),
+                                               mixPigments: brush.mixesPigments ? 1 : 0)
                     encoder.setRenderPipelineState(context.smudgeDepositPipelineState)
                     encoder.setVertexBytes(&instance, length: instance.count * MemoryLayout<Float>.size, index: 0)
                     encoder.setVertexBytes(&transform, length: MemoryLayout<float4x4>.size, index: 1)
                     encoder.setFragmentBytes(&params, length: MemoryLayout<DepositParams>.stride, index: 0)
                     encoder.setFragmentTexture(tipTexture, index: 0)
                     encoder.setFragmentTexture(carries[index].texture, index: 1)
+                    encoder.setFragmentTexture(backdrop, index: 2)
                     encoder.setFragmentSamplerState(context.tipSampler, index: 0)
                     encoder.setFragmentSamplerState(context.linearSampler, index: 1)
                     encoder.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: 6, instanceCount: 1)
@@ -151,6 +161,40 @@ final class SmudgeRenderer {
             drawn.append(bounds)
         }
         return drawn
+    }
+
+    /// Copy the layer's pixels within `reach` of `center` (canvas coordinates) into
+    /// `backdrop`, at its origin. Returns the patch in layer pixels, or nil if it is empty
+    /// or there is no room for it.
+    private func layerPatch(around center: CGPoint, reach: CGFloat, layer: MTLTexture,
+                            commandBuffer: MTLCommandBuffer) -> MTLScissorRect? {
+        let width = layer.width, height = layer.height
+        let minX = max(0, Int((center.x - reach).rounded(.down)) - 1)
+        let maxX = min(width, Int((center.x + reach).rounded(.up)) + 1)
+        let minY = max(0, height - Int((center.y + reach).rounded(.up)) - 1)
+        let maxY = min(height, height - Int((center.y - reach).rounded(.down)) + 1)
+        guard maxX > minX, maxY > minY else { return nil }
+        let patch = MTLScissorRect(x: minX, y: minY, width: maxX - minX, height: maxY - minY)
+
+        if backdrop == nil || backdrop!.width < patch.width || backdrop!.height < patch.height {
+            let side = Self.carrySize << (0...8).first { patch.width <= Self.carrySize << $0 && patch.height <= Self.carrySize << $0 }!
+            let desc = MTLTextureDescriptor.texture2DDescriptor(
+                pixelFormat: layer.pixelFormat, width: min(side, max(width, patch.width)),
+                height: min(side, max(height, patch.height)), mipmapped: false
+            )
+            desc.usage = [.shaderRead]
+            desc.storageMode = .private
+            backdrop = context.device.makeTexture(descriptor: desc)
+            backdrop?.label = "Smudge backdrop"
+        }
+        guard let backdrop, let blit = commandBuffer.makeBlitCommandEncoder() else { return nil }
+        blit.copy(from: layer, sourceSlice: 0, sourceLevel: 0,
+                  sourceOrigin: MTLOrigin(x: patch.x, y: patch.y, z: 0),
+                  sourceSize: MTLSize(width: patch.width, height: patch.height, depth: 1),
+                  to: backdrop, destinationSlice: 0, destinationLevel: 0,
+                  destinationOrigin: MTLOrigin(x: 0, y: 0, z: 0))
+        blit.endEncoding()
+        return patch
     }
 
     private func makeCarry() -> MTLTexture? {

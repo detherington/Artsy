@@ -34,6 +34,34 @@ struct BrushDescriptor: Codable, Identifiable, Equatable {
     var tiltDynamics: TiltDynamics? = nil
     /// Response to the speed of the stroke; nil ignores it.
     var velocityDynamics: VelocityDynamics? = nil
+    /// The stroke's colour mixes with the paint under it as pigments do (yellow over blue
+    /// makes green) rather than as light. Off, colours blend the usual way.
+    var mixesPigments: Bool = false
+
+    enum CodingKeys: String, CodingKey {
+        case id, name, category, hardness, baseSize, pressureDynamics, opacity, smoothing, fixedNibAngle
+        case rendering, tiltDynamics, velocityDynamics, mixesPigments
+    }
+}
+
+extension BrushDescriptor {
+    /// Reads older brush files too, which have no `mixesPigments`.
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(UUID.self, forKey: .id)
+        name = try c.decode(String.self, forKey: .name)
+        category = try c.decode(BrushCategory.self, forKey: .category)
+        hardness = try c.decode(Float.self, forKey: .hardness)
+        baseSize = try c.decode(Float.self, forKey: .baseSize)
+        pressureDynamics = try c.decode(PressureDynamics.self, forKey: .pressureDynamics)
+        opacity = try c.decode(Float.self, forKey: .opacity)
+        smoothing = try c.decode(Float.self, forKey: .smoothing)
+        fixedNibAngle = try c.decodeIfPresent(Float.self, forKey: .fixedNibAngle)
+        rendering = try c.decodeIfPresent(BrushRendering.self, forKey: .rendering) ?? .ribbon(.procedural)
+        tiltDynamics = try c.decodeIfPresent(TiltDynamics.self, forKey: .tiltDynamics)
+        velocityDynamics = try c.decodeIfPresent(VelocityDynamics.self, forKey: .velocityDynamics)
+        mixesPigments = try c.decodeIfPresent(Bool.self, forKey: .mixesPigments) ?? false
+    }
 }
 
 extension BrushDescriptor {
@@ -157,8 +185,9 @@ struct StampSettings: Codable, Equatable {
             case smearing
         }
         var mode: Mode = .smearing
-        /// Smearing: how far the paint carries, 0 (not at all) to 1 (for ever). Dulling: how
-        /// hard each pass blends, 0 to 1. Either way it reads the same whatever the spacing.
+        /// Smearing: how far the paint carries, 0 (not at all) to 1 (for ever); below 1 the
+        /// brush runs out over a few diameters. Dulling: how hard each pass blends, 0 to 1.
+        /// Either way it reads about the same whatever the spacing.
         var strength: Float = 0.7
         /// How much of the brush's own colour goes in with the carried paint, 0 (pure smudge)
         /// to 1 (plain paint).
@@ -166,8 +195,8 @@ struct StampSettings: Codable, Equatable {
 
         /// How much of the carried paint one dab lays down, for dabs `spacing` diameters
         /// apart: `strength` is defined at a quarter diameter, and closer dabs each do less so
-        /// the stroke does the same per distance travelled. Smeared paint fades by
-        /// `strength⁴` per diameter; dulling blends in `1 − (1 − strength)⁴` of the average.
+        /// the stroke does about the same per distance travelled. (Smeared paint runs out
+        /// through what the brush leaves behind it, so this is a normalisation, not a law.)
         func depositFraction(spacing: Float) -> Float {
             let quarters = max(spacing, 0.01) * 4
             switch mode {
@@ -334,7 +363,8 @@ extension BrushDescriptor {
             tip: .bristle, spacing: 0.05, flow: 0.6, accumulation: .wash,
             grain: .init(mode: .multiply, texture: .bristles, attachment: .stroke, scale: 1.2, depth: 0.55),
             opacityJitter: 0.1, followsDirection: true
-        ))
+        )),
+        mixesPigments: true
     )
 
     static let technicalPen = BrushDescriptor(
@@ -457,7 +487,8 @@ extension BrushDescriptor {
             tip: .bristle, spacing: 0.05, flow: 0.75, accumulation: .wash,
             grain: .init(mode: .multiply, texture: .bristles, attachment: .stroke, scale: 1.0, depth: 0.7),
             sizeJitter: 0.05, opacityJitter: 0.1, followsDirection: true
-        ))
+        )),
+        mixesPigments: true
     )
 
     static let airbrush = BrushDescriptor(
@@ -586,7 +617,8 @@ extension BrushDescriptor {
         rendering: .stamp(StampSettings(
             smudge: .init(mode: .smearing, strength: 0.75, colorRate: 0),
             spacing: 0.08, flow: 1.0, accumulation: .buildUp
-        ))
+        )),
+        mixesPigments: true
     )
 
     static let allDefaults: [BrushDescriptor] = [
