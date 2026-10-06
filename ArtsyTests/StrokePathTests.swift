@@ -194,6 +194,38 @@ final class StrokePathTests: XCTestCase {
         XCTAssertGreaterThan(fast.points[2].width, fast.points.last!.width)
     }
 
+    func testRestingIsTimedAndOnlyRedrawsWhenTheBrushSprays() {
+        func sample(_ x: CGFloat, _ t: Double) -> StrokePoint {
+            StrokePoint(position: CGPoint(x: x, y: 50), pressure: 0.5, tiltX: 0, tiltY: 0, rotation: 0, timestamp: t)
+        }
+        for sprays in [false, true] {
+            var spraying = style
+            spraying.spraysWhileResting = sprays
+            let path = StrokePath(style: spraying)
+            path.append(sample(0, 0))
+            path.append(sample(10, 0.01))
+            XCTAssertEqual(path.holdDuration, 0)
+
+            let revision = path.revision
+            path.append(sample(10, 0.3))
+            path.append(sample(10, 0.75))
+            XCTAssertEqual(path.holdDuration, 0.74, accuracy: 0.001, "rest is measured from when the pen stopped")
+            XCTAssertEqual(path.revision != revision, sprays, "a resting pen is only a change for a brush that sprays")
+            XCTAssertEqual(path.samples.count, 2, "resting adds no samples")
+
+            path.append(sample(20, 0.8))
+            XCTAssertEqual(path.holdDuration, 0, "moving ends the rest")
+            XCTAssertEqual(path.rests, [StrokePath.Rest(sampleIndex: 1, duration: 0.74)], "but it is remembered")
+            XCTAssertNil(path.currentRest)
+            let resting = try! XCTUnwrap(path.pointIndex(forSample: 1))
+            XCTAssertEqual(path.points[resting].position, CGPoint(x: 10, y: 50), "and where it happened")
+
+            path.append(sample(30, 0.9))
+            XCTAssertEqual(path.points[try! XCTUnwrap(path.pointIndex(forSample: 1))].position, CGPoint(x: 10, y: 50))
+            XCTAssertEqual(path.points[try! XCTUnwrap(path.pointIndex(forSample: 3))].position, CGPoint(x: 30, y: 50))
+        }
+    }
+
     func testBarrelRotationReachesThePoints() {
         let path = StrokePath(style: style)
         line(rotation: 90).forEach(path.append)

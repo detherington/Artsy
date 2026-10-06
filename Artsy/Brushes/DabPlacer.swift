@@ -111,10 +111,48 @@ struct DabPlacer {
         return result
     }
 
+    /// Dabs for a pen resting at `point`, for brushes that keep spraying while held still.
+    /// Each gets its own jitter; they do not advance the placer along the path.
+    mutating func restingDabs(at point: InterpolatedPoint, count: Int, settings: StampSettings) -> [Dab] {
+        guard count > 0 else { return [] }
+        let usesReach = settings.grain?.mode == .height
+        return (0..<count).map { _ in
+            defer { restingIndex += 1 }
+            var size = point.width
+            var opacity = usesReach ? settings.flow : point.opacity * settings.flow
+            var center = point.position
+            var angle = settings.followsDirection ? point.angle : 0
+            if point.aspect > 1.001 { angle = point.tiltAngle }
+            angle += point.rotation
+            if settings.sizeJitter > 0 { size *= 1 - settings.sizeJitter * restingRandom(1) }
+            if settings.opacityJitter > 0 { opacity *= 1 - settings.opacityJitter * restingRandom(2) }
+            if settings.angleJitter > 0 { angle += (restingRandom(3) - 0.5) * 2 * .pi * settings.angleJitter }
+            if settings.scatter > 0 {
+                center.x += CGFloat((restingRandom(4) - 0.5) * 2 * settings.scatter * point.width)
+                center.y += CGFloat((restingRandom(5) - 0.5) * 2 * settings.scatter * point.width)
+            }
+            return Dab(center: center, size: max(size, 0.5), angle: angle, aspect: point.aspect,
+                       opacity: opacity, seed: restingRandom(0), reach: usesReach ? point.opacity : 1,
+                       pathDistance: Float(point.distance))
+        }
+    }
+
+    /// Resting dabs count separately from dabs along the path, so laying them does not
+    /// change the jitter of the dabs that follow.
+    private var restingIndex = 0
+
+    private func restingRandom(_ channel: UInt64) -> Float {
+        hash(strokeSeed ^ 0x5EED0FA112B5, index: restingIndex, channel: channel)
+    }
+
     /// A repeatable random number in 0..<1 for the current dab; `channel` picks which one.
     private func random(_ channel: UInt64) -> Float {
-        // SplitMix64 over (stroke, dab, channel)
-        var z = strokeSeed &+ UInt64(index) &* 0x9E3779B97F4A7C15 &+ channel &* 0xD1B54A32D192ED03
+        hash(strokeSeed, index: index, channel: channel)
+    }
+
+    private func hash(_ seed: UInt64, index: Int, channel: UInt64) -> Float {
+        // SplitMix64 over (seed, dab, channel)
+        var z = seed &+ UInt64(index) &* 0x9E3779B97F4A7C15 &+ channel &* 0xD1B54A32D192ED03
         z = (z ^ (z >> 30)) &* 0xBF58476D1CE4E5B9
         z = (z ^ (z >> 27)) &* 0x94D049BB133111EB
         z ^= z >> 31

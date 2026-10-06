@@ -26,6 +26,8 @@ final class CanvasRenderer: NSObject, MTKViewDelegate {
     private var committedThrough: Int?
     /// Stamp brushes: where along the path the next settled dab goes.
     private var dabPlacer: DabPlacer?
+    /// Stamp brushes that spray while resting: dabs already laid per rest, by sample index.
+    private var restDabsLaid: [Int: Int] = [:]
     private var renderedRevision = 0
     /// Where the tail was drawn last frame.
     private var tailRegions: [MTLScissorRect] = []
@@ -97,6 +99,8 @@ final class CanvasRenderer: NSObject, MTKViewDelegate {
             hasInitializedTransform = true
         }
 
+        // NSEvent timestamps are system uptime, so the rest is measured on the same clock
+        viewModel.holdStroke(at: ProcessInfo.processInfo.systemUptime)
         encodeFrame(into: commandBuffer)
 
         // Display
@@ -285,13 +289,26 @@ final class CanvasRenderer: NSObject, MTKViewDelegate {
 
             // Dabs that sit on settled path are final: lay them for good.
             let settledEnd = finishing ? pathEnd : (path.settledCount > 0 ? points[path.settledCount - 1].distance : nil)
-            if let settledEnd {
-                let dabs = placer.dabs(along: points, upTo: settledEnd, brush: brush, settings: settings)
-                if !dabs.isEmpty {
-                    drawSettled = { encoder in
-                        renderer.encode(dabs: dabs, brush: brush, settings: settings, color: color, opacityScale: dabScale,
-                                        mirrors: mirrors, encoder: encoder, canvasSize: size)
-                    }
+            var dabs = settledEnd.map { placer.dabs(along: points, upTo: $0, brush: brush, settings: settings) } ?? []
+
+            // A pen resting on the paper keeps an airbrush spraying. Time has passed, so
+            // those dabs are final too; they go on the sample the pen rested on, which
+            // never moves. A rest the pen has moved on from gets whatever it is still owed,
+            // so the result does not depend on when frames happened to run.
+            if settings.holdRate > 0 {
+                for rest in path.rests + (path.currentRest.map { [$0] } ?? []) {
+                    let wanted = Int(rest.duration * Double(settings.holdRate))
+                    let laid = restDabsLaid[rest.sampleIndex] ?? 0
+                    guard wanted > laid, let index = path.pointIndex(forSample: rest.sampleIndex) else { continue }
+                    dabs += placer.restingDabs(at: points[index], count: wanted - laid, settings: settings)
+                    restDabsLaid[rest.sampleIndex] = wanted
+                }
+            }
+
+            if !dabs.isEmpty {
+                drawSettled = { encoder in
+                    renderer.encode(dabs: dabs, brush: brush, settings: settings, color: color, opacityScale: dabScale,
+                                    mirrors: mirrors, encoder: encoder, canvasSize: size)
                 }
             }
             dabPlacer = placer
@@ -878,6 +895,7 @@ final class CanvasRenderer: NSObject, MTKViewDelegate {
     private func resetStrokeState() {
         committedThrough = nil
         dabPlacer = nil
+        restDabsLaid = [:]
         renderedRevision = 0
         tailRegions = []
         strokeRegion = nil

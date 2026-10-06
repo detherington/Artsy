@@ -139,12 +139,28 @@ final class CanvasViewModel: ObservableObject {
             dynamics: currentBrush.pressureDynamics,
             tilt: currentBrush.tiltDynamics,
             velocity: currentBrush.velocityDynamics,
+            spraysWhileResting: { if case .stamp(let s) = currentBrush.rendering { return s.holdRate > 0 } else { return false } }(),
             easeLength: hasPressure || !easesStrokesWithoutPressure ? 0 : Self.easeLength(forBrushSize: brushSize)
         ))
         path.append(smoother.filter(point))
         activePath = path
+        lastInput = point
         strokeIsSettled = false
         isDrawing = true
+    }
+
+    /// The last sample the pen sent, before smoothing.
+    private var lastInput: StrokePoint?
+
+    /// Call once per frame while the pen is down. If no sample has arrived since the last
+    /// frame the pen is resting, which the stroke still needs to know about: smoothing
+    /// catches up to a resting pen, and an airbrush keeps spraying.
+    func holdStroke(at time: TimeInterval) {
+        guard isDrawing, let last = lastInput, time - last.timestamp > 0.004 else { return }
+        continueStroke(point: StrokePoint(
+            position: last.position, pressure: last.pressure, tiltX: last.tiltX, tiltY: last.tiltY,
+            rotation: last.rotation, timestamp: time
+        ))
     }
 
     /// How far a stroke without pen pressure takes to reach full width: a few brush widths.
@@ -169,6 +185,7 @@ final class CanvasViewModel: ObservableObject {
     func continueStroke(point: StrokePoint) {
         recorder?.append(point)
         guard isDrawing else { return }
+        lastInput = point
         activePath?.append(smoother.filter(point))
     }
 

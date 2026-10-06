@@ -82,6 +82,39 @@ final class CanvasViewModelTests: XCTestCase {
         XCTAssertLessThan(mouseUneased.start, 0.1, "the preference turns it off")
     }
 
+    /// Each frame the view tells the stroke the pen is still there. That only counts once
+    /// real input has gone quiet, and it is recorded like any other sample so a replay
+    /// rests for just as long.
+    func testHoldingThePenIsFedToTheStrokeAndRecorded() throws {
+        let harness = try EngineHarness(width: 100, height: 100)
+        let recorder = StrokeRecorder(canvasSize: harness.viewModel.canvasSize, fileURL: nil)
+        harness.viewModel.recorder = recorder
+        let viewModel = harness.viewModel
+
+        func sample(_ x: CGFloat, _ t: Double) -> StrokePoint {
+            StrokePoint(position: CGPoint(x: x, y: 50), pressure: 0.5, tiltX: 0, tiltY: 0, rotation: 0, timestamp: t)
+        }
+        harness.renderer.beginStroke()
+        viewModel.beginStroke(point: sample(10, 100))
+        viewModel.continueStroke(point: sample(20, 100.005))
+        viewModel.holdStroke(at: 100.006)   // too soon after real input to count
+        XCTAssertEqual(viewModel.activePath?.samples.count, 2)
+        viewModel.holdStroke(at: 100.3)
+        viewModel.holdStroke(at: 100.6)
+        XCTAssertEqual(viewModel.activePath?.samples.count, 2, "resting adds no points to the path")
+        XCTAssertEqual(viewModel.activePath?.holdDuration ?? 0, 0.595, accuracy: 0.001)
+        harness.renderer.finalizeStroke()
+        viewModel.endStroke()
+
+        let stroke = try XCTUnwrap(recorder.recording.strokes.first)
+        XCTAssertEqual(stroke.points.count, 4, "the two holds are recorded")
+        XCTAssertEqual(stroke.points.last?.time ?? 0, 0.6, accuracy: 0.0001)
+        XCTAssertEqual(stroke.points.last?.x ?? 0, 20, accuracy: 0.001)
+
+        viewModel.holdStroke(at: 101)
+        XCTAssertNil(viewModel.activePath, "nothing happens once the pen is up")
+    }
+
     func testRecorderCapturesRawInputAndSettings() throws {
         let harness = try EngineHarness(width: 128, height: 128)
         let recorder = StrokeRecorder(canvasSize: harness.viewModel.canvasSize, fileURL: nil)
