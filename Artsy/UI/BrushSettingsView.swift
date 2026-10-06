@@ -114,22 +114,14 @@ struct BrushSettingsContent: View {
                     .frame(width: 28, alignment: .trailing)
             }
 
-            // Pressure curve preset picker
+            // Pressure curve: a thumbnail that opens the editor
             HStack {
                 Text("Pressure")
                     .font(.system(size: 10))
                     .foregroundColor(.gray)
                     .frame(width: 52, alignment: .leading)
-
-                Picker("", selection: Binding(
-                    get: { pressureCurveLabel(viewModel.pressureCurve) },
-                    set: { viewModel.pressureCurve = pressureCurveForLabel($0) }
-                )) {
-                    Text("Linear").tag("Linear")
-                    Text("Soft").tag("Soft")
-                    Text("Firm").tag("Firm")
-                }
-                .pickerStyle(.segmented)
+                PressureCurveControl(viewModel: viewModel)
+                Spacer()
             }
 
             Divider().padding(.vertical, 2)
@@ -173,20 +165,6 @@ struct BrushSettingsContent: View {
         .padding(.horizontal, 16).padding(.vertical, 4)
     }
 
-    private func pressureCurveLabel(_ curve: PressureCurve) -> String {
-        if curve == .linear { return "Linear" }
-        if curve == .soft { return "Soft" }
-        if curve == .firm { return "Firm" }
-        return "Linear"
-    }
-
-    private func pressureCurveForLabel(_ label: String) -> PressureCurve {
-        switch label {
-        case "Soft": return .soft
-        case "Firm": return .firm
-        default: return .linear
-        }
-    }
 }
 
 struct ShapeSettingsContent: View {

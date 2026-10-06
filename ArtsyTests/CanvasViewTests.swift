@@ -187,6 +187,41 @@ final class CanvasViewTests: XCTestCase {
         XCTAssertEqual(drawn.at(x: 60, y: 100).x, 1, accuracy: 0.01)
     }
 
+    /// A proximity event names the pen; the canvas then uses that pen's saved pressure curve.
+    func testEachPenBringsItsOwnPressureCurve() throws {
+        let prefs = AppPreferences.shared
+        let savedCurves = prefs.pressureCurves
+        let savedPen = TabletEventHandler.currentPenID
+        defer {
+            prefs.pressureCurves = savedCurves
+            TabletEventHandler.currentPenID = savedPen
+        }
+        let penID: UInt64 = 0xA11CE
+        prefs.pressureCurves[String(penID, radix: 16)] = .firm
+        viewModel.pressureCurve = .linear
+
+        let event = try XCTUnwrap(CGEvent(source: nil))
+        event.type = .tabletProximity
+        event.setIntegerValueField(.tabletProximityEventVendorUniqueID, value: Int64(penID))
+        event.setIntegerValueField(.tabletProximityEventPointerType, value: 1)   // pen
+        event.setIntegerValueField(.tabletProximityEventEnterProximity, value: 1)
+        TabletEventHandler.handleProximity(event: try XCTUnwrap(NSEvent(cgEvent: event)))
+        NotificationCenter.default.post(name: .tabletProximityChanged, object: nil)
+
+        XCTAssertEqual(TabletEventHandler.currentPenID, penID)
+        XCTAssertEqual(viewModel.pressureCurve, .firm)
+
+        // An unknown pen gets the linear curve
+        let other = try XCTUnwrap(CGEvent(source: nil))
+        other.type = .tabletProximity
+        other.setIntegerValueField(.tabletProximityEventVendorUniqueID, value: 0xB0B)
+        other.setIntegerValueField(.tabletProximityEventPointerType, value: 1)
+        other.setIntegerValueField(.tabletProximityEventEnterProximity, value: 1)
+        TabletEventHandler.handleProximity(event: try XCTUnwrap(NSEvent(cgEvent: other)))
+        NotificationCenter.default.post(name: .tabletProximityChanged, object: nil)
+        XCTAssertEqual(viewModel.pressureCurve, .linear)
+    }
+
     func testBrushCursorIsARingTheSizeOfTheBrush() {
         let cursor = BrushCursor.cursor(diameter: 40)
         XCTAssertEqual(cursor.image.size, NSSize(width: 44, height: 44), "40 pt ring plus a 2 pt margin")

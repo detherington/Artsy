@@ -1403,6 +1403,9 @@ class CanvasView: MTKView {
     @objc private func handleProximityChanged() {
         guard let viewModel = viewModel else { return }
 
+        // Each pen keeps its own pressure curve
+        viewModel.pressureCurve = AppPreferences.shared.pressureCurve(forPen: TabletEventHandler.currentPenKey)
+
         if TabletEventHandler.isEraserActive {
             if previousBrush == nil {
                 previousBrush = viewModel.currentBrush
