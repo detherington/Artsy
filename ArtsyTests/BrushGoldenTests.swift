@@ -247,7 +247,11 @@ final class BrushGoldenTests: XCTestCase {
         }
         let out = environment["ARTSY_SESSION_OUT"].map { URL(fileURLWithPath: $0) }
         let zooms = (environment["ARTSY_SESSION_ZOOMS"] ?? "1").split(separator: ",").compactMap { Double($0) }
-        let recording = try JSONDecoder().decode(StrokeRecording.self, from: Data(contentsOf: URL(fileURLWithPath: recordingPath)))
+        // Several recordings, separated by |, when a document was drawn over more than one launch
+        let recordings = try recordingPath.split(separator: "|").map {
+            try JSONDecoder().decode(StrokeRecording.self, from: Data(contentsOf: URL(fileURLWithPath: String($0))))
+        }
+        let recording = try XCTUnwrap(recordings.first)
         let document = try CanvasDocument.load(from: URL(fileURLWithPath: documentPath), metalContext: EngineHarness.sharedContext)
         let harness = try EngineHarness(width: recording.canvasWidth, height: recording.canvasHeight)
         let saved = harness.pixels(of: document.viewModel.layerStack.layers[document.viewModel.layerStack.activeLayerIndex].texture)
@@ -256,7 +260,7 @@ final class BrushGoldenTests: XCTestCase {
         for zoom in zooms {
             let replay = try EngineHarness(width: recording.canvasWidth, height: recording.canvasHeight)
             replay.viewModel.transform.scale = zoom   // each stroke brings its own smoothing mode
-            for stroke in recording.strokes { replay.draw(stroke) }
+            for stroke in recordings.flatMap(\.strokes) { replay.draw(stroke) }
             let drawn = replay.pixels(of: replay.drawingLayer.texture)
 
             // Alpha is what a drawing layer differs in; colour follows it

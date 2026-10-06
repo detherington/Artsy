@@ -580,14 +580,28 @@ paint yet.
   260 the log counted, and recordings from 0.7.0 carry the repeats.
 - **Pressure never reached 0.87.** A third of all samples sit at 0.6–0.7; the pen's
   top tenth is unused. Hard Round at 12 px drew at little over half width most of the
-  time. A per-pen pressure range learnt from use (or the firm curve) would give the
-  whole brush; not done, since it changes the feel and is a choice to make with the pen
-  in hand.
+  time. The Soft pressure curve (saved for that pen in the curve editor) or a per-pen
+  pressure range set by calibration would give the whole brush; not done, since it
+  changes the feel and is a choice to make with the pen in hand.
 - **Timings.** Frames idle at 0.04 ms encode and draw at 0.1–0.3 ms; one 85 ms frame in
   the first second of drawing (first-stroke allocations), none after. Commits 0.1–0.9 ms.
   Save 0.17 s. The displays run at 60 Hz, so the 120 fps view draws 60.
 - **The eraser end** was recognised through proximity and erased; tilt is reported
   (up to 0.57) and reaches tilt dynamics.
+
+The second session, the same day, drew a document over two launches: Ink Brush,
+Sumi-e, Hard Round and sixteen Oil strokes, saved; reopened (the open path kept its
+thickness), ten Watercolor strokes, two shapes, an opacity change, an added layer and a
+fill mostly undone, saved again. Both recordings chained onto one canvas here match the
+saved layer to 0.11% of pixels, the rest being the one shape kept. No error in four
+launches; every tool's undo step appears in the log as designed; a fill on 2048² landed
+in 0.04 s. The pen reached 0.96 this time. Each session has one 40–90 ms frame at the
+first use of something: the first stroke, the first thick stroke (the layer's height map
+is made then), the first chalk or watercolour stroke (the paper grain and tips were
+generated on the CPU then; they are made at launch now). The frame log now says when
+its slowest frame was and whether a stroke was on, to pin what is left. Hours of idle
+time in the background show 10–90 ms frames at a few frames a second — App Nap, not
+drawing.
 
 ## Risks to check early
 

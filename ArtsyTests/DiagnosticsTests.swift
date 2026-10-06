@@ -33,13 +33,15 @@ final class DiagnosticsTests: XCTestCase {
 
     func testFrameTimingsAreSummarisedEveryFewSeconds() {
         let timings = DiagnosticsLog.FrameTimings(interval: 1)
-        XCTAssertNil(timings.frame(encodeMilliseconds: 1, recomposited: true, at: 100))
-        XCTAssertNil(timings.frame(encodeMilliseconds: 3, recomposited: false, at: 100.5))
-        XCTAssertEqual(timings.frame(encodeMilliseconds: 2, recomposited: false, at: 101.2),
+        XCTAssertNil(timings.frame(encodeMilliseconds: 1, recomposited: true, drawing: false, at: 100))
+        XCTAssertNil(timings.frame(encodeMilliseconds: 3, recomposited: false, drawing: false, at: 100.5))
+        XCTAssertEqual(timings.frame(encodeMilliseconds: 2, recomposited: false, drawing: false, at: 101.2),
                        "3 frames in 1.2 s, 1 recomposited, encode p50 2.00 ms p95 3.00 ms max 3.00 ms")
-        XCTAssertNil(timings.frame(encodeMilliseconds: 4, recomposited: true, at: 101.5), "a new interval begins")
-        XCTAssertEqual(timings.frame(encodeMilliseconds: 5, recomposited: false, at: 102.3),
-                       "2 frames in 1.1 s, 1 recomposited, encode p50 5.00 ms p95 5.00 ms max 5.00 ms")
+        XCTAssertNil(timings.frame(encodeMilliseconds: 4, recomposited: true, drawing: false, at: 101.5), "a new interval begins")
+        XCTAssertNil(timings.frame(encodeMilliseconds: 40, recomposited: true, drawing: true, at: 101.9))
+        XCTAssertEqual(timings.frame(encodeMilliseconds: 5, recomposited: false, drawing: false, at: 102.3),
+                       "3 frames in 1.1 s, 2 recomposited, encode p50 5.00 ms p95 40.00 ms max 40.00 ms (at +0.7 s, while drawing)",
+                       "a slow frame says when it was and what was going on")
     }
 
     func testTheBundleGathersTheFoldersAndASummary() throws {

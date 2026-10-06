@@ -174,6 +174,7 @@ final class MetalContext {
         smudgeDesc.colorAttachments[0].pixelFormat = .r16Float
         self.smudgeDepositHeightPipelineState = try device.makeRenderPipelineState(descriptor: smudgeDesc)
         self.brushTextures = BrushTextureLibrary(device: device)
+        brushTextures.warmUp()
 
         // Radial cap variants
         self.strokeRadialPipelineState = try MetalContext.makeStrokePipeline(
