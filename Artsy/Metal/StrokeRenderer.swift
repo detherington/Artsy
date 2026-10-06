@@ -27,7 +27,7 @@ final class StrokeRenderer {
         encoder: MTLRenderCommandEncoder,
         canvasSize: CGSize
     ) -> [CGRect] {
-        var transform = orthographicProjection(
+        var transform = Self.orthographicProjection(
             left: 0, right: Float(canvasSize.width),
             bottom: 0, top: Float(canvasSize.height),
             near: -1, far: 1
@@ -105,7 +105,7 @@ final class StrokeRenderer {
         guard !dabs.isEmpty, let paper = context.brushTextures.paperGrain else { return [] }
         let grainTexture = settings.grain.flatMap { context.brushTextures.grainTexture(for: $0.texture) } ?? paper
 
-        var transform = orthographicProjection(
+        var transform = Self.orthographicProjection(
             left: 0, right: Float(canvasSize.width),
             bottom: 0, top: Float(canvasSize.height),
             near: -1, far: 1
@@ -205,7 +205,7 @@ final class StrokeRenderer {
 
     // MARK: - Math
 
-    private func orthographicProjection(
+    static func orthographicProjection(
         left: Float, right: Float,
         bottom: Float, top: Float,
         near: Float, far: Float

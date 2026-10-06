@@ -65,9 +65,12 @@ final class CanvasUndoManager {
     /// Save one rectangle of a layer BEFORE a stroke is merged into it.
     /// The copy is encoded into `commandBuffer`, so it runs ahead of whatever that buffer
     /// does to the layer next.
-    func saveRegion(of layer: Layer, in layerStack: LayerStack, region: MTLScissorRect, context: MetalContext,
-                    description: String, commandBuffer: MTLCommandBuffer) {
-        guard let snapshot = captureRegion(of: layer, region: region, context: context,
+    ///
+    /// - Parameter source: where the pixels come from, if not the layer itself: a tool that
+    ///   has already changed the layer passes the copy it took beforehand.
+    func saveRegion(of layer: Layer, in layerStack: LayerStack, region: MTLScissorRect, from source: MTLTexture? = nil,
+                    context: MetalContext, description: String, commandBuffer: MTLCommandBuffer) {
+        guard let snapshot = captureRegion(of: layer, region: region, from: source, context: context,
                                            description: description, commandBuffer: commandBuffer) else { return }
         noteStackSize(layerStack)
         push(.region(snapshot))
@@ -164,8 +167,9 @@ final class CanvasUndoManager {
 
     // MARK: - Snapshot Capture & Restore
 
-    private func captureRegion(of layer: Layer, region: MTLScissorRect, context: MetalContext,
-                               description: String, commandBuffer: MTLCommandBuffer) -> RegionSnapshot? {
+    private func captureRegion(of layer: Layer, region: MTLScissorRect, from source: MTLTexture? = nil,
+                               context: MetalContext, description: String,
+                               commandBuffer: MTLCommandBuffer) -> RegionSnapshot? {
         guard region.width > 0, region.height > 0 else { return nil }
         let desc = MTLTextureDescriptor.texture2DDescriptor(
             pixelFormat: layer.texture.pixelFormat,
@@ -178,7 +182,7 @@ final class CanvasUndoManager {
 
         guard let copy = context.device.makeTexture(descriptor: desc),
               let blit = commandBuffer.makeBlitCommandEncoder() else { return nil }
-        blit.copy(from: layer.texture,
+        blit.copy(from: source ?? layer.texture,
                   sourceSlice: 0, sourceLevel: 0,
                   sourceOrigin: MTLOrigin(x: region.x, y: region.y, z: 0),
                   sourceSize: MTLSize(width: region.width, height: region.height, depth: 1),

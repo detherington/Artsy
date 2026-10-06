@@ -203,10 +203,36 @@ Done:
   the dab is too, which breaks a plain tip up into texture. In the Brush Studio under
   "Second tip".
 
-### 5. Wet media (large)
+### 5. Wet media (large) — in progress
 
-Smudge (dulling first, then smearing), wet-mix controls, a per-brush pigment-mixing toggle,
-wet edges, paper granulation, impasto height map with lighting.
+Done:
+
+- **Smudge.** A stamp brush can move the paint under it instead of adding its own
+  (`StampSettings.smudge`; built-in "Smudge"; Brush Studio → Smudge). The brush carries
+  paint: for every dab it lays down what it carries, then picks up what is under it. The
+  carried paint lives in a small texture mapped to the dab's quad, so moving the dab moves
+  the paint. Laying it down blends the layer towards it — alpha included, with dual-source
+  blending — so paint dragged off an edge thins that edge.
+  - *Smearing* keeps the paint's layout, a texel per canvas pixel (256 at most), and drags
+    it along. *Dulling* keeps one colour, the tip-weighted average under the dab, and
+    softens without dragging.
+  - *Carry/strength* is defined at a quarter diameter and scaled to the brush's spacing,
+    so it reads the same whatever the spacing: smeared paint fades by `strength⁴` per
+    diameter travelled (1 carries for ever); dulling blends in `1 − (1 − strength)⁴` per
+    diameter. *Add brush colour* mixes the brush's colour into what is laid down; at 100%
+    it paints like any other brush.
+  - A smudge draws straight into the layer, as the path settles (no provisional tail), and
+    the changed regions are recomposited like any stroke's. The layer is copied at
+    pen-down (one canvas-size texture, made on first use) and the undo step is cut from
+    that copy at pen-up, so undo costs what any stroke's does.
+  - Each dab is two small render passes in strict order, so a frame costs two encoders per
+    dab laid; at the built-in's spacing that is a few per frame.
+
+Still to do:
+
+- Wet-mix controls, a per-brush pigment-mixing toggle (spectral.js port), wet edges,
+  paper granulation, impasto height map with lighting; redo Watercolor on them.
+- Smudge samples the active layer only ("sample all layers" is not offered).
 
 ### 6. Scale (large, optional)
 

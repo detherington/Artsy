@@ -84,10 +84,12 @@ final class BrushStudioTests: XCTestCase {
         XCTAssertNotNil(faint)
     }
 
-    /// The whole panel lays out and draws; with ARTSY_DUMP_UI=1 the image is written out to look at.
+    /// The whole panel lays out and draws; with ARTSY_DUMP_UI=1 the image is written out to
+    /// look at, for the brush named by ARTSY_DUMP_BRUSH (Chalk otherwise).
     func testStudioViewRenders() throws {
         let harness = try EngineHarness(width: 64, height: 64)
-        harness.select(.chalk)
+        let named = ProcessInfo.processInfo.environment["ARTSY_DUMP_BRUSH"].flatMap(BrushDescriptor.builtIn(named:))
+        harness.select(named ?? .chalk)
         harness.viewModel.currentColor = StrokeColor(red: 0.12, green: 0.33, blue: 0.70, alpha: 1)
         let model = BrushStudioModel(viewModel: harness.viewModel, library: library,
                                      previewRenderer: try BrushPreview(context: EngineHarness.sharedContext))

@@ -13,6 +13,7 @@ struct BrushStudioView: View {
             Form {
                 shapeSection
                 if model.stampSettings != nil {
+                    smudgeSection
                     secondTipSection
                     grainSection
                     jitterSection
@@ -126,6 +127,25 @@ struct BrushStudioView: View {
                         set: { degrees in model.apply { $0.fixedNibAngle = degrees * .pi / 180 } }
                     ), in: 0...180, unit: "°")
                 }
+            }
+        }
+    }
+
+    private var smudgeSection: some View {
+        Section("Smudge") {
+            Toggle("Move the paint under the brush instead of adding paint", isOn: Binding(
+                get: { model.stampSettings?.smudge != nil },
+                set: { on in
+                    model.stampBinding(\.smudge, default: nil).wrappedValue = on ? StampSettings.Smudge() : nil
+                }
+            ))
+            if let smudge = model.stampSettings?.smudge {
+                Picker("Mode", selection: smudgeBinding(\.mode, smudge)) {
+                    Text("Smearing — drags the paint along with the stroke").tag(StampSettings.Smudge.Mode.smearing)
+                    Text("Dulling — blends what is under the brush, without dragging").tag(StampSettings.Smudge.Mode.dulling)
+                }
+                slider(smudge.mode == .smearing ? "Carry" : "Strength", smudgeBinding(\.strength, smudge), in: 0...1, percent: true)
+                slider("Add brush colour", smudgeBinding(\.colorRate, smudge), in: 0...1, percent: true)
             }
         }
     }
@@ -247,6 +267,18 @@ struct BrushStudioView: View {
                 var grain = model.stampSettings?.grain ?? current
                 grain[keyPath: keyPath] = value
                 model.stampBinding(\.grain, default: nil).wrappedValue = grain
+            }
+        )
+    }
+
+    private func smudgeBinding<Value>(_ keyPath: WritableKeyPath<StampSettings.Smudge, Value>,
+                                      _ current: StampSettings.Smudge) -> Binding<Value> {
+        Binding(
+            get: { (model.stampSettings?.smudge ?? current)[keyPath: keyPath] },
+            set: { value in
+                var smudge = model.stampSettings?.smudge ?? current
+                smudge[keyPath: keyPath] = value
+                model.stampBinding(\.smudge, default: nil).wrappedValue = smudge
             }
         )
     }

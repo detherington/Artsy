@@ -248,6 +248,127 @@ fragment float4 stampFragment(
     return premultiplied(params.color.rgb, params.color.a * alpha);
 }
 
+// --- Smudge ---
+//
+// A smudge brush carries paint. For every dab it first lays down what it carries, straight
+// into the layer, then picks up what is under it to carry on to the next dab. The carried
+// paint lives in a small texture mapped to the dab's quad (the "carry"); laying it down
+// blends the layer towards it by the dab's strength, alpha included, so paint dragged off
+// its edge thins that edge the way a finger would.
+
+struct SmudgeParams {
+    float4 color;
+    float  hardness;
+    int    tipIsTexture;
+    float  colorRate;        // how much of the brush's own colour goes in with the carried paint
+    float2 carryTexels;      // texels of the carry texture in use, from the last pickup
+};
+
+// The dab's quad is drawn with `stampVertex`. Dual-source blending: the layer pixel becomes
+// mix(layer, paint, k) for the k written to the second output.
+struct SmudgeDepositOut {
+    float4 paint  [[color(0), index(0)]];
+    float4 weight [[color(0), index(1)]];
+};
+
+static inline float tipCoverage(float2 uv, float hardness, int tipIsTexture,
+                                texture2d<float> tip, sampler tipSampler) {
+    if (tipIsTexture != 0) return tip.sample(tipSampler, uv).r;
+    float dist = distance(uv, float2(0.5)) * 2.0;
+    if (hardness >= 0.99) {
+        float edge = fwidth(dist);
+        return 1.0 - smoothstep(1.0 - edge, 1.0, dist);
+    }
+    return 1.0 - smoothstep(hardness, 1.0, dist);
+}
+
+fragment SmudgeDepositOut smudgeDepositFragment(
+    StampVertexOut in [[stage_in]],
+    texture2d<float> tip [[texture(0)]],
+    texture2d<float> carry [[texture(1)]],
+    sampler tipSampler [[sampler(0)]],
+    sampler carrySampler [[sampler(1)]],
+    constant SmudgeParams &params [[buffer(0)]]
+) {
+    float k = tipCoverage(in.uv, params.hardness, params.tipIsTexture, tip, tipSampler) * in.opacity;
+    // Sample from texel centre to texel centre so nothing outside the picked-up area bleeds in
+    float2 texel = 0.5 + in.uv * (params.carryTexels - 1.0);
+    float4 paint = carry.sample(carrySampler, texel / float2(carry.get_width(), carry.get_height()));
+    paint = mix(paint, premultiplied(params.color.rgb, params.color.a), params.colorRate);
+    SmudgeDepositOut out;
+    out.paint = paint * k;
+    out.weight = float4(k);
+    return out;
+}
+
+struct SmudgePickupParams {
+    float2 center;           // the dab, in canvas pixels
+    float  size;
+    float  angle;
+    float  aspect;
+    float2 canvasSize;
+    float2 carryTexels;      // the part of the carry texture being written
+    int    dulling;          // 1: pick up one average colour instead of the paint's layout
+    float  hardness;
+    int    tipIsTexture;
+};
+
+struct SmudgePickupOut {
+    float4 position [[position]];
+    float2 uv;
+};
+
+// Fills the viewport.
+vertex SmudgePickupOut smudgePickupVertex(uint vertexID [[vertex_id]]) {
+    const float2 corners[6] = {
+        float2(-1, -1), float2(1, -1), float2(1, 1),
+        float2(-1, -1), float2(1, 1), float2(-1, 1),
+    };
+    SmudgePickupOut out;
+    out.position = float4(corners[vertexID], 0, 1);
+    // Texel (0, 0), top-left of the viewport, holds the dab's uv (0, 0); deposit reads the
+    // texels in the same order.
+    out.uv = float2(corners[vertexID].x * 0.5 + 0.5, 0.5 - corners[vertexID].y * 0.5);
+    return out;
+}
+
+static inline float4 layerUnderDab(float2 uv, constant SmudgePickupParams &p,
+                                   texture2d<float> layer, sampler canvasSampler) {
+    float2 stretched = (uv - 0.5) * float2(p.size * p.aspect, p.size);
+    float c = cos(p.angle), sn = sin(p.angle);
+    float2 canvas = p.center + float2(stretched.x * c - stretched.y * sn, stretched.x * sn + stretched.y * c);
+    return layer.sample(canvasSampler, float2(canvas.x / p.canvasSize.x, 1.0 - canvas.y / p.canvasSize.y));
+}
+
+fragment float4 smudgePickupFragment(
+    SmudgePickupOut in [[stage_in]],
+    texture2d<float> layer [[texture(0)]],
+    texture2d<float> tip [[texture(1)]],
+    sampler canvasSampler [[sampler(0)]],
+    sampler tipSampler [[sampler(1)]],
+    constant SmudgePickupParams &p [[buffer(0)]]
+) {
+    if (p.dulling != 0) {
+        // One colour for the whole dab: the paint under it, weighted by the tip's shape.
+        // Premultiplied values average correctly as they are.
+        const int taps = 8;
+        float4 sum = 0.0;
+        float weight = 0.0;
+        for (int j = 0; j < taps; j++) {
+            for (int i = 0; i < taps; i++) {
+                float2 uv = (float2(i, j) + 0.5) / float(taps);
+                float w = tipCoverage(uv, p.hardness, p.tipIsTexture, tip, tipSampler);
+                sum += layerUnderDab(uv, p, layer, canvasSampler) * w;
+                weight += w;
+            }
+        }
+        return weight > 0.0 ? sum / weight : float4(0.0);
+    }
+    // Texel i holds the paint at uv i / (texels - 1), matching how deposit samples it
+    float2 uv = (in.uv * p.carryTexels - 0.5) / max(p.carryTexels - 1.0, 1.0);
+    return layerUnderDab(uv, p, layer, canvasSampler);
+}
+
 // --- Compositing ---
 
 struct CompositeVertexIn {

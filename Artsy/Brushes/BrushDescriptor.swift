@@ -44,6 +44,12 @@ extension BrushDescriptor {
         self.id = id
         self.name = name
     }
+
+    /// Set when the brush moves the paint under it rather than adding its own.
+    var smudgeSettings: StampSettings.Smudge? {
+        if case .stamp(let settings) = rendering { return settings.smudge }
+        return nil
+    }
 }
 
 /// The two ways a stroke can be drawn.
@@ -139,8 +145,42 @@ struct StampSettings: Codable, Equatable {
         var angleJitter: Float = 0
     }
 
+    /// A brush that moves the paint already on the layer instead of (or as well as) adding
+    /// its own. Such a brush draws straight into the layer as the pen moves.
+    struct Smudge: Codable, Equatable {
+        enum Mode: String, Codable {
+            /// Picks up the average colour under the dab and lays it back down: softens
+            /// and blends without dragging. Cheap and keeps the tip's shape.
+            case dulling
+            /// Carries the paint from where the dab was to where it is now: drags and
+            /// streaks, like a finger through wet paint.
+            case smearing
+        }
+        var mode: Mode = .smearing
+        /// Smearing: how far the paint carries, 0 (not at all) to 1 (for ever). Dulling: how
+        /// hard each pass blends, 0 to 1. Either way it reads the same whatever the spacing.
+        var strength: Float = 0.7
+        /// How much of the brush's own colour goes in with the carried paint, 0 (pure smudge)
+        /// to 1 (plain paint).
+        var colorRate: Float = 0
+
+        /// How much of the carried paint one dab lays down, for dabs `spacing` diameters
+        /// apart: `strength` is defined at a quarter diameter, and closer dabs each do less so
+        /// the stroke does the same per distance travelled. Smeared paint fades by
+        /// `strength⁴` per diameter; dulling blends in `1 − (1 − strength)⁴` of the average.
+        func depositFraction(spacing: Float) -> Float {
+            let quarters = max(spacing, 0.01) * 4
+            switch mode {
+            case .smearing: return pow(max(strength, 0), quarters)
+            case .dulling: return 1 - pow(max(1 - strength, 0), quarters)
+            }
+        }
+    }
+
     var tip: Tip = .round
     var secondTip: SecondTip? = nil
+    /// Set for a brush that moves the paint under it.
+    var smudge: Smudge? = nil
     /// Distance between dabs, as a fraction of the dab's diameter.
     var spacing: Float
     /// Opacity of a single dab, before pressure.
@@ -529,6 +569,26 @@ extension BrushDescriptor {
         fixedNibAngle: nil
     )
 
+    static let smudge = BrushDescriptor(
+        id: UUID(uuidString: "00000000-0015-0000-0000-000000000015")!,
+        name: "Smudge",
+        category: .painting,
+        hardness: 0.3,
+        baseSize: 36,
+        pressureDynamics: PressureDynamics(
+            sizeRange: 0.6...1.0,
+            opacityRange: 0.4...1.0    // press harder to carry more paint
+        ),
+        opacity: 1.0,
+        smoothing: 0.4,
+        fixedNibAngle: nil,
+        // Drags the paint under it; adds none of its own
+        rendering: .stamp(StampSettings(
+            smudge: .init(mode: .smearing, strength: 0.75, colorRate: 0),
+            spacing: 0.08, flow: 1.0, accumulation: .buildUp
+        ))
+    )
+
     static let allDefaults: [BrushDescriptor] = [
         // Sketching
         .pencil, .graphiteStick, .conte, .chalk, .pastel,
@@ -536,7 +596,7 @@ extension BrushDescriptor {
         .hardRound, .inkBrush, .sumiE, .calligraphy,
         .technicalPen, .fineliner, .ballpointPen, .gelPen,
         // Painting
-        .softRound, .airbrush, .marker, .watercolor, .acrylic, .oil
+        .softRound, .airbrush, .marker, .watercolor, .acrylic, .oil, .smudge
     ]
 
     /// Look up a built-in brush (including the eraser) by its display name.

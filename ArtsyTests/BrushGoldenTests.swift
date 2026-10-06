@@ -22,6 +22,16 @@ final class BrushGoldenTests: XCTestCase {
     func testEveryBrush() throws {
         for brush in BrushDescriptor.allDefaults {
             let harness = try EngineHarness()
+            // A smudge brush shows nothing on a blank layer: give it bands of paint to drag.
+            if brush.smudgeSettings != nil {
+                harness.select(.hardRound)
+                harness.viewModel.brushSize = 70
+                for (index, band) in BrushPreview.paintBands.enumerated() {
+                    harness.viewModel.currentColor = band
+                    let x = CGFloat(100 + 156 * index)
+                    harness.draw(StrokeFixtures.line(from: CGPoint(x: x, y: 20), to: CGPoint(x: x, y: 268), pressure: 1...1))
+                }
+            }
             harness.select(brush)
             harness.viewModel.currentColor = ink
             StrokeFixtures.brushSheet.forEach { harness.draw($0) }
