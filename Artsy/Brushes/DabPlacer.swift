@@ -7,6 +7,8 @@ struct Dab {
     var size: Float
     /// Rotation in radians.
     var angle: Float
+    /// Length-to-width ratio (1 = round).
+    var aspect: Float = 1
     var opacity: Float
     /// 0..<1, different for every dab; the shader uses it to vary the tip.
     var seed: Float
@@ -57,6 +59,7 @@ struct DabPlacer {
 
             let width = a.width + (b.width - a.width) * t
             var size = width
+            let aspect = a.aspect + (b.aspect - a.aspect) * t
             // Pressure normally thins each dab. With height grain it instead decides how
             // deep into the paper the dab reaches, which lightens the mark by itself.
             let pressed = a.opacity + (b.opacity - a.opacity) * t
@@ -66,8 +69,12 @@ struct DabPlacer {
                                  y: a.position.y + (b.position.y - a.position.y) * CGFloat(t))
             // Interpolating an angle across the ±π seam would spin the dab; the path is
             // sampled every pixel, so the nearer point's direction is close enough.
-            let direction = t < 0.5 ? a.angle : b.angle
+            let nearer = t < 0.5 ? a : b
+            let direction = nearer.angle
             var angle = settings.followsDirection ? direction : 0
+            // A mark elongated by tilt lies along the lean; barrel rotation turns any tip.
+            if aspect > 1.001 { angle = nearer.tiltAngle }
+            angle += nearer.rotation
 
             if settings.sizeJitter > 0 {
                 size *= 1 - settings.sizeJitter * random(1)
@@ -87,7 +94,7 @@ struct DabPlacer {
                 center.y += dx * across + dy * along
             }
 
-            result.append(Dab(center: center, size: max(size, 0.5), angle: angle,
+            result.append(Dab(center: center, size: max(size, 0.5), angle: angle, aspect: aspect,
                               opacity: opacity, seed: random(0), reach: usesReach ? pressed : 1))
             index += 1
 

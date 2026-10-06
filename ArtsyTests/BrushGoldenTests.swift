@@ -63,6 +63,31 @@ final class BrushGoldenTests: XCTestCase {
         Golden.assertMatches(harness.displayed(), named: "mouse-strokes")
     }
 
+    /// Dry media shade with the side of the pencil when it leans over; a loaded ink brush
+    /// thins as it is swept faster.
+    func testDynamics() throws {
+        let harness = try EngineHarness()
+        harness.viewModel.currentColor = ink
+        func sweep(y: CGFloat, tilt: SIMD2<Float>, speed: Double) -> [StrokePoint] {
+            StrokeFixtures.line(from: CGPoint(x: 30, y: y), to: CGPoint(x: 482, y: y), pressure: 0.7...0.7, duration: 452 / speed)
+                .map { StrokePoint(position: $0.position, pressure: $0.pressure, tiltX: tilt.x, tiltY: tilt.y,
+                                   rotation: 0, timestamp: $0.timestamp) }
+        }
+        for (row, brush) in [BrushDescriptor.pencil, .graphiteStick, .chalk].enumerated() {
+            harness.select(brush)
+            let y = CGFloat(262 - row * 62)
+            harness.draw(sweep(y: y + 14, tilt: .zero, speed: 400))                // upright
+            harness.draw(sweep(y: y - 14, tilt: SIMD2(0.3, -0.85), speed: 400))    // leaning
+        }
+        for (row, brush) in [BrushDescriptor.inkBrush, .sumiE].enumerated() {
+            harness.select(brush)
+            let y = CGFloat(76 - row * 44)
+            harness.draw(sweep(y: y + 10, tilt: .zero, speed: 250))     // slow
+            harness.draw(sweep(y: y - 10, tilt: .zero, speed: 2500))    // fast
+        }
+        Golden.assertMatches(harness.displayed(), named: "dynamics")
+    }
+
     func testEraser() throws {
         let harness = try EngineHarness()
         harness.viewModel.currentColor = ink

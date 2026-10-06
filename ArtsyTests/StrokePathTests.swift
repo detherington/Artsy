@@ -140,6 +140,66 @@ final class StrokePathTests: XCTestCase {
         }
     }
 
+    // MARK: - Dynamics
+
+    private func line(tilt: SIMD2<Float> = .zero, rotation: Float = 0, speed: CGFloat = 400) -> [StrokePoint] {
+        // 200 Hz samples along x at the given speed
+        (0..<60).map { i in
+            StrokePoint(position: CGPoint(x: CGFloat(i) * speed / 200, y: 50), pressure: 0.6,
+                        tiltX: tilt.x, tiltY: tilt.y, rotation: rotation, timestamp: Double(i) / 200)
+        }
+    }
+
+    func testLeaningThePenBroadensAndElongatesTheMark() {
+        var pencil = style
+        pencil.tilt = TiltDynamics(sizeScale: 2.5, opacityScale: 0.5, aspect: 2.0)
+
+        let upright = StrokePath(style: pencil)
+        line().forEach(upright.append)
+        let flat = StrokePath(style: pencil)
+        line(tilt: SIMD2(0, -0.95)).forEach(flat.append)
+        let slight = StrokePath(style: pencil)
+        line(tilt: SIMD2(0.1, 0)).forEach(slight.append)
+
+        let up = upright.points[30], down = flat.points[30], bit = slight.points[30]
+        XCTAssertEqual(down.width, up.width * 2.5, accuracy: 0.05)
+        XCTAssertEqual(down.opacity, up.opacity * 0.5, accuracy: 0.01)
+        XCTAssertEqual(down.aspect, 2.0, accuracy: 0.01)
+        XCTAssertEqual(down.tiltAngle, -.pi / 2, accuracy: 0.01, "the long side follows the lean")
+        XCTAssertEqual(up.aspect, 1)
+        XCTAssertEqual(bit.width, up.width, accuracy: 0.001, "a normal grip's slight lean changes nothing")
+
+        let plain = StrokePath(style: style)   // no tilt dynamics
+        line(tilt: SIMD2(0, -0.95)).forEach(plain.append)
+        XCTAssertEqual(plain.points[30].width, up.width, accuracy: 0.001)
+    }
+
+    func testASweptBrushThins() {
+        var ink = style
+        ink.velocity = VelocityDynamics(referenceSpeed: 1000, sizeScale: 0.5, opacityScale: 0.8)
+
+        let slow = StrokePath(style: ink)
+        line(speed: 100).forEach(slow.append)
+        let fast = StrokePath(style: ink)
+        line(speed: 1000).forEach(fast.append)
+        let faster = StrokePath(style: ink)
+        line(speed: 3000).forEach(faster.append)
+
+        let rest = style.dynamics.size(for: PressureCurve.linear.map(0.6)) * style.brushSize
+        XCTAssertEqual(slow.points.last!.width, rest * 0.95, accuracy: rest * 0.05)
+        XCTAssertEqual(fast.points.last!.width, rest * 0.5, accuracy: rest * 0.03, "half as wide at the reference speed")
+        XCTAssertEqual(faster.points.last!.width, rest * 0.5, accuracy: rest * 0.01, "and no thinner beyond it")
+        XCTAssertEqual(fast.points.last!.opacity, slow.points.last!.opacity * 0.8, accuracy: 0.03)
+        XCTAssertLessThan(fast.points[2].width, rest, "speed is smoothed in, not applied in one jump")
+        XCTAssertGreaterThan(fast.points[2].width, fast.points.last!.width)
+    }
+
+    func testBarrelRotationReachesThePoints() {
+        let path = StrokePath(style: style)
+        line(rotation: 90).forEach(path.append)
+        XCTAssertEqual(path.points[20].rotation, .pi / 2, accuracy: 0.001)
+    }
+
     /// A pen held still reports the same position repeatedly; that must still leave a dot.
     func testAPenThatDoesNotMoveStillLeavesADot() {
         let path = StrokePath(style: style)

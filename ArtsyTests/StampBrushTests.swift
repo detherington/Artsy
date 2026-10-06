@@ -64,6 +64,23 @@ final class StampBrushTests: XCTestCase {
         }
     }
 
+    func testTiltAndRotationShapeTheDabs() {
+        let stroke = StrokePath(style: StrokePath.Style(
+            brushSize: 20, pressureCurve: .linear, dynamics: PressureDynamics(sizeRange: 1...1, opacityRange: 1...1),
+            tilt: TiltDynamics(sizeScale: 2, opacityScale: 1, aspect: 1.8)
+        ))
+        for i in 0..<40 {
+            stroke.append(StrokePoint(position: CGPoint(x: CGFloat(i) * 3, y: 50), pressure: 1,
+                                      tiltX: 0.9, tiltY: 0, rotation: 30, timestamp: Double(i) / 200))
+        }
+        var placer = DabPlacer(strokeSeed: 1)
+        let dabs = placer.dabs(along: stroke.points, upTo: 100, brush: .chalk, settings: StampSettings(spacing: 0.5, flow: 1))
+        let middle = dabs[dabs.count / 2]
+        XCTAssertEqual(middle.aspect, 1.8, accuracy: 0.01)
+        XCTAssertEqual(middle.size, 40, accuracy: 0.1, "twice as big when flat")
+        XCTAssertEqual(middle.angle, 0 + 30 * .pi / 180, accuracy: 0.01, "along the lean, plus the barrel rotation")
+    }
+
     func testJitterVariesFromDabToDabAndStrokeToStroke() {
         let stroke = path(StrokeFixtures.line(from: CGPoint(x: 0, y: 50), to: CGPoint(x: 300, y: 50)))
         let jittery = StampSettings(spacing: 0.2, flow: 0.5, sizeJitter: 0.5, opacityJitter: 0.5, angleJitter: 1, scatter: 0.3)

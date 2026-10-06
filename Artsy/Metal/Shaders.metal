@@ -240,6 +240,7 @@ struct StampInstance {
     float opacity;
     float seed;             // 0..<1, different for every dab
     float reach;            // 0..1: how firmly the dab is pressed into the paper's tooth
+    float aspect;           // length-to-width ratio along the dab's x axis
 };
 
 struct StampVertexOut {
@@ -273,7 +274,8 @@ vertex StampVertexOut stampVertex(
     StampInstance dab = dabs[instanceID];
     float2 corner = corners[vertexID];
     float c = cos(dab.angle), sn = sin(dab.angle);
-    float2 offset = float2(corner.x * c - corner.y * sn, corner.x * sn + corner.y * c) * dab.size;
+    float2 stretched = float2(corner.x * dab.aspect, corner.y);
+    float2 offset = float2(stretched.x * c - stretched.y * sn, stretched.x * sn + stretched.y * c) * dab.size;
     float2 canvas = float2(dab.center) + offset;
 
     StampVertexOut out;

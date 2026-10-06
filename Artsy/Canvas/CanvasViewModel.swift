@@ -137,6 +137,8 @@ final class CanvasViewModel: ObservableObject {
             brushSize: brushSize,
             pressureCurve: pressureCurve,
             dynamics: currentBrush.pressureDynamics,
+            tilt: currentBrush.tiltDynamics,
+            velocity: currentBrush.velocityDynamics,
             easeLength: hasPressure || !easesStrokesWithoutPressure ? 0 : Self.easeLength(forBrushSize: brushSize)
         ))
         path.append(smoother.filter(point))
