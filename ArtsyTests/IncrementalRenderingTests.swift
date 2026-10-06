@@ -19,11 +19,19 @@ final class IncrementalRenderingTests: XCTestCase {
         harness.viewModel.symmetryMode = symmetry
     }
 
+    private static let dualTipBrush: BrushDescriptor = {
+        var brush = BrushDescriptor(copying: .softRound, id: UUID(), name: "Dual")
+        var settings = StampSettings(spacing: 0.12, flow: 0.6)
+        settings.secondTip = .init(tip: .bristle, scale: 0.7, angleJitter: 1)
+        brush.rendering = .stamp(settings)
+        return brush
+    }()
+
     func testResultDoesNotDependOnHowSamplesFallIntoFrames() throws {
         let cases: [(BrushDescriptor, SymmetryMode)] = [
             (.softRound, .off), (.inkBrush, .radial(5)), (.oil, .quad), (.calligraphy, .off), (.eraser, .horizontal),
-            // Stamp brushes: plain dabs, grain with jitter, a textured tip with scatter
-            (.airbrush, .quad), (.pencil, .off), (.chalk, .radial(3)),
+            // Stamp brushes: plain dabs, grain with jitter, a textured tip with scatter, a second tip
+            (.airbrush, .quad), (.pencil, .off), (.chalk, .radial(3)), (Self.dualTipBrush, .horizontal),
         ]
         for (brush, symmetry) in cases {
             var results: [PixelGrid] = []

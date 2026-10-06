@@ -139,6 +139,7 @@ struct StampInstance {
     float reach;            // 0..1: how firmly the dab is pressed into the paper's tooth
     float aspect;           // length-to-width ratio along the dab's x axis
     float pathDistance;     // how far along the stroke the dab sits
+    float secondAngle;      // rotation of the second tip, radians
 };
 
 struct StampVertexOut {
@@ -149,6 +150,7 @@ struct StampVertexOut {
     float  opacity;
     float  seed;
     float  reach;
+    float  secondAngle;
 };
 
 struct StampParams {
@@ -159,6 +161,8 @@ struct StampParams {
     float  grainScale;       // texture pixels per canvas pixel
     float  grainDepth;
     int    grainOnStroke;    // 0 = fixed to the canvas, 1 = runs along the stroke
+    int    hasSecondTip;
+    float  secondTipScale;   // size of the second tip relative to the dab
 };
 
 vertex StampVertexOut stampVertex(
@@ -186,6 +190,7 @@ vertex StampVertexOut stampVertex(
     out.opacity = dab.opacity;
     out.seed = dab.seed;
     out.reach = dab.reach;
+    out.secondAngle = dab.secondAngle;
     return out;
 }
 
@@ -193,6 +198,7 @@ fragment float4 stampFragment(
     StampVertexOut in [[stage_in]],
     texture2d<float> tip [[texture(0)]],
     texture2d<float> grain [[texture(1)]],
+    texture2d<float> secondTip [[texture(2)]],
     sampler tipSampler [[sampler(0)]],
     sampler grainSampler [[sampler(1)]],
     constant StampParams &params [[buffer(0)]]
@@ -209,6 +215,15 @@ fragment float4 stampFragment(
         } else {
             coverage = 1.0 - smoothstep(params.hardness, 1.0, dist);
         }
+    }
+
+    if (params.hasSecondTip != 0) {
+        // The second tip is sampled in the dab's own space, turned and scaled about its
+        // centre; the repeating sampler lets a small one tile across the dab.
+        float c = cos(in.secondAngle), sn = sin(in.secondAngle);
+        float2 centred = (in.uv - 0.5) / params.secondTipScale;
+        float2 uv = float2(centred.x * c - centred.y * sn, centred.x * sn + centred.y * c) + 0.5;
+        coverage *= secondTip.sample(grainSampler, uv).r;
     }
 
     float alpha = coverage * in.opacity;
