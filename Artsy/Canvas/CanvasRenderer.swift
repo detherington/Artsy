@@ -139,7 +139,8 @@ final class CanvasRenderer: NSObject, MTKViewDelegate {
         let encodeStart = DispatchTime.now().uptimeNanoseconds
         encodeFrame(into: commandBuffer)
         let encodeMilliseconds = Double(DispatchTime.now().uptimeNanoseconds - encodeStart) / 1e6
-        if let line = frameTimings.frame(encodeMilliseconds: encodeMilliseconds, recomposited: lastFrameRecomposited, at: now) {
+        if let line = frameTimings.frame(encodeMilliseconds: encodeMilliseconds, recomposited: lastFrameRecomposited,
+                                         drawing: viewModel.isDrawing, at: now) {
             DiagnosticsLog.shared.note(.frame, line)
         }
 
@@ -516,6 +517,7 @@ final class CanvasRenderer: NSObject, MTKViewDelegate {
         ) else { return nil }
         textureManager.clearTexture(height, commandBuffer: commandBuffer)
         layer.heightTexture = height
+        DiagnosticsLog.shared.note(.tool, "height map made for \(layer.name) (\(height.width)×\(height.height))")
         return height
     }
 

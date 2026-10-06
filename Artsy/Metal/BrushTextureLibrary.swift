@@ -57,6 +57,16 @@ final class BrushTextureLibrary {
         self.device = device
     }
 
+    /// Make the procedural grains and tips now, rather than in the first stroke that needs
+    /// them: generating the paper grain alone takes the main thread tens of milliseconds,
+    /// which showed as a dropped frame at the first chalk or watercolour stroke of a session.
+    func warmUp() {
+        _ = paperGrain
+        _ = bristleGrain
+        _ = tipTexture(for: .chalk)
+        _ = tipTexture(for: .bristle)
+    }
+
     /// The image for a tip, or nil for tips the shader draws itself.
     func tipTexture(for tip: StampSettings.Tip) -> MTLTexture? {
         switch tip {

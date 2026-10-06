@@ -118,24 +118,31 @@ final class DiagnosticsLog {
         private var recomposited = 0
         /// When the frames being summarised began: the first frame's time.
         private var since: TimeInterval?
+        /// The slowest frame so far: how far into the window, and whether a stroke was on.
+        private var slowest: (ms: Double, at: TimeInterval, drawing: Bool)?
         let interval: TimeInterval
 
         init(interval: TimeInterval = 5) { self.interval = interval }
 
         /// Returns the line to log, once `interval` has passed.
-        func frame(encodeMilliseconds ms: Double, recomposited didRecomposite: Bool, at now: TimeInterval) -> String? {
+        func frame(encodeMilliseconds ms: Double, recomposited didRecomposite: Bool, drawing: Bool, at now: TimeInterval) -> String? {
             encodeMilliseconds.append(ms)
             if didRecomposite { recomposited += 1 }
             let since = self.since ?? now
             self.since = since
+            if slowest.map({ ms > $0.ms }) ?? true { slowest = (ms, now - since, drawing) }
             guard now - since >= interval else { return nil }
             defer { self.since = now }
             let sorted = encodeMilliseconds.sorted()
-            let line = String(format: "%d frames in %.1f s, %d recomposited, encode p50 %.2f ms p95 %.2f ms max %.2f ms",
+            var line = String(format: "%d frames in %.1f s, %d recomposited, encode p50 %.2f ms p95 %.2f ms max %.2f ms",
                               sorted.count, now - since, recomposited,
                               sorted[sorted.count / 2], sorted[min(sorted.count - 1, sorted.count * 95 / 100)], sorted[sorted.count - 1])
+            if let slowest, slowest.ms >= 8 {
+                line += String(format: " (at +%.1f s, %@)", slowest.at, slowest.drawing ? "while drawing" : "idle")
+            }
             encodeMilliseconds.removeAll(keepingCapacity: true)
             recomposited = 0
+            slowest = nil
             return line
         }
     }
