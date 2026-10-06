@@ -37,6 +37,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         do {
             metalContext = try MetalContext()
+            metalContext.brushTextures.userTextureDirectory = BrushLibrary.shared.texturesDirectory
         } catch {
             let alert = NSAlert()
             alert.messageText = "Failed to initialize Metal"
@@ -353,28 +354,38 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     // Queue of files to open if received before Metal is initialized
     private var pendingOpenURLs: [URL] = []
 
-    // Handle double-click opening of .artsy files
+    // Handle double-click opening of .artsy documents and .artsybrush brushes
     func application(_ sender: NSApplication, openFile filename: String) -> Bool {
         let url = URL(fileURLWithPath: filename)
-        guard url.pathExtension == "artsy" else { return false }
-        if metalContext != nil {
-            openArtsyDocument(at: url)
-        } else {
-            pendingOpenURLs.append(url)
+        switch url.pathExtension {
+        case "artsy":
+            if metalContext != nil {
+                openArtsyDocument(at: url)
+            } else {
+                pendingOpenURLs.append(url)
+            }
+            return true
+        case BrushLibrary.fileExtension:
+            importBrushFile(at: url)
+            return true
+        default:
+            return false
         }
-        return true
     }
 
     func application(_ sender: NSApplication, openFiles filenames: [String]) {
         for filename in filenames {
-            let url = URL(fileURLWithPath: filename)
-            if url.pathExtension == "artsy" {
-                if metalContext != nil {
-                    openArtsyDocument(at: url)
-                } else {
-                    pendingOpenURLs.append(url)
-                }
-            }
+            _ = application(sender, openFile: filename)
+        }
+    }
+
+    /// A brush file opened from the Finder goes into the library and becomes the current brush.
+    private func importBrushFile(at url: URL) {
+        do {
+            let brush = try BrushLibrary.shared.importBrush(from: url)
+            activeStore?.viewModel.currentBrush = brush
+        } catch {
+            NSAlert(error: error).runModal()
         }
     }
 
@@ -576,11 +587,34 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // View menu
         let viewMenuItem = NSMenuItem()
         mainMenu.addItem(viewMenuItem)
+        // Brush menu
+        let brushMenuItem = NSMenuItem()
+        let brushMenu = NSMenu(title: "Brush")
+        brushMenu.addItem(withTitle: "Duplicate Brush", action: #selector(handleDuplicateBrush), keyEquivalent: "")
+        brushMenu.addItem(withTitle: "Delete Brush", action: #selector(handleDeleteBrush), keyEquivalent: "")
+        brushMenu.addItem(NSMenuItem.separator())
+        brushMenu.addItem(withTitle: "Import Brush...", action: #selector(handleImportBrush), keyEquivalent: "")
+        brushMenu.addItem(withTitle: "Export Brush...", action: #selector(handleExportBrush), keyEquivalent: "")
+        brushMenu.addItem(NSMenuItem.separator())
+        brushMenu.addItem(withTitle: "Import Tip or Grain Image...", action: #selector(handleImportTexture), keyEquivalent: "")
+        brushMenu.addItem(withTitle: "Show Brushes Folder", action: #selector(handleShowBrushesFolder), keyEquivalent: "")
+        brushMenuItem.submenu = brushMenu
+        mainMenu.addItem(brushMenuItem)
+
         let viewMenu = NSMenu(title: "View")
         viewMenu.addItem(withTitle: "Distraction Free", action: #selector(toggleDistractionFree), keyEquivalent: "f")
         viewMenu.addItem(NSMenuItem.separator())
         viewMenu.addItem(withTitle: "Zoom to Fit", action: #selector(handleZoomToFit), keyEquivalent: "0")
         viewMenu.addItem(withTitle: "Actual Size", action: #selector(handleActualSize), keyEquivalent: "1")
+        viewMenu.addItem(NSMenuItem.separator())
+        let rotateLeft = viewMenu.addItem(withTitle: "Rotate Canvas Left", action: #selector(handleRotateLeft), keyEquivalent: "[")
+        rotateLeft.keyEquivalentModifierMask = [.command, .option]
+        let rotateRight = viewMenu.addItem(withTitle: "Rotate Canvas Right", action: #selector(handleRotateRight), keyEquivalent: "]")
+        rotateRight.keyEquivalentModifierMask = [.command, .option]
+        let resetRotation = viewMenu.addItem(withTitle: "Reset Rotation", action: #selector(handleResetRotation), keyEquivalent: "0")
+        resetRotation.keyEquivalentModifierMask = [.command, .option]
+        let flip = viewMenu.addItem(withTitle: "Flip Canvas View", action: #selector(handleFlipView), keyEquivalent: "f")
+        flip.keyEquivalentModifierMask = [.command, .option]
         viewMenu.addItem(NSMenuItem.separator())
         viewMenu.addItem(withTitle: "Toggle Right Panel", action: #selector(handleToggleRightPanel), keyEquivalent: "\t")
         viewMenu.addItem(NSMenuItem.separator())
@@ -688,6 +722,38 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         store.viewModel.transform.offset = .zero
     }
 
+    /// Rotation and flipping happen about the middle of the canvas view.
+    private func viewCentre(of store: (viewModel: CanvasViewModel, canvasView: CanvasView)) -> (CGPoint, CGSize) {
+        let size = store.canvasView.bounds.size
+        return (CGPoint(x: size.width / 2, y: size.height / 2), size)
+    }
+
+    /// Turn to the next 15° mark in `direction` (+1 counter-clockwise), so repeated
+    /// presses land on clean angles even after a freehand twist.
+    private func rotateCanvas(direction: CGFloat) {
+        guard let store = activeStore else { return }
+        let (centre, size) = viewCentre(of: store)
+        let step = CGFloat.pi / 12
+        let marks = store.viewModel.transform.rotation / step
+        let next = direction > 0 ? (marks + 0.001).rounded(.down) + 1 : (marks - 0.001).rounded(.up) - 1
+        store.viewModel.transform.setRotation(next * step, at: centre, viewSize: size)
+    }
+
+    @objc private func handleRotateLeft() { rotateCanvas(direction: 1) }
+    @objc private func handleRotateRight() { rotateCanvas(direction: -1) }
+
+    @objc private func handleResetRotation() {
+        guard let store = activeStore else { return }
+        let (centre, size) = viewCentre(of: store)
+        store.viewModel.transform.setRotation(0, at: centre, viewSize: size)
+    }
+
+    @objc private func handleFlipView() {
+        guard let store = activeStore else { return }
+        let (centre, size) = viewCentre(of: store)
+        store.viewModel.transform.flip(at: centre, viewSize: size)
+    }
+
     @objc private func handleToggleRightPanel() {
         activeStore?.viewModel.toggleRightPanel()
     }
@@ -792,6 +858,109 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     @objc private func bgColorChanged(_ sender: NSColorPanel) {
         guard let c = sender.color.usingColorSpace(.deviceRGB) else { return }
         activeStore?.viewModel.canvasBackgroundColor = (Double(c.redComponent), Double(c.greenComponent), Double(c.blueComponent))
+    }
+
+    // MARK: - Brush menu
+
+    /// A copy of the current brush, saved to the library and selected, so it can be
+    /// changed without touching the original.
+    @objc private func handleDuplicateBrush() {
+        guard let store = activeStore else { return }
+        do {
+            let copy = try BrushLibrary.shared.duplicate(store.viewModel.currentBrush)
+            store.viewModel.currentBrush = copy
+        } catch {
+            NSAlert(error: error).runModal()
+        }
+    }
+
+    @objc private func handleDeleteBrush() {
+        guard let store = activeStore else { return }
+        let brush = store.viewModel.currentBrush
+        guard BrushLibrary.shared.isUserBrush(brush) else {
+            let alert = NSAlert()
+            alert.messageText = "\(brush.name) is a built-in brush"
+            alert.informativeText = "Built-in brushes can't be deleted. Only brushes you have made or imported can."
+            alert.runModal()
+            return
+        }
+        let alert = NSAlert()
+        alert.messageText = "Delete \"\(brush.name)\"?"
+        alert.informativeText = "This removes the brush from your library. It can't be undone."
+        alert.addButton(withTitle: "Delete")
+        alert.addButton(withTitle: "Cancel")
+        guard alert.runModal() == .alertFirstButtonReturn else { return }
+        do {
+            try BrushLibrary.shared.remove(brush)
+            store.viewModel.currentBrush = .hardRound
+        } catch {
+            NSAlert(error: error).runModal()
+        }
+    }
+
+    @objc private func handleImportBrush() {
+        guard let store = activeStore else { return }
+        let panel = NSOpenPanel()
+        panel.allowedContentTypes = [BrushLibrary.brushType, .json]
+        panel.allowsMultipleSelection = true
+        panel.begin { response in
+            guard response == .OK else { return }
+            for url in panel.urls {
+                do {
+                    store.viewModel.currentBrush = try BrushLibrary.shared.importBrush(from: url)
+                } catch {
+                    NSAlert(error: error).runModal()
+                }
+            }
+        }
+    }
+
+    @objc private func handleExportBrush() {
+        guard let store = activeStore else { return }
+        let brush = store.viewModel.currentBrush
+        let panel = NSSavePanel()
+        panel.allowedContentTypes = [BrushLibrary.brushType]
+        panel.nameFieldStringValue = "\(brush.name).\(BrushLibrary.fileExtension)"
+        panel.begin { response in
+            guard response == .OK, let url = panel.url else { return }
+            do {
+                try BrushLibrary.shared.export(brush, to: url)
+            } catch {
+                NSAlert(error: error).runModal()
+            }
+        }
+    }
+
+    /// Copies images into the library's textures folder. A brush file refers to one as
+    /// "image:<file name>" for its tip or grain.
+    @objc private func handleImportTexture() {
+        let panel = NSOpenPanel()
+        panel.allowedContentTypes = [.image, UTType(filenameExtension: "gbr") ?? .data]
+        panel.allowsMultipleSelection = true
+        panel.message = "Choose tip or grain images. A tip's alpha channel is its shape; a grain's brightness is its height."
+        panel.begin { [weak self] response in
+            guard response == .OK else { return }
+            var names: [String] = []
+            for url in panel.urls {
+                do {
+                    let name = try BrushLibrary.shared.importTexture(from: url)
+                    self?.metalContext.brushTextures.forgetImage(named: name)
+                    names.append(name)
+                } catch {
+                    NSAlert(error: error).runModal()
+                }
+            }
+            guard !names.isEmpty else { return }
+            let alert = NSAlert()
+            alert.messageText = names.count == 1 ? "Imported \(names[0])" : "Imported \(names.count) images"
+            alert.informativeText = "Refer to an image from a brush file as \"image:<name>\" for its tip or grain texture. Names: "
+                + names.joined(separator: ", ")
+            alert.runModal()
+        }
+    }
+
+    @objc private func handleShowBrushesFolder() {
+        NSWorkspace.shared.activateFileViewerSelecting([BrushLibrary.shared.directory])
     }
 
     @objc private func handleExportPNG() {

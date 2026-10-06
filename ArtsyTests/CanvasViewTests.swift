@@ -164,6 +164,29 @@ final class CanvasViewTests: XCTestCase {
         XCTAssertTrue(NSEvent.isMouseCoalescingEnabled)
     }
 
+    /// With the canvas turned and mirrored on screen, a stroke still lands where the pen is.
+    func testDrawingOnARotatedFlippedCanvasLandsUnderThePen() throws {
+        let centre = CGPoint(x: view.bounds.midX, y: view.bounds.midY)
+        viewModel.transform.rotate(by: 1.1, at: centre, viewSize: view.bounds.size)
+        viewModel.transform.flip(at: centre, viewSize: view.bounds.size)
+        view.draw()
+
+        // `mouse(atCanvas:)` puts the event where that canvas point currently shows on screen
+        view.mouseDown(with: mouse(.leftMouseDown, atCanvas: CGPoint(x: 60, y: 200), time: 0))
+        for step in 1...20 {
+            view.mouseDragged(with: mouse(.leftMouseDragged, atCanvas: CGPoint(x: 60 + CGFloat(step) * 7, y: 200 - CGFloat(step) * 5),
+                                          time: Double(step) * 0.008))
+        }
+        view.mouseUp(with: mouse(.leftMouseUp, atCanvas: CGPoint(x: 200, y: 100), time: 0.17))
+        view.draw()
+
+        let drawn = composite()
+        XCTAssertLessThan(drawn.at(x: 130, y: 150).x, 0.05, "on the line from (60,200) to (200,100)")
+        XCTAssertLessThan(drawn.at(x: 190, y: 107).x, 0.05)
+        XCTAssertEqual(drawn.at(x: 130, y: 190).x, 1, accuracy: 0.01, "nowhere else")
+        XCTAssertEqual(drawn.at(x: 60, y: 100).x, 1, accuracy: 0.01)
+    }
+
     func testBrushCursorIsARingTheSizeOfTheBrush() {
         let cursor = BrushCursor.cursor(diameter: 40)
         XCTAssertEqual(cursor.image.size, NSSize(width: 44, height: 44), "40 pt ring plus a 2 pt margin")

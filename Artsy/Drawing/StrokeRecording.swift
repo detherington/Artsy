@@ -45,7 +45,7 @@ struct RecordedStroke: Codable, Equatable {
     /// Returns false if the brush no longer exists.
     @discardableResult
     func applySettings(to viewModel: CanvasViewModel) -> Bool {
-        guard let brush = BrushDescriptor.builtIn(named: brushName) else { return false }
+        guard let brush = BrushLibrary.shared.brush(named: brushName) else { return false }
         viewModel.currentBrush = brush
         viewModel.currentColor = color
         viewModel.brushSize = size

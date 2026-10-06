@@ -24,6 +24,15 @@ struct StatusBarView: View {
             Text("Zoom: \(Int(viewModel.transform.scale * 100))%")
                 .font(.system(size: 11, design: .monospaced))
 
+            if viewModel.transform.rotation != 0 {
+                Text("Rotated \(Int((viewModel.transform.rotation * 180 / .pi).rounded()))°")
+                    .font(.system(size: 11, design: .monospaced))
+            }
+            if viewModel.transform.isFlipped {
+                Text("Flipped")
+                    .font(.system(size: 11, design: .monospaced))
+            }
+
             if let path = viewModel.selectionPath {
                 let bounds = path.boundingBox
                 Text("Selection: \(Int(bounds.width))×\(Int(bounds.height))")

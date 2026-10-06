@@ -3,6 +3,7 @@ import AppKit
 
 struct ToolPaletteView: View {
     @ObservedObject var viewModel: CanvasViewModel
+    @ObservedObject private var library = BrushLibrary.shared
     @State private var showForegroundPicker = false
     @State private var showBackgroundPicker = false
 
@@ -162,10 +163,10 @@ struct ToolPaletteView: View {
     }
 
     /// Groups all brushes by category in a fixed display order, preserving the
-    /// global position in `allDefaults` for keyboard-shortcut indexing.
+    /// global position in the library for keyboard-shortcut indexing.
     private var categorizedBrushes: [BrushGroup] {
         let order: [BrushCategory] = [.sketching, .inking, .painting, .utility]
-        let entries = BrushDescriptor.allDefaults.enumerated().map {
+        let entries = library.all.enumerated().map {
             BrushEntry(brush: $0.element, globalIndex: $0.offset)
         }
         return order.compactMap { cat in

@@ -281,7 +281,7 @@ struct GeneralSettingsView: View {
                                 .font(.system(size: 11, weight: .medium))
                                 .frame(width: 60, alignment: .leading)
                             Picker("", selection: $prefs.defaultBrushName) {
-                                ForEach(BrushDescriptor.allDefaults, id: \.name) { brush in
+                                ForEach(BrushLibrary.shared.all, id: \.name) { brush in
                                     Text(brush.name).tag(brush.name)
                                 }
                             }

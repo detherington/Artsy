@@ -1,7 +1,7 @@
 # Drawing engine plan
 
 Goal: make drawing and painting the first-class feature of Artsy. Written 2026-10-05 from a
-code audit of v0.6.1 plus outside research. Steps 1 and 2 are merged; step 3 is under way.
+code audit of v0.6.1 plus outside research. Steps 1 to 3 are merged; step 4 is under way.
 
 **Direction:** keep the current ribbon renderer for inking pens, and build a stamp (dab)
 engine beside it for everything meant to be paint or dry media. Fix feel and correctness
@@ -111,7 +111,7 @@ Still to do:
 - **Tune with a pen.** The smoothing amounts, the pressure time constant and the ease
   length (2.5 brush widths, 8–160 px) are reasoned defaults, not ones anyone has drawn with.
 
-### 3. Stamp engine (large) — in progress
+### 3. Stamp engine (large) — done, apart from Watercolor and a dual tip
 
 Done:
 
@@ -153,8 +153,6 @@ Done:
 
 Still to do:
 
-- A second (dual) tip. No built-in brush needs one yet; it belongs with step 4's Brush
-  Studio, where a user can reach it.
 - Watercolor is the last ribbon with its own shader. It is best redone together with
   step 5's wet edges and diffusion. Acrylic and Oil are flat paint until step 5 adds
   smudge and impasto.
@@ -162,13 +160,32 @@ Still to do:
 - The values in the re-authored brushes and the dynamics are a first pass judged from
   test renders. Tilt in particular needs a pen: the direction convention is a guess.
 
-### 4. Brush Studio and canvas handling (medium)
+### 4. Brush Studio and canvas handling (medium) — in progress
 
-- Data-driven brush format and an editor with a live preview pad.
-- Custom pressure-curve editor; per-pen settings keyed on `NSEvent.uniqueID`.
-- Canvas rotation and flip.
-- Import of tip and grain images (PNG, GIMP `.gbr`; then Photoshop `.abr` and Procreate
-  `.brush` shape and grain).
+Done:
+
+- **Brush files.** A brush is JSON: `{"format": 1, "brush": <BrushDescriptor>}`, saved as
+  `.artsybrush`. Tips and grain textures are named in plain strings (`"chalk"`,
+  `"image:scan.png"`). The type is declared, so a brush file opens from the Finder.
+- **A brush library.** `BrushLibrary` keeps the user's brushes as one file each in
+  `~/Library/Application Support/Artsy/Brushes/`, with their images in `Textures/`. The
+  palette and the default-brush setting list built-ins and user brushes together.
+- **Brush menu:** Duplicate (a copy to change without touching the original), Delete,
+  Import, Export, Import Tip or Grain Image, Show Brushes Folder. Until the editor exists,
+  a duplicated brush is changed by editing its JSON.
+- **Image tips and grain.** A `.stamp` brush can use `image:<name>` for its tip (alpha is
+  the shape; a flat image's darkness is) or grain (brightness is height). PNG, JPEG, TIFF
+  and GIMP `.gbr` are imported; a missing image falls back to a round tip or paper.
+- **Canvas rotation and flip**, view only: two-finger twist, View → Rotate Canvas
+  Left/Right (⌥⌘[ ⌥⌘]) to 15° marks, Reset Rotation (⌥⌘0), Flip Canvas View (⌥⌘F). The
+  status bar shows both. Strokes land under the pen whatever the view is doing.
+
+Still to do:
+
+- The editor: a panel for the current brush's settings with a live preview pad.
+- A pressure-curve editor; per-pen settings keyed on `NSEvent.uniqueID`.
+- Photoshop `.abr` and Procreate `.brush` imports (shape and grain only).
+- A dual tip, once the editor can expose it.
 
 ### 5. Wet media (large)
 
