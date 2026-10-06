@@ -22,7 +22,10 @@ final class TabletEventHandler {
         if event.isEnteringProximity, event.uniqueID != 0 {
             currentPenID = event.uniqueID
         }
-        fputs("Artsy: proximity — deviceType=\(event.pointingDeviceType.rawValue) entering=\(event.isEnteringProximity) pen=\(currentPenKey) (0=generic,1=pen,2=cursor,3=eraser)\n", stderr)
+        DiagnosticsLog.shared.note(.pen, "\(event.isEnteringProximity ? "in range" : "gone"): type \(event.pointingDeviceType.rawValue) "
+            + "(0 generic, 1 pen, 2 cursor, 3 eraser), vendor type \(event.vendorPointingDeviceType), id \(currentPenKey), "
+            + "vendor \(event.vendorID), tablet \(event.tabletID)/\(event.systemTabletID), device \(event.pointingDeviceID), "
+            + "serial \(event.pointingDeviceSerialNumber), capabilities \(event.capabilityMask)")
     }
 
     /// Whether the eraser end is currently active (based on last proximity event).

@@ -9,8 +9,14 @@ final class CanvasViewTests: XCTestCase {
     private var window: NSWindow!
     private var view: CanvasView!
     private var viewModel: CanvasViewModel!
+    private var logDirectory: URL!
+    private var previousLog: DiagnosticsLog!
 
     override func setUpWithError() throws {
+        // The diagnostics log goes somewhere temporary, not the user's Library
+        logDirectory = FileManager.default.temporaryDirectory.appendingPathComponent("ArtsyViewTests-\(UUID().uuidString)")
+        previousLog = DiagnosticsLog.shared
+        DiagnosticsLog.shared = DiagnosticsLog(directory: logDirectory)
         let context = EngineHarness.sharedContext
         viewModel = CanvasViewModel(canvasSize: CGSize(width: 256, height: 256))
         viewModel.recorder = nil
@@ -38,6 +44,14 @@ final class CanvasViewTests: XCTestCase {
         window = nil
         view = nil
         viewModel = nil
+        DiagnosticsLog.shared = previousLog
+        try? FileManager.default.removeItem(at: logDirectory)
+    }
+
+    /// What the diagnostics log holds so far.
+    private func logText() throws -> String {
+        DiagnosticsLog.shared.flush()
+        return try String(contentsOf: XCTUnwrap(DiagnosticsLog.shared.fileURL), encoding: .utf8)
     }
 
     private func mouse(_ type: NSEvent.EventType, atCanvas point: CGPoint, time: TimeInterval,
@@ -221,6 +235,31 @@ final class CanvasViewTests: XCTestCase {
         TabletEventHandler.handleProximity(event: try XCTUnwrap(NSEvent(cgEvent: other)))
         NotificationCenter.default.post(name: .tabletProximityChanged, object: nil)
         XCTAssertEqual(viewModel.pressureCurve, .linear)
+
+        // Both pens went into the log, by id, for a session to bring back
+        let log = try logText()
+        XCTAssertTrue(log.contains("pen      in range: type 1"), log)
+        XCTAssertTrue(log.contains("id a11ce"), log)
+        XCTAssertTrue(log.contains("id b0b"), log)
+    }
+
+    /// A session on another Mac leaves a log of what the pen did and what the app did with it.
+    func testASessionLeavesALogToBringBack() throws {
+        view.mouseDown(with: mouse(.leftMouseDown, atCanvas: CGPoint(x: 40, y: 128), time: 0))
+        for step in 1...10 {
+            view.mouseDragged(with: mouse(.leftMouseDragged, atCanvas: CGPoint(x: 40 + CGFloat(step) * 8, y: 128),
+                                          time: Double(step) * 0.01))
+        }
+        view.mouseUp(with: mouse(.leftMouseUp, atCanvas: CGPoint(x: 120, y: 128), time: 0.11))
+        view.draw()
+        view.performUndoAction()
+
+        let log = try logText()
+        XCTAssertTrue(log.contains("stroke   Hard Round 12 px: 11 samples in 0.10 s (110/s)"), log)
+        XCTAssertTrue(log.contains("pressure 0.70–0.70"), "the mouse's fixed pressure")
+        XCTAssertTrue(log.contains(", mouse"), log)
+        XCTAssertTrue(log.contains("stroke   committed in"), log)
+        XCTAssertTrue(log.contains("undo     undo: 0 steps left"), log)
     }
 
     func testBrushCursorIsARingTheSizeOfTheBrush() {

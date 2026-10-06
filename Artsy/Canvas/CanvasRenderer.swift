@@ -115,6 +115,9 @@ final class CanvasRenderer: NSObject, MTKViewDelegate {
 
     // MARK: - MTKViewDelegate
 
+    /// Encode times of the frames drawn, summarised to the diagnostics log every few seconds.
+    private let frameTimings = DiagnosticsLog.FrameTimings()
+
     func mtkView(_ view: MTKView, drawableSizeWillChange size: CGSize) {}
 
     func draw(in view: MTKView) {
@@ -131,8 +134,14 @@ final class CanvasRenderer: NSObject, MTKViewDelegate {
         }
 
         // NSEvent timestamps are system uptime, so the rest is measured on the same clock
-        viewModel.holdStroke(at: ProcessInfo.processInfo.systemUptime)
+        let now = ProcessInfo.processInfo.systemUptime
+        viewModel.holdStroke(at: now)
+        let encodeStart = DispatchTime.now().uptimeNanoseconds
         encodeFrame(into: commandBuffer)
+        let encodeMilliseconds = Double(DispatchTime.now().uptimeNanoseconds - encodeStart) / 1e6
+        if let line = frameTimings.frame(encodeMilliseconds: encodeMilliseconds, recomposited: lastFrameRecomposited, at: now) {
+            DiagnosticsLog.shared.note(.frame, line)
+        }
 
         // Display
         compositor.renderToScreen(
@@ -1121,6 +1130,7 @@ final class CanvasRenderer: NSObject, MTKViewDelegate {
 
         let isErasing = viewModel.currentBrush.category == .utility
         let isSmudging = viewModel.currentBrush.smudgeSettings != nil
+        let commitStart = DispatchTime.now().uptimeNanoseconds
 
         guard let commandBuffer = context.commandQueue.makeCommandBuffer() else { return }
 
@@ -1172,6 +1182,8 @@ final class CanvasRenderer: NSObject, MTKViewDelegate {
 
         commandBuffer.commit()
         resetStrokeState()
+        DiagnosticsLog.shared.note(.stroke, String(format: "committed in %.1f ms on the CPU",
+                                                   Double(DispatchTime.now().uptimeNanoseconds - commitStart) / 1e6))
 
         updateThumbnail(for: activeLayer)
     }
