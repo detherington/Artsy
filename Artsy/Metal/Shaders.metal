@@ -72,44 +72,6 @@ fragment float4 strokeRadialWatercolorFragment(
     return premultiplied(color, brushColor.a * alpha);
 }
 
-// Round tip for oil paint — impasto, bristle streaks, more textured than acrylic
-fragment float4 strokeRadialOilFragment(
-    StrokeVertexOut in [[stage_in]],
-    constant float4 &brushColor [[buffer(0)]],
-    constant float &hardness [[buffer(1)]]
-) {
-    float dist = distance(in.texCoord, float2(0.5, 0.5)) * 2.0;
-    float shape = 1.0 - smoothstep(hardness + 0.05, 0.98, dist);
-
-    float2 p = in.position.xy;
-    // Pronounced canvas texture + clump-like high-frequency noise for impasto
-    float canvas = fract(sin(dot(floor(p * 0.25), float2(12.9898, 78.233))) * 43758.5453);
-    float canvasTexture = mix(0.82, 1.0, canvas);
-
-    // Center impasto highlight: slightly brighter towards the middle as if paint is piled up
-    float impasto = 1.0 + (1.0 - dist) * 0.15;
-    float3 color = clamp(brushColor.rgb * impasto, 0.0, 1.0);
-
-    float alpha = shape * canvasTexture * in.opacity;
-    return premultiplied(color, brushColor.a * alpha);
-}
-
-// Round tip for acrylic (cap version of acrylic brush)
-fragment float4 strokeRadialAcrylicFragment(
-    StrokeVertexOut in [[stage_in]],
-    constant float4 &brushColor [[buffer(0)]],
-    constant float &hardness [[buffer(1)]]
-) {
-    float dist = distance(in.texCoord, float2(0.5, 0.5)) * 2.0;
-    float shape = 1.0 - smoothstep(hardness + 0.1, 0.95, dist);
-
-    float2 p = in.position.xy;
-    float canvas = fract(sin(dot(floor(p * 0.2), float2(12.9898, 78.233))) * 43758.5453);
-    float canvasTexture = mix(0.92, 1.0, canvas);
-    float alpha = shape * canvasTexture * in.opacity;
-    return premultiplied(brushColor.rgb, brushColor.a * alpha);
-}
-
 // Procedural brush: uses texCoord.x as cross-stroke distance (0=left edge, 1=right edge)
 // For triangle strip rendering, the stroke is a continuous ribbon.
 fragment float4 strokeProceduralFragment(
@@ -162,71 +124,6 @@ fragment float4 strokeWatercolorFragment(
     return premultiplied(color, brushColor.a * alpha);
 }
 
-// Acrylic: thick, opaque paint with subtle canvas/bristle texture
-// Oil paint ribbon — stronger bristle streaks + impasto highlights
-fragment float4 strokeOilFragment(
-    StrokeVertexOut in [[stage_in]],
-    constant float4 &brushColor [[buffer(0)]],
-    constant float &hardness [[buffer(1)]]
-) {
-    float dist = abs(in.texCoord.x - 0.5) * 2.0;
-    // Sharper edge than acrylic for chunky paint feel
-    float shape = 1.0 - smoothstep(hardness + 0.05, 0.98, dist);
-
-    // Bristle streaks parallel to stroke direction (quantize cross-stroke into 40 lanes)
-    float laneSeed = floor(in.texCoord.x * 40.0);
-    float bristle = fract(sin(laneSeed * 45.17) * 43758.5453);
-    // Wider dark/light variation than acrylic for visible brush bristles
-    float bristleAlpha = mix(0.7, 1.05, bristle);
-
-    float2 p = in.position.xy;
-    // Canvas weave — larger + stronger grain than acrylic
-    float canvas = fract(sin(dot(floor(p * 0.25), float2(12.9898, 78.233))) * 43758.5453);
-    float canvasTexture = mix(0.82, 1.0, canvas);
-
-    // Second, finer noise to break up the bristles
-    float2 fp = p * 0.8;
-    float fine = fract(sin(dot(floor(fp), float2(4.837, 31.727))) * 23457.1357);
-
-    // Paint thickness — center of ribbon has slight impasto highlight
-    float centerBoost = 1.0 + (1.0 - dist) * 0.12;
-    float thickness = mix(0.9, 1.12, bristle * 0.5 + fine * 0.5) * centerBoost;
-    float3 color = clamp(brushColor.rgb * thickness, 0.0, 1.0);
-
-    float alpha = shape * bristleAlpha * canvasTexture * in.opacity;
-    return premultiplied(color, brushColor.a * alpha);
-}
-
-fragment float4 strokeAcrylicFragment(
-    StrokeVertexOut in [[stage_in]],
-    constant float4 &brushColor [[buffer(0)]],
-    constant float &hardness [[buffer(1)]]
-) {
-    float dist = abs(in.texCoord.x - 0.5) * 2.0;
-
-    // Firm edge with slight softness
-    float shape = 1.0 - smoothstep(hardness + 0.1, 0.95, dist);
-
-    // Bristle texture: streaks along the stroke direction
-    float2 p = in.position.xy;
-    // Cross-stroke bristle lines
-    float bristle = fract(sin(floor(in.texCoord.x * 30.0) * 45.17) * 43758.5453);
-    float bristleAlpha = mix(0.85, 1.0, bristle);
-
-    // Slight canvas grain
-    float2 cp = p * 0.2;
-    float grain = fract(sin(dot(floor(cp), float2(12.9898, 78.233))) * 43758.5453);
-    float canvasTexture = mix(0.92, 1.0, grain);
-
-    float alpha = shape * bristleAlpha * canvasTexture * in.opacity;
-
-    // Subtle color variation for paint thickness
-    float thickness = mix(0.95, 1.05, bristle * 0.5 + grain * 0.5);
-    float3 color = clamp(brushColor.rgb * thickness, 0.0, 1.0);
-
-    return premultiplied(color, brushColor.a * alpha);
-}
-
 // --- Stamp (dab) rendering ---
 //
 // A stamp brush draws many copies of its tip along the stroke. Each dab is one instance:
@@ -241,12 +138,14 @@ struct StampInstance {
     float seed;             // 0..<1, different for every dab
     float reach;            // 0..1: how firmly the dab is pressed into the paper's tooth
     float aspect;           // length-to-width ratio along the dab's x axis
+    float pathDistance;     // how far along the stroke the dab sits
 };
 
 struct StampVertexOut {
     float4 position [[position]];
     float2 uv;          // 0..1 across the dab
     float2 canvas;      // canvas pixels
+    float2 along;       // canvas pixels along and across the stroke, for stroke-attached grain
     float  opacity;
     float  seed;
     float  reach;
@@ -256,9 +155,10 @@ struct StampParams {
     float4 color;
     float  hardness;
     int    tipIsTexture;
-    int    grainMode;     // 0 = none, 1 = multiply, 2 = height
-    float  grainScale;    // paper texture pixels per canvas pixel
+    int    grainMode;        // 0 = none, 1 = multiply, 2 = height
+    float  grainScale;       // texture pixels per canvas pixel
     float  grainDepth;
+    int    grainOnStroke;    // 0 = fixed to the canvas, 1 = runs along the stroke
 };
 
 vertex StampVertexOut stampVertex(
@@ -274,14 +174,15 @@ vertex StampVertexOut stampVertex(
     StampInstance dab = dabs[instanceID];
     float2 corner = corners[vertexID];
     float c = cos(dab.angle), sn = sin(dab.angle);
-    float2 stretched = float2(corner.x * dab.aspect, corner.y);
-    float2 offset = float2(stretched.x * c - stretched.y * sn, stretched.x * sn + stretched.y * c) * dab.size;
+    float2 stretched = float2(corner.x * dab.aspect, corner.y) * dab.size;
+    float2 offset = float2(stretched.x * c - stretched.y * sn, stretched.x * sn + stretched.y * c);
     float2 canvas = float2(dab.center) + offset;
 
     StampVertexOut out;
     out.position = transform * float4(canvas, 0.0, 1.0);
     out.uv = corner + 0.5;
     out.canvas = canvas;
+    out.along = float2(dab.pathDistance + stretched.x, stretched.y);
     out.opacity = dab.opacity;
     out.seed = dab.seed;
     out.reach = dab.reach;
@@ -313,8 +214,10 @@ fragment float4 stampFragment(
     float alpha = coverage * in.opacity;
 
     if (params.grainMode != 0) {
-        // The paper is fixed to the canvas, so every stroke meets the same tooth.
-        float height = grain.sample(grainSampler, in.canvas * params.grainScale / float(grain.get_width())).r;
+        // Paper is fixed to the canvas, so every stroke meets the same tooth; bristle
+        // streaks run along the stroke and bend with it.
+        float2 where = params.grainOnStroke != 0 ? in.along : in.canvas;
+        float height = grain.sample(grainSampler, where * params.grainScale / float(grain.get_width())).r;
         if (params.grainMode == 1) {
             alpha *= mix(1.0, height, params.grainDepth);
         } else {

@@ -9,8 +9,6 @@ final class MetalContext {
     // Pipeline states
     let strokeProceduralPipelineState: MTLRenderPipelineState
     let strokeWatercolorPipelineState: MTLRenderPipelineState
-    let strokeAcrylicPipelineState: MTLRenderPipelineState
-    let strokeOilPipelineState: MTLRenderPipelineState
     /// Dabs of a stamp brush, blended source-over into the stroke texture.
     let stampPipelineState: MTLRenderPipelineState
     /// Tips and paper grain for stamp brushes.
@@ -18,8 +16,6 @@ final class MetalContext {
     // Radial-distance variants for stroke caps (rounded endpoints, Procreate-style)
     let strokeRadialPipelineState: MTLRenderPipelineState
     let strokeRadialWatercolorPipelineState: MTLRenderPipelineState
-    let strokeRadialAcrylicPipelineState: MTLRenderPipelineState
-    let strokeRadialOilPipelineState: MTLRenderPipelineState
     let compositeNormalPipelineState: MTLRenderPipelineState
     let compositeBlendPipelineState: MTLRenderPipelineState
     // Active-layer variants that merge the in-progress stroke into the layer first
@@ -106,18 +102,6 @@ final class MetalContext {
             fragmentFunction: "strokeWatercolorFragment"
         )
 
-        // Stroke acrylic
-        self.strokeAcrylicPipelineState = try MetalContext.makeStrokePipeline(
-            device: device, library: library, vertexDescriptor: strokeVD,
-            fragmentFunction: "strokeAcrylicFragment"
-        )
-
-        // Stroke oil — impasto + bristle streaks
-        self.strokeOilPipelineState = try MetalContext.makeStrokePipeline(
-            device: device, library: library, vertexDescriptor: strokeVD,
-            fragmentFunction: "strokeOilFragment"
-        )
-
         // Stamp brushes: instanced dabs, premultiplied source-over
         let stampDesc = MTLRenderPipelineDescriptor()
         stampDesc.vertexFunction = library.makeFunction(name: "stampVertex")
@@ -142,14 +126,6 @@ final class MetalContext {
         self.strokeRadialWatercolorPipelineState = try MetalContext.makeStrokePipeline(
             device: device, library: library, vertexDescriptor: strokeVD,
             fragmentFunction: "strokeRadialWatercolorFragment"
-        )
-        self.strokeRadialAcrylicPipelineState = try MetalContext.makeStrokePipeline(
-            device: device, library: library, vertexDescriptor: strokeVD,
-            fragmentFunction: "strokeRadialAcrylicFragment"
-        )
-        self.strokeRadialOilPipelineState = try MetalContext.makeStrokePipeline(
-            device: device, library: library, vertexDescriptor: strokeVD,
-            fragmentFunction: "strokeRadialOilFragment"
         )
 
         // Composite normal

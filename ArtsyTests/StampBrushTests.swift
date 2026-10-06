@@ -186,6 +186,30 @@ final class StampBrushTests: XCTestCase {
         XCTAssertGreaterThan(Double(agreeing) / Double(first.count), 0.8)
     }
 
+    /// Bristle streaks belong to the stroke: move the stroke and the streaks move with it.
+    /// Paper grain belongs to the canvas: move the stroke and it meets different tooth.
+    func testStrokeAttachedGrainTravelsWithTheStroke() throws {
+        func profile(_ brush: BrushDescriptor, offset: CGFloat) throws -> [Float] {
+            let harness = try EngineHarness(width: 300, height: 160)
+            harness.select(brush)
+            harness.viewModel.brushSize = 30
+            let y = 60 + offset
+            harness.draw(StrokeFixtures.line(from: CGPoint(x: 20, y: y), to: CGPoint(x: 280, y: y), pressure: 0.6...0.6))
+            let shown = harness.displayed()
+            // Across the stroke, in its middle, where the streaks are
+            return (-12...12).map { shown.at(x: 150, y: Int(y) + $0).x }
+        }
+        func difference(_ a: [Float], _ b: [Float]) -> Float {
+            zip(a, b).map { abs($0 - $1) }.reduce(0, +) / Float(a.count)
+        }
+        let oilHere = try profile(.oil, offset: 0), oilThere = try profile(.oil, offset: 37)
+        XCTAssertGreaterThan(oilHere.max()! - oilHere.min()!, 0.1, "the streaks are visible")
+        XCTAssertLessThan(difference(oilHere, oilThere), 0.02, "same streaks wherever the stroke is")
+
+        let pencilHere = try profile(.graphiteStick, offset: 0), pencilThere = try profile(.graphiteStick, offset: 37)
+        XCTAssertGreaterThan(difference(pencilHere, pencilThere), 0.05, "different paper under a moved stroke")
+    }
+
     /// Height grain: light pressure only reaches the paper's peaks, firm pressure fills in.
     func testFirmerPressureFillsMoreOfThePaper() throws {
         func covered(pressure: Float) throws -> Double {

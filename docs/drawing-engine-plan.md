@@ -136,7 +136,10 @@ Done:
   brush is nearly invisible.
 - **Re-authored on stamps:** Soft Round and Airbrush (plain dabs; wash and build-up),
   Pencil and Graphite Stick (height grain), Conté and Chalk (chalk tip, height grain),
-  Pastel (chalk tip, multiply grain).
+  Pastel (chalk tip, multiply grain), Marker (flat wash with faint streaks), Acrylic and
+  Oil (ragged bristle tip; streaks that run along the stroke and bend with it).
+- **Stroke-attached grain.** Grain can be fixed to the canvas (paper, every stroke meets the
+  same tooth) or run along the stroke (bristle streaks). Both textures are generated.
 - **Dynamics.** `TiltDynamics`: as the pen leans towards flat, the mark broadens, pales and
   elongates along the lean (the dry media shade with their side). `VelocityDynamics`: a
   loaded brush thins as it is swept faster (Ink Brush, Sumi-e; Watercolor also dries).
@@ -145,10 +148,11 @@ Done:
 
 Still to do:
 
-- Grain that moves with the stroke, and a second (dual) tip. No built-in brush needs them
-  yet; they belong with step 4's Brush Studio, where a user can reach them.
-- Marker, Watercolor, Acrylic and Oil are still ribbons. The wet ones are best redone
-  together with step 5's smudge and wet mix.
+- A second (dual) tip. No built-in brush needs one yet; it belongs with step 4's Brush
+  Studio, where a user can reach it.
+- Watercolor is the last ribbon with its own shader. It is best redone together with
+  step 5's wet edges and diffusion. Acrylic and Oil are flat paint until step 5 adds
+  smudge and impasto.
 - Tips and grain from image files (with step 4's import).
 - An airbrush that keeps spraying while held still. Needs a clock the replay harness can
   drive, or recordings will not reproduce it.

@@ -11,6 +11,15 @@ final class BrushTextureLibrary {
 
     /// Tileable paper grain; red channel is the height of the paper (1 = a peak).
     private(set) lazy var paperGrain: MTLTexture? = makeTexture(size: Self.grainSize, pixels: Self.paperGrainPixels())
+    /// Tileable bristle streaks running along x.
+    private(set) lazy var bristleGrain: MTLTexture? = makeTexture(size: Self.grainSize, pixels: Self.bristleGrainPixels())
+
+    func grainTexture(for texture: StampSettings.Grain.Texture) -> MTLTexture? {
+        switch texture {
+        case .paper: return paperGrain
+        case .bristles: return bristleGrain
+        }
+    }
 
     static let grainSize = 512
     static let tipSize = 128
@@ -24,9 +33,10 @@ final class BrushTextureLibrary {
         switch tip {
         case .round:
             return nil
-        case .chalk:
+        case .chalk, .bristle:
             if let cached = tips[tip] { return cached }
-            let texture = makeTexture(size: Self.tipSize, pixels: Self.chalkTipPixels())
+            let pixels = tip == .chalk ? Self.chalkTipPixels() : Self.bristleTipPixels()
+            let texture = makeTexture(size: Self.tipSize, pixels: pixels)
             tips[tip] = texture
             return texture
         }
@@ -66,16 +76,27 @@ final class BrushTextureLibrary {
 
     // MARK: - Generators
 
-    /// Gradient (Perlin) noise that wraps at `period` cells, so textures built from it tile.
-    /// Output is roughly 0...1, centred on 0.5.
+    /// Gradient (Perlin) noise that wraps every `periodX` by `periodY` cells, so textures
+    /// built from it tile. Output is roughly 0...1, centred on 0.5.
     private struct TileableNoise {
-        let period: Int
+        let periodX: Int
+        let periodY: Int
         let seed: UInt64
+
+        init(period: Int, seed: UInt64) {
+            self.init(periodX: period, periodY: period, seed: seed)
+        }
+
+        init(periodX: Int, periodY: Int, seed: UInt64) {
+            self.periodX = periodX
+            self.periodY = periodY
+            self.seed = seed
+        }
 
         /// A unit gradient for a lattice point.
         private func gradient(_ x: Int, _ y: Int) -> (Float, Float) {
-            let wx = UInt64(((x % period) + period) % period)
-            let wy = UInt64(((y % period) + period) % period)
+            let wx = UInt64(((x % periodX) + periodX) % periodX)
+            let wy = UInt64(((y % periodY) + periodY) % periodY)
             var z = seed &+ wx &* 0x9E3779B97F4A7C15 &+ wy &* 0xD1B54A32D192ED03
             z = (z ^ (z >> 30)) &* 0xBF58476D1CE4E5B9
             z = (z ^ (z >> 27)) &* 0x94D049BB133111EB
@@ -126,6 +147,51 @@ final class BrushTextureLibrary {
         var pixels = [UInt8](repeating: 0, count: heights.count)
         for (rank, index) in order.enumerated() {
             pixels[index] = UInt8((Float(rank) / Float(heights.count - 1) * 255).rounded())
+        }
+        return pixels
+    }
+
+    /// Streaks along x: fine across the stroke, slowly varying along it, the way a loaded
+    /// brush's bristles leave their marks. Heights are spread evenly over 0...1.
+    static func bristleGrainPixels() -> [UInt8] {
+        let size = grainSize
+        // The lattice is 7 cells along x by 112 across y, so the noise is stretched into stripes.
+        let streaks = TileableNoise(periodX: 7, periodY: 112, seed: 0xB215)
+        let breaks = TileableNoise(period: 28, seed: 0xB216)
+        var heights = [Float](repeating: 0, count: size * size)
+        for y in 0..<size {
+            for x in 0..<size {
+                let u = Float(x) / Float(size), v = Float(y) / Float(size)
+                let stripe = streaks.value(u * 7, v * 112)
+                let gap = breaks.value(u * 28, v * 28)
+                heights[y * size + x] = stripe * 0.8 + gap * 0.2
+            }
+        }
+        let order = heights.indices.sorted { heights[$0] < heights[$1] }
+        var pixels = [UInt8](repeating: 0, count: heights.count)
+        for (rank, index) in order.enumerated() {
+            pixels[index] = UInt8((Float(rank) / Float(heights.count - 1) * 255).rounded())
+        }
+        return pixels
+    }
+
+    /// The footprint of a loaded bristle brush: a disc whose edge is ragged where single
+    /// bristles stick out, solid inside.
+    static func bristleTipPixels() -> [UInt8] {
+        let size = tipSize
+        let ragged = TileableNoise(period: 16, seed: 0xB217)
+        var pixels = [UInt8](repeating: 0, count: size * size)
+        for y in 0..<size {
+            for x in 0..<size {
+                let u = (Float(x) + 0.5) / Float(size), v = (Float(y) + 0.5) / Float(size)
+                let dist = hypot(u - 0.5, v - 0.5) * 2
+                let angle = atan2(v - 0.5, u - 0.5)
+                // Noise around the rim moves the edge in and out
+                let rim = ragged.value((angle / (2 * .pi) + 0.5) * 16, dist * 4)
+                let edge = 0.72 + (rim - 0.5) * 0.5
+                let disc = 1 - min(1, max(0, (dist - (edge - 0.08)) / 0.08))
+                pixels[y * size + x] = UInt8((disc * 255).rounded())
+            }
         }
         return pixels
     }
