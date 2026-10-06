@@ -935,12 +935,19 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         guard let store = activeStore else { return }
         let panel = NSOpenPanel()
         panel.allowedContentTypes = [BrushLibrary.brushType, .json]
+            + ["abr", "brush", "brushset"].compactMap { UTType(filenameExtension: $0) }
         panel.allowsMultipleSelection = true
-        panel.begin { response in
+        panel.message = "Artsy brushes, Photoshop .abr files (their tips), or Procreate .brush and .brushset files (shape and grain)."
+        panel.begin { [weak self] response in
             guard response == .OK else { return }
             for url in panel.urls {
                 do {
-                    store.viewModel.currentBrush = try BrushLibrary.shared.importBrush(from: url)
+                    let imported = try BrushLibrary.shared.importBrushes(from: url)
+                    for case .stamp(let settings) in imported.map(\.rendering) {
+                        if case .image(let name) = settings.tip { self?.metalContext.brushTextures.forgetImage(named: name) }
+                        if case .image(let name)? = settings.grain?.texture { self?.metalContext.brushTextures.forgetImage(named: name) }
+                    }
+                    if let last = imported.last { store.viewModel.currentBrush = last }
                 } catch {
                     NSAlert(error: error).runModal()
                 }
