@@ -260,6 +260,7 @@ final class CanvasViewModel: ObservableObject {
               !path.style.spraysWhileResting, let end = path.samples.last?.position else { return }
         if snappedPath != nil {
             if let anchor = snapAnchor, hypot(end.x - anchor.x, end.y - anchor.y) > 6 {
+                DiagnosticsLog.shared.note(.stroke, "moved on from \(snappedShapeName ?? "the shape"): back to the stroke as drawn")
                 snappedPath = nil
                 snappedShapeName = nil
                 snapAnchor = nil
@@ -291,6 +292,28 @@ final class CanvasViewModel: ObservableObject {
         snappedPath = snapped
         snappedShapeName = shape.name
         snapAnchor = end
+        DiagnosticsLog.shared.note(.stroke, String(format: "held %.2f s: snapped to %@", path.holdDuration, shape.name))
+    }
+
+    /// Turn raw-input recording on or off for this canvas (Help ▸ Diagnostics ▸ Record Strokes).
+    func setStrokeRecording(_ on: Bool) {
+        recorder = on ? StrokeRecorder(canvasSize: canvasSize, fileURL: StrokeRecorder.newFileURL()) : nil
+    }
+
+    /// One line about the stroke in progress for the diagnostics log: the brush, how many
+    /// samples came at what rate, the pressure and tilt the pen reported, how long it was
+    /// held, whether it snapped. Nil when no stroke is in progress.
+    func strokeSummary() -> String? {
+        guard let path = activePath, let first = path.samples.first, let last = path.samples.last else { return nil }
+        let samples = path.samples
+        let duration = last.timestamp - first.timestamp
+        let pressures = samples.map(\.pressure)
+        let tilt = samples.map { hypot($0.tiltX, $0.tiltY) }.max() ?? 0
+        let length = path.points.last?.distance ?? 0
+        return String(format: "%@ %.0f px: %d samples in %.2f s (%.0f/s), %.0f px long, pressure %.2f–%.2f, tilt %.2f, held %.2f s%@%@",
+                      currentBrush.name, brushSize, samples.count, duration, duration > 0 ? Double(samples.count) / duration : 0,
+                      Double(length), pressures.min() ?? 0, pressures.max() ?? 0, tilt, path.holdDuration,
+                      strokeHasPressure ? "" : ", no pressure", snappedShapeName.map { ", snapped to \($0)" } ?? "")
     }
 
     /// Call after the renderer has finalized the stroke — it still needs the points.
@@ -321,6 +344,13 @@ final class CanvasViewModel: ObservableObject {
             description: description
         )
         markDirty()
+        let copies: String
+        switch scope {
+        case .nothing: copies = "copying nothing"
+        case .layers(let ids): copies = "copying \(ids.count) layer\(ids.count == 1 ? "" : "s")"
+        case .everything: copies = "copying every layer"
+        }
+        DiagnosticsLog.shared.note(.undo, "step '\(description)' saved, \(copies)")
     }
 
     func performUndo(renderer: CanvasRenderer) {
@@ -328,6 +358,7 @@ final class CanvasViewModel: ObservableObject {
         undoManager.undo(layerStack: layerStack, viewModel: self, context: renderer.context)
         markDirty()
         renderer.updateAllThumbnails(in: layerStack)
+        DiagnosticsLog.shared.note(.undo, "undo: \(undoManager.undoCount) steps left")
     }
 
     func performRedo(renderer: CanvasRenderer) {
@@ -335,6 +366,7 @@ final class CanvasViewModel: ObservableObject {
         undoManager.redo(layerStack: layerStack, viewModel: self, context: renderer.context)
         markDirty()
         renderer.updateAllThumbnails(in: layerStack)
+        DiagnosticsLog.shared.note(.undo, "redo: \(undoManager.undoCount) steps")
     }
 
     // MARK: - Color

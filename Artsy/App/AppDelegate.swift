@@ -32,13 +32,19 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         NSApp.setActivationPolicy(.regular)
+        // Raw pen input is recorded unless Help ▸ Diagnostics says otherwise, so a session
+        // can be replayed here
+        UserDefaults.standard.register(defaults: ["recordStrokes": true])
         buildMenuBar()
         _ = updaterController // instantiate → starts background update checks
 
         do {
             metalContext = try MetalContext()
             metalContext.brushTextures.userTextureDirectory = BrushLibrary.shared.texturesDirectory
+            DiagnosticsLog.shared.launched(device: metalContext.device)
         } catch {
+            DiagnosticsLog.shared.launched(device: nil)
+            DiagnosticsLog.shared.error(error, doing: "initialising Metal")
             let alert = NSAlert()
             alert.messageText = "Failed to initialize Metal"
             alert.informativeText = error.localizedDescription
@@ -289,6 +295,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     // MARK: - Quit with unsaved changes
 
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        DiagnosticsLog.shared.note(.app, "quitting")
+        DiagnosticsLog.shared.flush()
         // Gather all canvas windows with dirty state.
         let dirtyWindows = NSApp.windows.compactMap { w -> (window: NSWindow, store: (viewModel: CanvasViewModel, canvasView: CanvasView))? in
             guard w.tabbingIdentifier == "ArtsyCanvas",
@@ -457,6 +465,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             window.makeKeyAndOrderFront(nil)
 
         } catch {
+            DiagnosticsLog.shared.error(error, doing: "opening \(url.lastPathComponent)")
             let alert = NSAlert()
             alert.messageText = "Failed to open document"
             alert.informativeText = error.localizedDescription
@@ -618,6 +627,21 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         windowMenu.item(at: 2)?.keyEquivalentModifierMask = [.command, .shift]
         windowMenuItem.submenu = windowMenu
         NSApp.windowsMenu = windowMenu
+
+        // Help menu: what to bring back from a session on another Mac
+        let helpMenuItem = NSMenuItem()
+        mainMenu.addItem(helpMenuItem)
+        let helpMenu = NSMenu(title: "Help")
+        let diagnosticsMenu = NSMenu(title: "Diagnostics")
+        diagnosticsMenu.delegate = self
+        diagnosticsMenu.addItem(withTitle: "Record Strokes", action: #selector(toggleStrokeRecording), keyEquivalent: "")
+        diagnosticsMenu.addItem(withTitle: "Show Diagnostics Folder", action: #selector(showDiagnosticsFolder), keyEquivalent: "")
+        diagnosticsMenu.addItem(withTitle: "Export Diagnostics…", action: #selector(exportDiagnostics), keyEquivalent: "")
+        let diagnosticsItem = NSMenuItem(title: "Diagnostics", action: nil, keyEquivalent: "")
+        diagnosticsItem.submenu = diagnosticsMenu
+        helpMenu.addItem(diagnosticsItem)
+        helpMenuItem.submenu = helpMenu
+        NSApp.helpMenu = helpMenu
 
         NSApp.mainMenu = mainMenu
     }
@@ -956,12 +980,15 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             for url in panel.urls {
                 do {
                     let imported = try BrushLibrary.shared.importBrushes(from: url)
+                    DiagnosticsLog.shared.note(.brush, "imported \(imported.count) from \(url.lastPathComponent): "
+                                               + imported.map(\.name).joined(separator: ", "))
                     for case .stamp(let settings) in imported.map(\.rendering) {
                         if case .image(let name) = settings.tip { self?.metalContext.brushTextures.forgetImage(named: name) }
                         if case .image(let name)? = settings.grain?.texture { self?.metalContext.brushTextures.forgetImage(named: name) }
                     }
                     if let last = imported.last { store.viewModel.currentBrush = last }
                 } catch {
+                    DiagnosticsLog.shared.error(error, doing: "importing \(url.lastPathComponent)")
                     NSAlert(error: error).runModal()
                 }
             }
@@ -1016,6 +1043,43 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         NSWorkspace.shared.activateFileViewerSelecting([BrushLibrary.shared.directory])
     }
 
+    // MARK: - Diagnostics
+
+    @objc private func toggleStrokeRecording() {
+        let on = !StrokeRecorder.isEnabledInDefaults
+        UserDefaults.standard.set(on, forKey: "recordStrokes")
+        for store in CanvasWindowStore.shared.all { store.viewModel.setStrokeRecording(on) }
+        DiagnosticsLog.shared.note(.app, "stroke recording turned \(on ? "on" : "off")")
+    }
+
+    @objc private func showDiagnosticsFolder() {
+        guard let folder = DiagnosticsLog.folder else { return }
+        try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        DiagnosticsLog.shared.flush()
+        NSWorkspace.shared.activateFileViewerSelecting([folder])
+    }
+
+    /// The logs, the stroke recordings and the brush library, copied into one folder to send.
+    @objc private func exportDiagnostics() {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.dateFormat = "yyyy-MM-dd HH.mm"
+        let panel = NSSavePanel()
+        panel.canCreateDirectories = true
+        panel.prompt = "Export"
+        panel.nameFieldStringValue = "Artsy Diagnostics \(formatter.string(from: Date()))"
+        panel.begin { [weak self] response in
+            guard response == .OK, let url = panel.url else { return }
+            do {
+                try DiagnosticsLog.gatherBundle(to: url, device: self?.metalContext?.device)
+                NSWorkspace.shared.activateFileViewerSelecting([url])
+            } catch {
+                DiagnosticsLog.shared.error(error, doing: "exporting diagnostics")
+                NSAlert(error: error).runModal()
+            }
+        }
+    }
+
     @objc private func handleExportPNG() {
         guard let store = activeStore else { return }
         let panel = NSSavePanel()
@@ -1025,7 +1089,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             guard response == .OK, let url = panel.url else { return }
             store.canvasView.commitPendingEdits()
             do { try ImageExporter.exportPNG(renderer: store.canvasView.renderer, to: url) }
-            catch { NSAlert(error: error).runModal() }
+            catch { DiagnosticsLog.shared.error(error, doing: "exporting PNG"); NSAlert(error: error).runModal() }
         }
     }
 
@@ -1038,7 +1102,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             guard response == .OK, let url = panel.url else { return }
             store.canvasView.commitPendingEdits()
             do { try ImageExporter.exportPNG(renderer: store.canvasView.renderer, to: url, bitsPerChannel: 16) }
-            catch { NSAlert(error: error).runModal() }
+            catch { DiagnosticsLog.shared.error(error, doing: "exporting 16-bit PNG"); NSAlert(error: error).runModal() }
         }
     }
 
@@ -1051,7 +1115,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             guard response == .OK, let url = panel.url else { return }
             store.canvasView.commitPendingEdits()
             do { try ImageExporter.exportJPEG(renderer: store.canvasView.renderer, to: url) }
-            catch { NSAlert(error: error).runModal() }
+            catch { DiagnosticsLog.shared.error(error, doing: "exporting JPEG"); NSAlert(error: error).runModal() }
         }
     }
 
@@ -1082,6 +1146,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                     targetWindow?.title = existingURL.deletingPathExtension().lastPathComponent
                     completion?(true)
                 case .failure(let error):
+                    DiagnosticsLog.shared.error(error, doing: "saving")
                     let alert = NSAlert(error: error)
                     alert.runModal()
                     completion?(false)
@@ -1113,6 +1178,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                     targetWindow?.title = url.deletingPathExtension().lastPathComponent
                     completion?(true)
                 case .failure(let error):
+                    DiagnosticsLog.shared.error(error, doing: "saving")
                     let alert = NSAlert(error: error)
                     alert.runModal()
                     completion?(false)
@@ -1178,6 +1244,9 @@ final class CanvasWindowStore {
         store[ObjectIdentifier(window)]
     }
 
+    /// Every open canvas.
+    var all: [(viewModel: CanvasViewModel, canvasView: CanvasView)] { Array(store.values) }
+
     func remove(for window: NSWindow) {
         store.removeValue(forKey: ObjectIdentifier(window))
     }
@@ -1187,6 +1256,10 @@ final class CanvasWindowStore {
 
 extension AppDelegate: NSMenuDelegate {
     func menuNeedsUpdate(_ menu: NSMenu) {
+        if menu.title == "Diagnostics" {
+            menu.items.first { $0.title == "Record Strokes" }?.state = StrokeRecorder.isEnabledInDefaults ? .on : .off
+            return
+        }
         guard let guides = activeStore?.viewModel.guides else { return }
         for item in menu.items {
             switch item.title {

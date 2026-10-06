@@ -47,10 +47,23 @@ final class CanvasDocument {
         to url: URL,
         completion: @escaping (Result<Void, Error>) -> Void
     ) {
+        let started = DispatchTime.now().uptimeNanoseconds
+        let layers = viewModel.layerStack?.layers.count ?? 0
+        let size = "\(Int(viewModel.canvasSize.width))×\(Int(viewModel.canvasSize.height))"
+        let logged: (Result<Void, Error>) -> Void = { result in
+            switch result {
+            case .success:
+                DiagnosticsLog.shared.note(.document, String(format: "saved %@ (%@, %d layers) in %.2f s", url.lastPathComponent, size, layers,
+                                                             Double(DispatchTime.now().uptimeNanoseconds - started) / 1e9))
+            case .failure(let error):
+                DiagnosticsLog.shared.error(error, doing: "saving \(url.lastPathComponent)")
+            }
+            completion(result)
+        }
         do {
-            try saveAsyncCore(renderer: renderer, viewModel: viewModel, to: url, completion: completion)
+            try saveAsyncCore(renderer: renderer, viewModel: viewModel, to: url, completion: logged)
         } catch {
-            DispatchQueue.main.async { completion(.failure(error)) }
+            DispatchQueue.main.async { logged(.failure(error)) }
         }
     }
 
@@ -232,6 +245,7 @@ final class CanvasDocument {
     ) throws -> (viewModel: CanvasViewModel, canvasView: CanvasView) {
         let fm = FileManager.default
         let docURL = url.appendingPathComponent("document.json")
+        let started = DispatchTime.now().uptimeNanoseconds
 
         guard fm.fileExists(atPath: docURL.path) else {
             throw DocumentError.invalidFormat
@@ -308,6 +322,10 @@ final class CanvasDocument {
         }
         if let guides = doc.guides { viewModel.guides = guides }
 
+        DiagnosticsLog.shared.note(.document, String(format: "opened %@ (%d×%d, %d layers, %d with thickness) in %.2f s",
+                                                     url.lastPathComponent, doc.canvasWidth, doc.canvasHeight, layerStack.layers.count,
+                                                     layerStack.layers.filter { $0.heightTexture != nil }.count,
+                                                     Double(DispatchTime.now().uptimeNanoseconds - started) / 1e9))
         return (viewModel, canvasView)
     }
 

@@ -543,6 +543,20 @@ Each canvas then writes its raw input to
 `ArtsyTests/Recordings/` and `BrushGoldenTests.testRecordedSessions` replays it and keeps a
 golden for it. Turn recording off with `defaults delete com.artsy.app recordStrokes`.
 
+### Bringing a session back from another Mac
+
+The app keeps a diagnostics log for each launch in
+`~/Library/Application Support/Artsy/Diagnostics/`: what it ran on (app, macOS, Mac, GPU
+and its memory, screens, the settings that shape a stroke), every pen that comes near
+with the ids it reports, each stroke's sample count and rate, pressure and tilt ranges,
+hold time and whether it snapped, each commit's CPU time, frame encode times summarised
+every five seconds, undo steps saved and taken, documents opened and saved with timings,
+fills, imports, and every error shown. Stroke recording is on by default in builds from
+0.7.0 (Help ▸ Diagnostics ▸ Record Strokes turns it off). Help ▸ Diagnostics ▸ Export
+Diagnostics… copies the logs, the stroke recordings and the brush library into one
+folder to send back; the recordings replay here through `BrushGoldenTests`, the log says
+what the engine did around them.
+
 ## Risks to check early
 
 - **macOS input rate.** Developers report macOS 26.2 downsampling mouse events to the

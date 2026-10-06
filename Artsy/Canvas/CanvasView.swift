@@ -345,6 +345,9 @@ class CanvasView: MTKView {
     private func handleDrawingMouseUp(_ event: NSEvent) {
         guard let viewModel = viewModel, let renderer = renderer else { return }
 
+        if let summary = viewModel.strokeSummary() {
+            DiagnosticsLog.shared.note(.stroke, summary + (TabletEventHandler.isTabletEvent(event) ? ", tablet" : ", mouse"))
+        }
         // Finalize first: the renderer still needs the stroke's points to draw its last samples.
         renderer.finalizeStroke()
         viewModel.endStroke()
@@ -1009,6 +1012,7 @@ class CanvasView: MTKView {
         // Snapshot BEFORE dispatching async work so redo/undo captures pre-fill state.
         viewModel.saveUndoSnapshot(renderer: renderer, description: "Fill", changing: .layer(viewModel.layerStack?.activeLayer))
         let fillStep = viewModel.undoManager.lastStepToken
+        let fillStarted = DispatchTime.now().uptimeNanoseconds
 
         // Run fill in the background — returns immediately so the UI stays responsive.
         BucketFill.fillAsync(
@@ -1027,6 +1031,7 @@ class CanvasView: MTKView {
             }
         ) { [weak renderer, weak layer] in
             guard let renderer = renderer, let layer = layer else { return }
+            DiagnosticsLog.shared.note(.tool, String(format: "fill landed after %.2f s", Double(DispatchTime.now().uptimeNanoseconds - fillStarted) / 1e9))
             renderer.updateThumbnail(for: layer)
             // The pixels changed after the undo step noted them: tell the display
             renderer.viewModel?.noteContentChanged()
