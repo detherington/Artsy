@@ -16,6 +16,8 @@ final class AppPreferences: ObservableObject {
         static let defaultBrushSize = "defaultBrushSize"
         static let defaultCanvasBackground = "defaultCanvasBackground" // hex string
         static let recentColors = "recentColors" // [hex string]
+        static let smoothingMode = "smoothingMode" // SmoothingMode raw value
+        static let easeStrokesWithoutPressure = "easeStrokesWithoutPressure"
     }
 
     // MARK: - Published
@@ -50,6 +52,16 @@ final class AppPreferences: ObservableObject {
         didSet { defaults.set(recentColors, forKey: Key.recentColors) }
     }
 
+    /// Stroke smoothing algorithm. Starts on Adaptive: steady when slow, out of the way when fast.
+    @Published var smoothingMode: SmoothingMode {
+        didSet { defaults.set(smoothingMode.rawValue, forKey: Key.smoothingMode) }
+    }
+
+    /// Ease strokes in and out when the input has no pressure (mouse, trackpad).
+    @Published var easeStrokesWithoutPressure: Bool {
+        didSet { defaults.set(easeStrokesWithoutPressure, forKey: Key.easeStrokesWithoutPressure) }
+    }
+
     // MARK: - Init
 
     private init() {
@@ -67,6 +79,9 @@ final class AppPreferences: ObservableObject {
         self.defaultCanvasBackground = defaults.string(forKey: Key.defaultCanvasBackground) ?? "#FFFFFF"
 
         self.recentColors = (defaults.array(forKey: Key.recentColors) as? [String]) ?? []
+
+        self.smoothingMode = defaults.string(forKey: Key.smoothingMode).flatMap(SmoothingMode.init(rawValue:)) ?? .oneEuro
+        self.easeStrokesWithoutPressure = (defaults.object(forKey: Key.easeStrokesWithoutPressure) as? Bool) ?? true
     }
 
     func pushRecentColor(_ hex: String) {

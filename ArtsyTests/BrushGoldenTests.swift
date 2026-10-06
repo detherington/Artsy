@@ -42,6 +42,27 @@ final class BrushGoldenTests: XCTestCase {
         Golden.assertMatches(harness.displayed(), named: "soft-brushes-over-dark")
     }
 
+    /// A mouse has no pressure, so its strokes are eased in and out. Brushes whose size
+    /// doesn't respond to pressure (Technical Pen) stay uniform.
+    func testMouseStrokes() throws {
+        let harness = try EngineHarness()
+        harness.viewModel.currentColor = ink
+        let brushes: [BrushDescriptor] = [.hardRound, .inkBrush, .sumiE, .pencil, .softRound, .technicalPen]
+        for (row, brush) in brushes.enumerated() {
+            harness.select(brush)
+            if brush.baseSize < 12 { harness.viewModel.brushSize = 12 }
+            let y = CGFloat(262 - row * 46)
+            let mouse = StrokeFixtures.wave(from: CGPoint(x: 30, y: y), length: 300, amplitude: 12, cycles: 1.5)
+                .map { StrokePoint(position: $0.position, pressure: 0.7, tiltX: 0, tiltY: 0, rotation: 0, timestamp: $0.timestamp) }
+            harness.draw(mouse, hasPressure: false)
+            // A short flick and a click
+            harness.draw(StrokeFixtures.line(from: CGPoint(x: 370, y: y - 8), to: CGPoint(x: 410, y: y + 8), duration: 0.08),
+                         hasPressure: false)
+            harness.draw(StrokeFixtures.dot(at: CGPoint(x: 460, y: y), pressure: 0.7), hasPressure: false)
+        }
+        Golden.assertMatches(harness.displayed(), named: "mouse-strokes")
+    }
+
     func testEraser() throws {
         let harness = try EngineHarness()
         harness.viewModel.currentColor = ink

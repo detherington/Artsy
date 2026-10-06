@@ -19,6 +19,9 @@ final class CanvasViewTests: XCTestCase {
         viewModel.currentBrush = .hardRound
         viewModel.brushSize = 12
         viewModel.currentColor = .black
+        // Not whatever the saved preferences say
+        viewModel.smoothingMode = .none
+        viewModel.easesStrokesWithoutPressure = false
 
         // Never shown; the view only needs a window to convert event locations.
         window = NSWindow(contentRect: view.frame, styleMask: [.borderless], backing: .buffered, defer: false)

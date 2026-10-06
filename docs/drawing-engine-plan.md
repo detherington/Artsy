@@ -85,16 +85,31 @@ Done:
 - **Brush cursor.** A ring the size of the tip on screen, following brush size and zoom;
   a crosshair below 6 pt or above 512 pt.
 
+- **Stabilisation.**
+  - Smoothing is on by default (Adaptive), and the chosen mode is remembered across launches.
+  - Each brush has its own amount, starting from the brush's `smoothing` value.
+  - The adaptive filter measures speed in screen points, so it behaves the same at any zoom.
+    At half strength its cutoff is about 7 Hz at rest and 20 Hz at 500 pt/s (4 pt of lag).
+  - Pressure is low-passed along with position (5–40 ms time constant by strength).
+  - At pen-up the stroke is taken to where the pen actually lifted (Adaptive and Moving
+    Avg). The lazy brush deliberately ends where the string left it.
+  - Splines are centripetal Catmull-Rom, which does not overshoot when samples are
+    unevenly spaced; the uniform form overshot a tight corner by 6 px in the test case.
+- **Mouse and trackpad strokes ease in and out.** They have no pressure, so the engine
+  ramps pressure up over the first few brush widths and down over the last, live while
+  drawing. Each brush responds through its own dynamics; one that ignores pressure
+  (Technical Pen) is unchanged. Clicks and short flicks still reach full width.
+  Settings → Tablet has the switch.
+- **Thumbnails** are shrunk on the GPU in 4× steps and only the small result is read back.
+- **Undo depth** is a memory budget: history may use what 25 whole-stack snapshots would,
+  up to 200 steps. Strokes go much deeper than before; whole-stack actions keep their 25.
+
 Still to do:
 
 - **Hardware check of the input rate** — see the first risk below. Draw with stroke
   recording on and look at the spacing of the sample times.
-- Stabilisation: on by default, per-brush amount, pressure smoothed with position, catch-up
-  to the pen on lift, start and end taper. Centripetal Catmull-Rom instead of uniform.
-  Worth tuning with a pen in hand rather than blind.
-- Every stroke end reads the whole layer back to the CPU to rebuild a 64 px thumbnail.
-- Undo depth is still 25 steps. Strokes are now cheap enough to keep many more; the limit
-  should become a memory budget.
+- **Tune with a pen.** The smoothing amounts, the pressure time constant and the ease
+  length (2.5 brush widths, 8–160 px) are reasoned defaults, not ones anyone has drawn with.
 
 ### 3. Stamp engine (large)
 

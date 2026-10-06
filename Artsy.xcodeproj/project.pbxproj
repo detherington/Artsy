@@ -81,6 +81,7 @@
 		92948045B3372E73DC6E5222 /* IncrementalRenderingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0C6674A940D26CFE75F54F3A /* IncrementalRenderingTests.swift */; };
 		9BE4C7715D7DE2DB4FA554B3 /* UndoTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0AAF037C68F7B4EA643159D6 /* UndoTests.swift */; };
 		11AD04CA99B3741D8873D8B3 /* BrushCursor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6F7C5B97272A60F40BF41ED5 /* BrushCursor.swift */; };
+		C05A62DC94BA26B37872A2B6 /* StrokeSmoothingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FC0572507A83016E6DAAAF4E /* StrokeSmoothingTests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -172,6 +173,7 @@
 		0C6674A940D26CFE75F54F3A /* IncrementalRenderingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IncrementalRenderingTests.swift; sourceTree = "<group>"; };
 		0AAF037C68F7B4EA643159D6 /* UndoTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UndoTests.swift; sourceTree = "<group>"; };
 		6F7C5B97272A60F40BF41ED5 /* BrushCursor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrushCursor.swift; sourceTree = "<group>"; };
+		FC0572507A83016E6DAAAF4E /* StrokeSmoothingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StrokeSmoothingTests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXGroup section */
@@ -314,6 +316,7 @@
 		B48AF066E85C8962CFFD499C /* ArtsyTests */ = {
 			isa = PBXGroup;
 			children = (
+				FC0572507A83016E6DAAAF4E /* StrokeSmoothingTests.swift */,
 				0AAF037C68F7B4EA643159D6 /* UndoTests.swift */,
 				0C6674A940D26CFE75F54F3A /* IncrementalRenderingTests.swift */,
 				7FC3CB88C597B34A9D26C79B /* StrokePathTests.swift */,
@@ -594,6 +597,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				C05A62DC94BA26B37872A2B6 /* StrokeSmoothingTests.swift in Sources */,
 				9BE4C7715D7DE2DB4FA554B3 /* UndoTests.swift in Sources */,
 				92948045B3372E73DC6E5222 /* IncrementalRenderingTests.swift in Sources */,
 				BB7F2F374B17032A33A61E1A /* StrokePathTests.swift in Sources */,

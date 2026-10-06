@@ -23,11 +23,15 @@ final class OneEuroFilter {
     let minCutoff: Double  // Minimum cutoff frequency (lower = more smoothing at low speed)
     let beta: Double       // Speed coefficient (higher = less smoothing at high speed)
     let dCutoff: Double    // Cutoff for derivative filter
+    /// Multiplies the measured speed. Positions are in canvas pixels; passing the zoom level
+    /// makes the speed screen points per second, so the filter feels the same at any zoom.
+    let speedScale: Double
 
-    init(minCutoff: Double = 1.0, beta: Double = 0.007, dCutoff: Double = 1.0) {
+    init(minCutoff: Double = 1.0, beta: Double = 0.007, dCutoff: Double = 1.0, speedScale: Double = 1.0) {
         self.minCutoff = minCutoff
         self.beta = beta
         self.dCutoff = dCutoff
+        self.speedScale = speedScale
         self.xFilter = LowPassFilter()
         self.yFilter = LowPassFilter()
         self.dxFilter = LowPassFilter()
@@ -64,7 +68,7 @@ final class OneEuroFilter {
         let edy = dyFilter.filter(value: dy, alpha: Self.alpha(cutoff: dCutoff, rate: rate))
 
         // Adaptive cutoff based on speed
-        let speed = sqrt(edx * edx + edy * edy)
+        let speed = sqrt(edx * edx + edy * edy) * speedScale
         let cutoff = minCutoff + beta * speed
 
         let a = Self.alpha(cutoff: cutoff, rate: rate)
@@ -173,20 +177,33 @@ final class MovingAverageFilter {
 final class StrokeSmoother {
     var mode: SmoothingMode = .none
     var strength: Float = 0.5  // 0.0 to 1.0
+    /// Screen points per canvas pixel (the zoom level), for the speed-adaptive filter.
+    var zoom: CGFloat = 1
 
     private var oneEuro: OneEuroFilter?
     private var lazyBrush: LazyBrushFilter?
     private var movingAvg: MovingAverageFilter?
 
+    private var lastInput: StrokePoint?
+    private var lastOutput: StrokePoint?
+    private var smoothedPressure: Float = 0
+
     func begin() {
+        lastInput = nil
+        lastOutput = nil
         switch mode {
         case .none:
             break
         case .oneEuro:
-            // Map strength: low strength = mild smoothing, high = heavy
-            let minCutoff = Double(1.0 + (1.0 - strength) * 4.0)  // 1.0 (strong) to 5.0 (weak)
-            let beta = Double(0.001 + strength * 0.01)
-            oneEuro = OneEuroFilter(minCutoff: minCutoff, beta: beta)
+            // Slow, deliberate movement is steadied (low cutoff); fast movement passes almost
+            // untouched so the stroke doesn't trail the pen. At half strength the cutoff is
+            // about 7 Hz at rest and 20 Hz at 500 pt/s, which is 4 pt of lag.
+            let s = Double(strength)
+            oneEuro = OneEuroFilter(
+                minCutoff: 12.0 - s * 10.5,   // 12 Hz (barely any) to 1.5 Hz (heavy)
+                beta: 0.05 - s * 0.046,
+                speedScale: Double(zoom)
+            )
         case .lazyBrush:
             let radius = Double(2.0 + strength * 28.0)  // 2px to 30px string
             lazyBrush = LazyBrushFilter(radius: radius)
@@ -210,13 +227,45 @@ final class StrokeSmoother {
             smoothedPos = movingAvg?.filter(point: point.position) ?? point.position
         }
 
-        return StrokePoint(
+        // Pressure is steadied along with position. If only position were smoothed, the
+        // stroke would lag the pen while its width did not, and width jitter would stay.
+        if let previous = lastInput {
+            let dt = Float(max(point.timestamp - previous.timestamp, 0.001))
+            let timeConstant = 0.005 + 0.035 * strength   // 5 ms to 40 ms
+            smoothedPressure += (point.pressure - smoothedPressure) * dt / (dt + timeConstant)
+        } else {
+            smoothedPressure = point.pressure
+        }
+
+        let output = StrokePoint(
             position: smoothedPos,
-            pressure: point.pressure,
+            pressure: smoothedPressure,
             tiltX: point.tiltX,
             tiltY: point.tiltY,
             rotation: point.rotation,
             timestamp: point.timestamp
+        )
+        lastInput = point
+        lastOutput = output
+        return output
+    }
+
+    /// When the pen lifts, the smoothed position can still be short of where the pen was.
+    /// This is the point that takes the stroke the rest of the way, or nil if it is already
+    /// there. The lazy brush never catches up: its stroke ends where the string left it,
+    /// which is how you place the end of a line with it.
+    func catchUpPoint() -> StrokePoint? {
+        guard mode == .oneEuro || mode == .movingAverage,
+              let input = lastInput, let output = lastOutput,
+              hypot(input.position.x - output.position.x, input.position.y - output.position.y) > 0.5
+        else { return nil }
+        return StrokePoint(
+            position: input.position,
+            pressure: output.pressure,
+            tiltX: input.tiltX,
+            tiltY: input.tiltY,
+            rotation: input.rotation,
+            timestamp: input.timestamp
         )
     }
 
@@ -224,5 +273,7 @@ final class StrokeSmoother {
         oneEuro = nil
         lazyBrush = nil
         movingAvg = nil
+        lastInput = nil
+        lastOutput = nil
     }
 }

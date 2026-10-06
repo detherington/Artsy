@@ -26,6 +26,62 @@ final class CanvasViewModelTests: XCTestCase {
         XCTAssertEqual(viewModel.brushSize, 9, "switching to the eraser and back keeps the brush size")
     }
 
+    func testEachBrushKeepsItsOwnSmoothingAmount() {
+        let viewModel = CanvasViewModel(canvasSize: CGSize(width: 64, height: 64))
+        let others = BrushDescriptor.allDefaults.filter { $0.id != viewModel.currentBrush.id }
+        let pencil = others.first { $0.name == "Pencil" }!
+        let sumiE = others.first { $0.name == "Sumi-e" }!
+
+        viewModel.currentBrush = pencil
+        XCTAssertEqual(viewModel.smoothingStrength, pencil.smoothing)
+        viewModel.smoothingStrength = 0.9
+        viewModel.currentBrush = sumiE
+        XCTAssertEqual(viewModel.smoothingStrength, sumiE.smoothing)
+        viewModel.currentBrush = pencil
+        XCTAssertEqual(viewModel.smoothingStrength, 0.9)
+    }
+
+    /// With smoothing on, the stroke that lands on the layer still ends where the pen lifted.
+    func testSmoothedStrokeEndsWhereThePenLifted() throws {
+        for mode in [SmoothingMode.oneEuro, .movingAverage] {
+            let harness = try EngineHarness(width: 300, height: 100)
+            harness.viewModel.brushSize = 8
+            harness.viewModel.smoothingMode = mode
+            harness.viewModel.smoothingStrength = 1.0
+            // A fast stroke that stops dead: the filter is well behind when the pen lifts.
+            harness.draw(StrokeFixtures.line(from: CGPoint(x: 20, y: 50), to: CGPoint(x: 280, y: 50),
+                                             pressure: 1...1, duration: 0.1))
+            let shown = harness.displayed()
+            XCTAssertLessThan(shown.at(x: 278, y: 50).x, 0.1, "\(mode.rawValue): the stroke reaches the pen-up point")
+            XCTAssertEqual(shown.at(x: 290, y: 50).x, 1, accuracy: 0.01, "\(mode.rawValue): and goes no further")
+        }
+    }
+
+    /// A mouse stroke eases in and out; the same samples from a pen do not.
+    func testOnlyStrokesWithoutPressureAreEased() throws {
+        func widthProfile(hasPressure: Bool, eases: Bool = true) throws -> (start: Float, middle: Float) {
+            let harness = try EngineHarness(width: 300, height: 100)
+            harness.viewModel.brushSize = 20
+            harness.viewModel.easesStrokesWithoutPressure = eases
+            harness.draw(StrokeFixtures.line(from: CGPoint(x: 30, y: 50), to: CGPoint(x: 270, y: 50), pressure: 0.7...0.7),
+                         hasPressure: hasPressure)
+            // How dark the paper is 7 px off the centre line: covered where the stroke is
+            // at full width (15.8 px), bare where it has tapered.
+            let shown = harness.displayed()
+            return (shown.at(x: 36, y: 57).x, shown.at(x: 150, y: 57).x)
+        }
+        let pen = try widthProfile(hasPressure: true)
+        XCTAssertLessThan(pen.start, 0.1)
+        XCTAssertLessThan(pen.middle, 0.1)
+
+        let mouse = try widthProfile(hasPressure: false)
+        XCTAssertGreaterThan(mouse.start, 0.9, "tapered at the start")
+        XCTAssertLessThan(mouse.middle, 0.1, "full width in the middle")
+
+        let mouseUneased = try widthProfile(hasPressure: false, eases: false)
+        XCTAssertLessThan(mouseUneased.start, 0.1, "the preference turns it off")
+    }
+
     func testRecorderCapturesRawInputAndSettings() throws {
         let harness = try EngineHarness(width: 128, height: 128)
         let recorder = StrokeRecorder(canvasSize: harness.viewModel.canvasSize, fileURL: nil)
