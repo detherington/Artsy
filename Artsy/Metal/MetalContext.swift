@@ -21,6 +21,9 @@ final class MetalContext {
     /// Smudge brushes: lays carried paint into the layer, then picks up what is under the dab
     let smudgeDepositPipelineState: MTLRenderPipelineState
     let smudgePickupPipelineState: MTLRenderPipelineState
+    /// The same for the paint's thickness, on a layer's height map
+    let smudgeDepositHeightPipelineState: MTLRenderPipelineState
+    let smudgePickupHeightPipelineState: MTLRenderPipelineState
     /// Merges a finished stroke into its layer when fixed-function blending will not do
     let compositeStrokeMergePipelineState: MTLRenderPipelineState
     /// Mixes colours as pigments, for tests and tools
@@ -160,6 +163,15 @@ final class MetalContext {
         pickupDesc.colorAttachments[0].pixelFormat = .rgba16Float
         pickupDesc.colorAttachments[0].isBlendingEnabled = false
         self.smudgePickupPipelineState = try device.makeRenderPipelineState(descriptor: pickupDesc)
+        pickupDesc.colorAttachments[0].pixelFormat = .r16Float
+        self.smudgePickupHeightPipelineState = try device.makeRenderPipelineState(descriptor: pickupDesc)
+
+        guard let smudgeDepositHeight = library.makeFunction(name: "smudgeDepositHeightFragment") else {
+            throw MetalError.pipelineCreationFailed("smudgeDepositHeightFragment not found")
+        }
+        smudgeDesc.fragmentFunction = smudgeDepositHeight
+        smudgeDesc.colorAttachments[0].pixelFormat = .r16Float
+        self.smudgeDepositHeightPipelineState = try device.makeRenderPipelineState(descriptor: smudgeDesc)
         self.brushTextures = BrushTextureLibrary(device: device)
 
         // Radial cap variants
@@ -416,7 +428,8 @@ enum MetalError: LocalizedError {
 }
 
 extension MetalContext {
-    /// Mix pairs of linear Display P3 colours as pigments, `t` being the share of the second.
+    /// Mix pairs of Display P3 colours (gamma-encoded, as the canvas holds them) as pigments,
+    /// `t` being the share of the second.
     /// Runs the same code the brushes use; meant for tests and tools, and it waits for the GPU.
     func mixPigments(_ pairs: [(SIMD3<Float>, SIMD3<Float>, Float)]) -> [SIMD3<Float>] {
         guard !pairs.isEmpty else { return [] }

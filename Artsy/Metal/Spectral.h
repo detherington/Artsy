@@ -1,7 +1,8 @@
 // Pigment mixing for the brush shaders: a port of the GLSL half of spectral.js
 // (https://github.com/rvanwijnen/spectral.js) to Metal, with the colour-space plumbing
-// Artsy needs around it. The canvas is linear Display P3; the pigment model works in
-// linear sRGB, so colours are converted on the way in and out.
+// Artsy needs around it. The canvas holds Display P3 components as the display shows
+// them, gamma-encoded; the pigment model works in linear sRGB, so colours are decoded
+// and converted on the way in, and converted and encoded on the way out.
 //
 //  MIT License
 //
@@ -196,9 +197,18 @@ static inline float3 sRGBToP3(float3 c) {
                   dot(float3(0.0170827, 0.0723974, 0.9105199), c));
 }
 
-/// `mixLinearSRGB` for the canvas's linear Display P3 colours.
+// Display P3 shares sRGB's transfer curve
+static inline float3 decode(float3 c) {
+    return select(pow((c + 0.055) / 1.055, 2.4), c / 12.92, c <= 0.04045);
+}
+static inline float3 encode(float3 c) {
+    return select(1.055 * pow(c, 1.0 / 2.4) - 0.055, c * 12.92, c <= 0.0031308);
+}
+
+/// `mixLinearSRGB` for the canvas's Display P3 colours, which are gamma-encoded.
 static inline float3 mixP3(float3 a, float3 b, float t) {
-    return sRGBToP3(mixLinearSRGB(p3ToSRGB(a), p3ToSRGB(b), t));
+    float3 mixed = mixLinearSRGB(p3ToSRGB(decode(saturate(a))), p3ToSRGB(decode(saturate(b))), t);
+    return encode(max(sRGBToP3(mixed), 0.0));
 }
 
 } // namespace spectral

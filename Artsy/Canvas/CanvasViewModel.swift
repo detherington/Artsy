@@ -53,8 +53,9 @@ final class CanvasViewModel: ObservableObject {
     @Published var shapeStrokeWidth: CGFloat = 3.0
     @Published var previewShapePath: CGPath? = nil
 
-    // Floating selection content (during move)
+    // Floating selection content (during move), and its thickness if the layer has any
     var floatingTexture: MTLTexture? = nil
+    var floatingHeight: MTLTexture? = nil
     var floatingOffset: CGPoint = .zero
     @Published var canvasBackgroundColor: (r: Double, g: Double, b: Double) = (0.10, 0.10, 0.10)
     @Published var isDistractionFree = false
