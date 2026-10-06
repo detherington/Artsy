@@ -137,16 +137,23 @@ Done:
 - **Re-authored on stamps:** Soft Round and Airbrush (plain dabs; wash and build-up),
   Pencil and Graphite Stick (height grain), Conté and Chalk (chalk tip, height grain),
   Pastel (chalk tip, multiply grain).
+- **Dynamics.** `TiltDynamics`: as the pen leans towards flat, the mark broadens, pales and
+  elongates along the lean (the dry media shade with their side). `VelocityDynamics`: a
+  loaded brush thins as it is swept faster (Ink Brush, Sumi-e; Watercolor also dries).
+  Barrel rotation turns stamp tips and the calligraphy nib. Speed is smoothed so a jittery
+  clock does not flicker the width. The tilt direction convention is unverified with a pen.
 
 Still to do:
 
-- Tilt, rotation and velocity dynamics.
-- Grain that moves with the stroke; a second (dual) tip.
+- Grain that moves with the stroke, and a second (dual) tip. No built-in brush needs them
+  yet; they belong with step 4's Brush Studio, where a user can reach them.
 - Marker, Watercolor, Acrylic and Oil are still ribbons. The wet ones are best redone
   together with step 5's smudge and wet mix.
 - Tips and grain from image files (with step 4's import).
-- An airbrush that keeps spraying while held still.
-- The values in the seven re-authored brushes are a first pass judged from test renders.
+- An airbrush that keeps spraying while held still. Needs a clock the replay harness can
+  drive, or recordings will not reproduce it.
+- The values in the re-authored brushes and the dynamics are a first pass judged from
+  test renders. Tilt in particular needs a pen: the direction convention is a guess.
 
 ### 4. Brush Studio and canvas handling (medium)
 

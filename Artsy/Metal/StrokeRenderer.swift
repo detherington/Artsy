@@ -127,9 +127,9 @@ final class StrokeRenderer {
 
         var drawn: [CGRect] = []
         for mirror in mirrors {
-            // Seven floats per dab, matching `StampInstance` in Shaders.metal
+            // Eight floats per dab, matching `StampInstance` in Shaders.metal
             var instances: [Float] = []
-            instances.reserveCapacity(dabs.count * 7)
+            instances.reserveCapacity(dabs.count * 8)
             var bounds = CGRect.null
 
             for dab in dabs {
@@ -139,10 +139,10 @@ final class StrokeRenderer {
                                            y: dab.center.y + CGFloat(sin(dab.angle))))
                 let angle = Float(atan2(ahead.y - center.y, ahead.x - center.x))
                 instances += [Float(center.x), Float(center.y), dab.size, angle,
-                              dab.opacity * opacityScale, dab.seed, dab.reach]
+                              dab.opacity * opacityScale, dab.seed, dab.reach, dab.aspect]
 
                 // Half the diagonal covers the quad at any rotation
-                let reach = CGFloat(dab.size) * 0.7072
+                let reach = CGFloat(dab.size * max(dab.aspect, 1)) * 0.7072
                 bounds = bounds.union(CGRect(x: center.x - reach, y: center.y - reach, width: reach * 2, height: reach * 2))
             }
 

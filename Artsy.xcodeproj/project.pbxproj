@@ -85,6 +85,7 @@
 		E5D281B9F71ED2C99383A93A /* DabPlacer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 72646CFD240043CF20A1222F /* DabPlacer.swift */; };
 		5315BF99627A7069E4D072A2 /* BrushTextureLibrary.swift in Sources */ = {isa = PBXBuildFile; fileRef = 63B590EB2937F982E7AD387D /* BrushTextureLibrary.swift */; };
 		4FCAE957E9C4989FA6EBF757 /* StampBrushTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2E6B0104D2D5FB98F6BB9B9E /* StampBrushTests.swift */; };
+		9EF123B79AD0F421F86D499F /* BrushDynamics.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5DF19525F83000E8AE6C162A /* BrushDynamics.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -180,6 +181,7 @@
 		72646CFD240043CF20A1222F /* DabPlacer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DabPlacer.swift; sourceTree = "<group>"; };
 		63B590EB2937F982E7AD387D /* BrushTextureLibrary.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrushTextureLibrary.swift; sourceTree = "<group>"; };
 		2E6B0104D2D5FB98F6BB9B9E /* StampBrushTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StampBrushTests.swift; sourceTree = "<group>"; };
+		5DF19525F83000E8AE6C162A /* BrushDynamics.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrushDynamics.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXGroup section */
@@ -247,6 +249,7 @@
 			children = (
 				9C62A909BCD9D532B7728EE0 /* BrushDescriptor.swift */,
 				72646CFD240043CF20A1222F /* DabPlacer.swift */,
+				5DF19525F83000E8AE6C162A /* BrushDynamics.swift */,
 				2D8F7EDA762E3FA8B6C4FA45 /* BrushEngine.swift */,
 			);
 			path = Brushes;
@@ -540,6 +543,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				9EF123B79AD0F421F86D499F /* BrushDynamics.swift in Sources */,
 				5315BF99627A7069E4D072A2 /* BrushTextureLibrary.swift in Sources */,
 				E5D281B9F71ED2C99383A93A /* DabPlacer.swift in Sources */,
 				11AD04CA99B3741D8873D8B3 /* BrushCursor.swift in Sources */,

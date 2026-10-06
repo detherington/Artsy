@@ -56,8 +56,9 @@ final class BrushEngine {
 
             // If the brush has a fixedNibAngle (calligraphy), every ribbon cross-section
             // uses the SAME perpendicular direction, which produces the classic
-            // thick-when-perpendicular-to-nib / thin-when-along-nib variation.
-            let nib: (Float, Float)? = brush.fixedNibAngle.map { (cos($0), sin($0)) }
+            // thick-when-perpendicular-to-nib / thin-when-along-nib variation — unless the
+            // pen reports barrel rotation, which turns the nib with it.
+            let nibAngle = brush.fixedNibAngle
 
             for (offset, i) in range.enumerated() {
                 let point = points[i]
@@ -67,8 +68,9 @@ final class BrushEngine {
 
                 let perpX: Float
                 let perpY: Float
-                if let nib {
-                    (perpX, perpY) = nib
+                if let nibAngle {
+                    perpX = cos(nibAngle + point.rotation)
+                    perpY = sin(nibAngle + point.rotation)
                 } else {
                     // Perpendicular to the direction between the neighbours on either side
                     let before = position(max(i - 1, 0))

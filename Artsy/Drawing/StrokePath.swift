@@ -12,6 +12,8 @@ final class StrokePath {
         var brushSize: Float
         var pressureCurve: PressureCurve
         var dynamics: PressureDynamics
+        var tilt: TiltDynamics? = nil
+        var velocity: VelocityDynamics? = nil
         /// For input with no pressure of its own (a mouse): the distance over which pressure
         /// eases in from nothing at the start of the stroke and back out at its end, as if a
         /// pen were touching down and lifting off. 0 turns it off.
@@ -33,8 +35,14 @@ final class StrokePath {
         var angle: Float
         /// Path length from the start of the stroke to this point.
         var distance: CGFloat
+        var tilt: SIMD2<Float>
+        var rotation: Float
+        /// Canvas pixels per second, smoothed.
+        var speed: Float
     }
     private var base: [Base] = []
+    /// Smoothed speed at each sample, so a jittery clock doesn't flicker the width.
+    private var speeds: [Float] = []
     /// Number of leading `base` points that come from settled segments.
     private var settledBaseCount = 0
 
@@ -57,6 +65,14 @@ final class StrokePath {
                 timestamp: sample.timestamp
             )
         } else {
+            if let last = samples.last {
+                let dt = Float(max(sample.timestamp - last.timestamp, 0.0005))
+                let instantaneous = Float(hypot(sample.position.x - last.position.x, sample.position.y - last.position.y)) / dt
+                let previous = speeds[speeds.count - 1]
+                speeds.append(previous + (instantaneous - previous) * dt / (dt + 0.04))
+            } else {
+                speeds.append(0)
+            }
             samples.append(sample)
             // The segment before the newest one now has the sample after it: settle it.
             if samples.count >= 3 {
@@ -74,7 +90,8 @@ final class StrokePath {
         }
         // A tap, or a pen that hasn't moved yet, is still a dot.
         if base.isEmpty {
-            base = [Base(position: samples[0].position, rawPressure: samples[0].pressure, angle: 0, distance: 0)]
+            base = [Base(position: samples[0].position, rawPressure: samples[0].pressure, angle: 0, distance: 0,
+                         tilt: SIMD2(samples[0].tiltX, samples[0].tiltY), rotation: samples[0].rotation, speed: 0)]
         }
 
         resolvePoints()
@@ -100,13 +117,30 @@ final class StrokePath {
                 pressure *= t * t * (3 - 2 * t)
             }
             let mapped = style.pressureCurve.map(pressure)
+            var width = style.dynamics.size(for: mapped) * style.brushSize
+            var opacity = style.dynamics.opacity(for: mapped)
+            var aspect: Float = 1
+            if let tilt = style.tilt {
+                let lean = TiltDynamics.amount(of: b.tilt)
+                width *= 1 + (tilt.sizeScale - 1) * lean
+                opacity *= 1 + (tilt.opacityScale - 1) * lean
+                aspect = 1 + (tilt.aspect - 1) * lean
+            }
+            if let velocity = style.velocity {
+                let speed = velocity.amount(atSpeed: b.speed)
+                width *= 1 + (velocity.sizeScale - 1) * speed
+                opacity *= 1 + (velocity.opacityScale - 1) * speed
+            }
             points.append(InterpolatedPoint(
                 position: b.position,
                 pressure: mapped,
-                width: style.dynamics.size(for: mapped) * style.brushSize,
-                opacity: style.dynamics.opacity(for: mapped),
+                width: width,
+                opacity: opacity,
                 angle: b.angle,
-                distance: b.distance
+                distance: b.distance,
+                aspect: aspect,
+                tiltAngle: atan2(b.tilt.y, b.tilt.x),
+                rotation: b.rotation * .pi / 180
             ))
         }
 
@@ -132,6 +166,7 @@ final class StrokePath {
         let p1 = samples[i]
         let p2 = samples[min(last, i + 1)]
         let p3 = samples[min(last, i + 2)].position
+        let speed1 = speeds[i], speed2 = speeds[min(last, i + 1)]
 
         let segLen = hypot(p2.position.x - p1.position.x, p2.position.y - p1.position.y)
         guard segLen > 0.01 else { return }
@@ -147,11 +182,15 @@ final class StrokePath {
             let pos = hermite(t: t, p1: p1.position, m1: m1, p2: p2.position, m2: m2)
             let tangent = hermiteTangent(t: t, p1: p1.position, m1: m1, p2: p2.position, m2: m2)
             let distance = base.last.map { $0.distance + hypot(pos.x - $0.position.x, pos.y - $0.position.y) } ?? 0
+            let ft = Float(t)
             base.append(Base(
                 position: pos,
-                rawPressure: p1.pressure + Float(t) * (p2.pressure - p1.pressure),
+                rawPressure: p1.pressure + ft * (p2.pressure - p1.pressure),
                 angle: Float(atan2(tangent.y, tangent.x)),
-                distance: distance
+                distance: distance,
+                tilt: SIMD2(p1.tiltX + ft * (p2.tiltX - p1.tiltX), p1.tiltY + ft * (p2.tiltY - p1.tiltY)),
+                rotation: p1.rotation + ft * (p2.rotation - p1.rotation),
+                speed: speed1 + ft * (speed2 - speed1)
             ))
         }
     }

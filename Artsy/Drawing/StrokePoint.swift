@@ -24,6 +24,22 @@ struct InterpolatedPoint {
     let opacity: Float           // After pressure curve mapping
     let angle: Float             // Stroke direction in radians
     let distance: CGFloat        // Path length from the start of the stroke
+    let aspect: Float            // Length-to-width ratio of the mark (1 = round)
+    let tiltAngle: Float         // Direction the pen leans in, radians; the mark's long side
+    let rotation: Float          // Barrel rotation in radians
+
+    init(position: CGPoint, pressure: Float, width: Float, opacity: Float, angle: Float, distance: CGFloat,
+         aspect: Float = 1, tiltAngle: Float = 0, rotation: Float = 0) {
+        self.position = position
+        self.pressure = pressure
+        self.width = width
+        self.opacity = opacity
+        self.angle = angle
+        self.distance = distance
+        self.aspect = aspect
+        self.tiltAngle = tiltAngle
+        self.rotation = rotation
+    }
 }
 
 struct StrokeColor: Codable, Equatable {

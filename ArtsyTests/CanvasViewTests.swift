@@ -56,12 +56,15 @@ final class CanvasViewTests: XCTestCase {
     }
 
     /// A mouse event carrying pen data, the way a tablet driver posts pen movement.
-    private func pen(_ type: CGEventType, atCanvas point: CGPoint, pressure: Double) throws -> NSEvent {
+    private func pen(_ type: CGEventType, atCanvas point: CGPoint, pressure: Double,
+                     tilt: CGPoint = .zero) throws -> NSEvent {
         let event = try XCTUnwrap(CGEvent(mouseEventSource: nil, mouseType: type,
                                           mouseCursorPosition: quartzLocation(ofCanvas: point), mouseButton: .left))
         event.setIntegerValueField(.mouseEventSubtype, value: Int64(CGEventMouseSubtype.tabletPoint.rawValue))
         event.setDoubleValueField(.mouseEventPressure, value: pressure)
         event.setDoubleValueField(.tabletEventPointPressure, value: pressure)
+        event.setDoubleValueField(.tabletEventTiltX, value: tilt.x)
+        event.setDoubleValueField(.tabletEventTiltY, value: tilt.y)
         return try XCTUnwrap(NSEvent(cgEvent: event))
     }
 
@@ -111,6 +114,29 @@ final class CanvasViewTests: XCTestCase {
         XCTAssertLessThan(drawn.at(x: 60, y: 128).x, 0.1, "the light end is drawn")
         XCTAssertGreaterThan(drawn.at(x: 60, y: 132).x, 0.9, "…but thin: 4 px off-centre is paper")
         XCTAssertLessThan(drawn.at(x: 190, y: 132).x, 0.1, "the firm end is wide enough to cover it")
+    }
+
+    /// Tilt reaches the brush: a pencil on its side makes a much broader mark.
+    func testLeaningThePenShadesWithTheSideOfThePencil() throws {
+        func widthOfStroke(tilt: CGPoint) throws -> Int {
+            viewModel.currentBrush = .pencil
+            viewModel.brushSize = 10
+            view.mouseDown(with: try pen(.leftMouseDown, atCanvas: CGPoint(x: 40, y: 128), pressure: 0.8, tilt: tilt))
+            for step in 1...30 {
+                view.mouseDragged(with: try pen(.leftMouseDragged, atCanvas: CGPoint(x: 40 + CGFloat(step) * 5, y: 128),
+                                                pressure: 0.8, tilt: tilt))
+            }
+            view.mouseUp(with: try pen(.leftMouseUp, atCanvas: CGPoint(x: 190, y: 128), pressure: 0, tilt: tilt))
+            view.draw()
+            let drawn = composite()
+            let marked = (100...156).filter { drawn.at(x: 120, y: $0).x < 0.9 }
+            view.performUndoAction()
+            return (marked.max() ?? 0) - (marked.min() ?? 0)
+        }
+        let upright = try widthOfStroke(tilt: .zero)
+        let leaning = try widthOfStroke(tilt: CGPoint(x: 0, y: 0.9))
+        XCTAssertGreaterThan(upright, 4)
+        XCTAssertGreaterThan(leaning, upright * 2, "upright \(upright) px, leaning \(leaning) px")
     }
 
     /// With the pen resting on the tablet, pressing harder sends tablet events, not drags.

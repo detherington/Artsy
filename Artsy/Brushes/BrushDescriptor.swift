@@ -27,6 +27,11 @@ struct BrushDescriptor: Codable, Identifiable, Equatable {
 
     /// How the stroke is drawn.
     var rendering: BrushRendering = .ribbon(.procedural)
+
+    /// Response to the pen leaning over; nil ignores tilt.
+    var tiltDynamics: TiltDynamics? = nil
+    /// Response to the speed of the stroke; nil ignores it.
+    var velocityDynamics: VelocityDynamics? = nil
 }
 
 /// The two ways a stroke can be drawn.
@@ -161,7 +166,9 @@ extension BrushDescriptor {
             spacing: 0.12, flow: 0.3, accumulation: .buildUp,
             grain: .init(mode: .height, scale: 2.2, depth: 0.9),
             sizeJitter: 0.1, opacityJitter: 0.15
-        ))
+        )),
+        // Lean the pencil over to shade with its side: a broad, pale, elongated mark
+        tiltDynamics: TiltDynamics(sizeScale: 2.5, opacityScale: 0.55, aspect: 2.0)
     )
 
     static let inkBrush = BrushDescriptor(
@@ -176,7 +183,9 @@ extension BrushDescriptor {
         ),
         opacity: 1.0,
         smoothing: 0.5,
-        fixedNibAngle: nil
+        fixedNibAngle: nil,
+        // A loaded brush thins as it is swept faster
+        velocityDynamics: VelocityDynamics(referenceSpeed: 1500, sizeScale: 0.55, opacityScale: 1.0)
     )
 
     static let marker = BrushDescriptor(
@@ -207,7 +216,9 @@ extension BrushDescriptor {
         opacity: 0.7,
         smoothing: 0.4,
         fixedNibAngle: nil,
-        rendering: .ribbon(.watercolor)
+        rendering: .ribbon(.watercolor),
+        // Fast strokes are drier
+        velocityDynamics: VelocityDynamics(referenceSpeed: 1500, sizeScale: 0.85, opacityScale: 0.6)
     )
 
     static let acrylic = BrushDescriptor(
@@ -303,7 +314,8 @@ extension BrushDescriptor {
             spacing: 0.08, flow: 0.25, accumulation: .buildUp,
             grain: .init(mode: .height, scale: 1.0, depth: 0.9),
             opacityJitter: 0.1
-        ))
+        )),
+        tiltDynamics: TiltDynamics(sizeScale: 2.0, opacityScale: 0.6, aspect: 1.8)
     )
 
     static let conte = BrushDescriptor(
@@ -323,7 +335,8 @@ extension BrushDescriptor {
             tip: .chalk, spacing: 0.1, flow: 0.6, accumulation: .buildUp,
             grain: .init(mode: .height, scale: 1.0, depth: 0.75),
             opacityJitter: 0.15, angleJitter: 1.0
-        ))
+        )),
+        tiltDynamics: TiltDynamics(sizeScale: 1.8, opacityScale: 0.7, aspect: 1.6)
     )
 
     static let oil = BrushDescriptor(
@@ -376,7 +389,8 @@ extension BrushDescriptor {
             tip: .chalk, spacing: 0.1, flow: 0.5, accumulation: .buildUp,
             grain: .init(mode: .height, scale: 0.8, depth: 0.85),
             sizeJitter: 0.1, opacityJitter: 0.2, angleJitter: 1.0, scatter: 0.04
-        ))
+        )),
+        tiltDynamics: TiltDynamics(sizeScale: 1.6, opacityScale: 0.75, aspect: 1.5)
     )
 
     static let pastel = BrushDescriptor(
@@ -397,7 +411,8 @@ extension BrushDescriptor {
             tip: .chalk, spacing: 0.08, flow: 0.35, accumulation: .buildUp,
             grain: .init(mode: .multiply, scale: 0.7, depth: 0.55),
             opacityJitter: 0.15, angleJitter: 1.0, scatter: 0.03
-        ))
+        )),
+        tiltDynamics: TiltDynamics(sizeScale: 1.5, opacityScale: 0.8, aspect: 1.4)
     )
 
     static let sumiE = BrushDescriptor(
@@ -412,7 +427,8 @@ extension BrushDescriptor {
         ),
         opacity: 1.0,
         smoothing: 0.6,
-        fixedNibAngle: nil
+        fixedNibAngle: nil,
+        velocityDynamics: VelocityDynamics(referenceSpeed: 1200, sizeScale: 0.45, opacityScale: 0.75)
     )
 
     static let calligraphy = BrushDescriptor(
