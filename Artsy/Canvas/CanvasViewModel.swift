@@ -149,8 +149,16 @@ final class CanvasViewModel: ObservableObject {
         return bytes
     }
 
-    func markDirty() { isDirty = true }
+    func markDirty() {
+        isDirty = true
+        noteContentChanged()
+    }
     func markClean() { isDirty = false }
+
+    /// Goes up whenever a layer's pixels may have changed outside a stroke, so the renderer
+    /// knows the composite is stale. `markDirty` counts; so do the tools that write pixels.
+    private(set) var contentVersion = 0
+    func noteContentChanged() { contentVersion += 1 }
 
     /// Short display name for prompts. Falls back to "Untitled".
     var displayName: String {
@@ -282,12 +290,17 @@ final class CanvasViewModel: ObservableObject {
 
     // MARK: - Undo / Redo
 
-    /// Call BEFORE performing any undoable action (stroke, layer add/remove, etc.)
-    func saveUndoSnapshot(renderer: CanvasRenderer, description: String = "Action") {
+    /// Call BEFORE performing any undoable action other than a stroke, saying which
+    /// layers' pixels it will change (`.nothing` for a selection or a change to the layer
+    /// list; `.layer(x)` for a fill, a transform…). Only those are copied; a snapshot of
+    /// everything costs a copy of every layer.
+    func saveUndoSnapshot(renderer: CanvasRenderer, description: String = "Action",
+                          changing scope: CanvasUndoManager.Scope = .everything) {
         guard let layerStack = layerStack else { return }
         undoManager.saveSnapshot(
             layerStack: layerStack,
             selectionPath: selectionPath,
+            scope: scope,
             context: renderer.context,
             description: description
         )

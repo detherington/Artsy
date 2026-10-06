@@ -96,7 +96,7 @@ final class StressTests: XCTestCase {
                     harness.draw(points, pointsPerFrame: pointsPerFrame)
                 }
             case 52..<60:
-                viewModel.saveUndoSnapshot(renderer: renderer, description: "Layers")
+                viewModel.saveUndoSnapshot(renderer: renderer, description: "Layers", changing: .nothing)
                 switch Int.random(in: 0..<6, using: &rng) {
                 case 0:
                     do { _ = try layerStack.addLayer(above: layerStack.activeLayerIndex) } catch { layerLimitHits += 1 }
@@ -119,7 +119,7 @@ final class StressTests: XCTestCase {
                 if viewModel.undoManager.canRedo { viewModel.performRedo(renderer: renderer) }
             case 73..<80:
                 guard let layer = layerStack.activeLayer else { continue }
-                viewModel.saveUndoSnapshot(renderer: renderer, description: "Move Selection")
+                viewModel.saveUndoSnapshot(renderer: renderer, description: "Move Selection", changing: .layer(layer))
                 let mover = SelectionMoveHandler()
                 mover.begin(selectionPath: CGPath(rect: rect(), transform: nil), layer: layer, context: context,
                             textureManager: renderer.textureManager)
@@ -127,7 +127,7 @@ final class StressTests: XCTestCase {
                 mover.commit(layer: layer, context: context, textureManager: renderer.textureManager, compositor: renderer.compositor)
             case 80..<86:
                 guard let layer = layerStack.activeLayer else { continue }
-                viewModel.saveUndoSnapshot(renderer: renderer, description: "Transform")
+                viewModel.saveUndoSnapshot(renderer: renderer, description: "Transform", changing: .layer(layer))
                 let withSelection = Bool.random(using: &rng)
                 guard let session = TransformSession.begin(targetLayer: layer, canvasSize: viewModel.canvasSize,
                                                            selectionPath: withSelection ? CGPath(rect: rect(), transform: nil) : nil,
@@ -138,17 +138,18 @@ final class StressTests: XCTestCase {
                 session.commit(context: context, textureManager: renderer.textureManager, compositor: renderer.compositor)
             case 86..<91:
                 guard let layer = layerStack.activeLayer else { continue }
-                viewModel.saveUndoSnapshot(renderer: renderer, description: "Clear")
+                viewModel.saveUndoSnapshot(renderer: renderer, description: "Clear", changing: .layer(layer))
                 renderer.clearInsideSelection(path: CGPath(ellipseIn: rect(), transform: nil), layer: layer, context: context)
             case 91..<95:
                 if layerStack.layers.count > 1 {
-                    viewModel.saveUndoSnapshot(renderer: renderer, description: "Merge Down")
-                    _ = layerStack.mergeDown(at: Int.random(in: 1..<layerStack.layers.count, using: &rng), renderer: renderer)
+                    let index = Int.random(in: 1..<layerStack.layers.count, using: &rng)
+                    viewModel.saveUndoSnapshot(renderer: renderer, description: "Merge Down", changing: .layer(layerStack.layers[index - 1]))
+                    _ = layerStack.mergeDown(at: index, renderer: renderer)
                     layerStack.activeLayerIndex = min(layerStack.activeLayerIndex, layerStack.layers.count - 1)
                 }
             default:
                 guard let layer = layerStack.activeLayer else { continue }
-                viewModel.saveUndoSnapshot(renderer: renderer, description: "Shift")
+                viewModel.saveUndoSnapshot(renderer: renderer, description: "Shift", changing: .layer(layer))
                 renderer.shiftLayerContent(layer: layer, dx: Int.random(in: -50...50, using: &rng),
                                            dy: Int.random(in: -50...50, using: &rng), context: context)
             }

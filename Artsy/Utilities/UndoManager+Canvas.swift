@@ -37,9 +37,34 @@ final class CanvasUndoManager {
         let isLocked: Bool
         let opacity: Float
         let blendMode: LayerBlendMode
-        let texture: MTLTexture  // GPU copy
-        /// GPU copy of the layer's height map, if it had one
+        /// A GPU copy of the layer's pixels — or, for a layer the action will not change, the
+        /// layer's own texture: it is in the right state when this step is undone, since
+        /// every later change to it has been undone first.
+        let texture: MTLTexture
+        /// Likewise the layer's height map, if it had one
         let height: MTLTexture?
+        /// Whether `texture` and `height` are copies (and so cost memory) or references.
+        let isCopy: Bool
+    }
+
+    /// Which layers' pixels an action is about to change, so a snapshot copies only those.
+    enum Scope: Equatable {
+        /// None: a selection, a layer's order, name or settings, a layer added or deleted.
+        case nothing
+        /// These layers' pixels.
+        case layers([UUID])
+        /// Every layer, when the caller cannot say.
+        case everything
+
+        static func layer(_ layer: Layer?) -> Scope { layer.map { .layers([$0.id]) } ?? .everything }
+
+        func includes(_ id: UUID) -> Bool {
+            switch self {
+            case .nothing: return false
+            case .layers(let ids): return ids.contains(id)
+            case .everything: return true
+            }
+        }
     }
 
     /// A class, so that layers found unchanged since the previous snapshot can be pointed
@@ -85,11 +110,15 @@ final class CanvasUndoManager {
     var canUndo: Bool { !undoStack.isEmpty }
     var canRedo: Bool { !redoStack.isEmpty }
 
-    /// Save the full layer stack state BEFORE performing an action. Layers that have not
-    /// changed since the last whole-stack snapshot end up sharing its copies.
-    func saveSnapshot(layerStack: LayerStack, selectionPath: CGPath?, context: MetalContext, description: String) {
-        guard let snapshot = captureStack(layerStack: layerStack, selectionPath: selectionPath, context: context,
-                                          description: description, sharingWith: lastStackSnapshot) else { return }
+    /// Save the layer stack's state BEFORE performing an action: every layer's settings and
+    /// order, the selection, and the pixels of the layers in `scope`. With `.everything`,
+    /// layers that have not changed since the last whole-stack snapshot end up sharing its
+    /// copies once the GPU has compared them.
+    func saveSnapshot(layerStack: LayerStack, selectionPath: CGPath?, scope: Scope = .everything,
+                      context: MetalContext, description: String) {
+        guard let snapshot = captureStack(layerStack: layerStack, selectionPath: selectionPath, scope: scope,
+                                          context: context, description: description,
+                                          sharingWith: scope == .everything ? lastStackSnapshot : nil) else { return }
         noteStackSize(layerStack)
         push(.stack(snapshot))
     }
@@ -163,8 +192,11 @@ final class CanvasUndoManager {
     private func apply(_ entry: Entry, layerStack: LayerStack, viewModel: CanvasViewModel, context: MetalContext) -> Entry? {
         switch entry {
         case .stack(let snapshot):
-            let current = captureStack(layerStack: layerStack, selectionPath: viewModel.selectionPath, context: context,
-                                       description: snapshot.description, sharingWith: snapshot)
+            // Restoring changes the pixels of exactly the layers the snapshot holds copies of,
+            // so the step that reverses it needs copies of exactly those
+            let copied = snapshot.layers.filter(\.isCopy).map(\.id)
+            let current = captureStack(layerStack: layerStack, selectionPath: viewModel.selectionPath,
+                                       scope: .layers(copied), context: context, description: snapshot.description)
             restoreStack(snapshot: snapshot, layerStack: layerStack, context: context)
             viewModel.selectionPath = snapshot.selectionPath
             return current.map(Entry.stack)
@@ -254,7 +286,7 @@ final class CanvasUndoManager {
         for entry in entries {
             switch entry {
             case .stack(let snapshot):
-                for layer in snapshot.layers {
+                for layer in snapshot.layers where layer.isCopy {
                     count(layer.texture)
                     count(layer.height)
                 }
@@ -297,16 +329,22 @@ final class CanvasUndoManager {
         return RegionSnapshot(layerID: layer.id, region: region, texture: pixels, height: height, description: description)
     }
 
-    /// Copy every layer. With `previous`, the copies are then compared on the GPU with that
-    /// snapshot's, and a layer found unchanged shares the previous copy instead: most
-    /// actions change one layer or none, so a history of whole-stack snapshots costs
-    /// little more than the layers that actually changed.
-    private func captureStack(layerStack: LayerStack, selectionPath: CGPath?, context: MetalContext,
+    /// Every layer's settings, and copies of the pixels of the layers in `scope`; the rest
+    /// are referenced. With `previous`, the copies are then compared on the GPU with that
+    /// snapshot's, and a layer found unchanged shares the previous copy instead.
+    private func captureStack(layerStack: LayerStack, selectionPath: CGPath?, scope: Scope, context: MetalContext,
                               description: String, sharingWith previous: StackSnapshot? = nil) -> StackSnapshot? {
         var layerSnapshots: [LayerSnapshot] = []
 
         for layer in layerStack.layers {
-            guard let textureCopy = copyTexture(layer.texture, context: context) else { return nil }
+            let copies = scope.includes(layer.id)
+            var texture = layer.texture
+            var height = layer.heightTexture
+            if copies {
+                guard let textureCopy = copyTexture(layer.texture, context: context) else { return nil }
+                texture = textureCopy
+                height = layer.heightTexture.flatMap { copyTexture($0, context: context) }
+            }
             layerSnapshots.append(LayerSnapshot(
                 id: layer.id,
                 name: layer.name,
@@ -314,8 +352,9 @@ final class CanvasUndoManager {
                 isLocked: layer.isLocked,
                 opacity: layer.opacity,
                 blendMode: layer.blendMode,
-                texture: textureCopy,
-                height: layer.heightTexture.flatMap { copyTexture($0, context: context) }
+                texture: texture,
+                height: height,
+                isCopy: copies
             ))
         }
 
@@ -332,8 +371,8 @@ final class CanvasUndoManager {
     private func shareUnchangedLayers(of snapshot: StackSnapshot, with previous: StackSnapshot, context: MetalContext) {
         // Candidates: the same layer in both, the same size, and either both or neither thick
         var candidates: [(index: Int, texture: MTLTexture, height: MTLTexture?)] = []
-        for (index, layer) in snapshot.layers.enumerated() {
-            guard let match = previous.layers.first(where: { $0.id == layer.id }),
+        for (index, layer) in snapshot.layers.enumerated() where layer.isCopy {
+            guard let match = previous.layers.first(where: { $0.id == layer.id }), match.isCopy,
                   match.texture.width == layer.texture.width, match.texture.height == layer.texture.height,
                   (match.height == nil) == (layer.height == nil) else { continue }
             candidates.append((index, match.texture, match.height))
@@ -365,7 +404,7 @@ final class CanvasUndoManager {
                 snapshot.replaceLayer(at: candidate.index, with: LayerSnapshot(
                     id: layer.id, name: layer.name, isVisible: layer.isVisible, isLocked: layer.isLocked,
                     opacity: layer.opacity, blendMode: layer.blendMode,
-                    texture: candidate.texture, height: candidate.height
+                    texture: candidate.texture, height: candidate.height, isCopy: true
                 ))
             }
             pending.leave()
@@ -385,12 +424,27 @@ final class CanvasUndoManager {
                 existing.isLocked = snap.isLocked
                 existing.opacity = snap.opacity
                 existing.blendMode = snap.blendMode
-                // Restore texture
-                blitCopy(from: snap.texture, to: existing.texture, context: context)
-                restoreHeight(snap.height, to: existing, context: context)
+                if snap.isCopy {
+                    blitCopy(from: snap.texture, to: existing.texture, context: context)
+                    restoreHeight(snap.height, to: existing, context: context)
+                } else if existing.texture !== snap.texture {
+                    // The layer object outlived its pixels (a merge gave it new ones): the
+                    // referenced textures are the ones from back then, still as they were
+                    existing.texture = snap.texture
+                    existing.heightTexture = snap.height
+                }
                 newLayers.append(existing)
+            } else if !snap.isCopy {
+                // The layer was deleted; its textures are still as they were when it went
+                let layer = Layer(id: snap.id, name: snap.name, texture: snap.texture)
+                layer.heightTexture = snap.height
+                layer.isVisible = snap.isVisible
+                layer.isLocked = snap.isLocked
+                layer.opacity = snap.opacity
+                layer.blendMode = snap.blendMode
+                newLayers.append(layer)
             } else {
-                // Layer was deleted — recreate it
+                // Layer was deleted and this snapshot copied it — recreate it
                 let desc = MTLTextureDescriptor.texture2DDescriptor(
                     pixelFormat: snap.texture.pixelFormat,
                     width: snap.texture.width,

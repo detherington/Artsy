@@ -147,6 +147,72 @@ final class StrokeBenchmarkTests: XCTestCase {
         }
     }
 
+    /// The limits step 6 opened up: an 8192² canvas with 12 layers. What a frame costs while
+    /// drawing and while idle, what a stroke's commit costs, and what the undo step of an
+    /// action that changes no pixels (a selection) and of one that changes one layer (a
+    /// fill) costs — call and GPU.
+    func testLargeCanvasCosts() throws {
+        let harness = try EngineHarness(width: 8192, height: 8192)
+        while harness.layerStack.layers.count < 12 { try harness.addLayer() }
+        harness.layerStack.activeLayerIndex = 6
+        for (index, layer) in harness.layerStack.layers.enumerated() where index % 3 == 0 {
+            harness.fill(layer, red: 0.5, green: 0.4, blue: 0.3, alpha: 0.5)
+        }
+        harness.select(.oil)
+        harness.viewModel.brushSize = 60
+        let device = harness.context.device
+        print(String(format: "BENCHMARK large-canvas (%@) | 8192² × 12 layers | %d MB allocated", build, device.currentAllocatedSize / 1_048_576))
+
+        func gpuMilliseconds(_ body: () -> Void) -> (call: Double, gpu: Double) {
+            var call = 0.0
+            let gpu = milliseconds {
+                call = milliseconds(body)
+                let fence = harness.context.commandQueue.makeCommandBuffer()!
+                fence.commit()
+                fence.waitUntilCompleted()
+            }
+            return (call, gpu)
+        }
+
+        // Idle frames: nothing has changed since the last one
+        harness.renderFrame()
+        var idle: [Double] = []
+        for _ in 0..<5 { idle.append(milliseconds { harness.renderFrameAsTheAppWould() }) }
+        let thumbnail = milliseconds { _ = harness.renderer.generateThumbnail(for: harness.drawingLayer) }
+        print(String(format: "BENCHMARK large-canvas idle frame (%@) | %6.2f ms | full recomposite %6.2f ms | thumbnail %6.2f ms",
+                     build, median(idle), milliseconds { harness.renderFrame() }, thumbnail))
+
+        // Frames while drawing, and the commit
+        var x = 1000.0, timestamp = 0.0
+        func nextPoint() -> StrokePoint {
+            x += 25; timestamp += 1.0 / 120
+            return StrokePoint(position: CGPoint(x: x, y: 4000 + 300 * sin(x / 500)), pressure: 0.8, tiltX: 0, tiltY: 0, rotation: 0, timestamp: timestamp)
+        }
+        harness.renderer.beginStroke()
+        harness.viewModel.beginStroke(point: nextPoint())
+        var drawing: [Double] = []
+        for _ in 0..<20 {
+            harness.viewModel.continueStroke(point: nextPoint())
+            drawing.append(milliseconds { harness.renderFrame() })
+        }
+        let commit = gpuMilliseconds {
+            harness.renderer.finalizeStroke()
+            harness.viewModel.endStroke()
+        }
+        print(String(format: "BENCHMARK large-canvas drawing frame (%@) | %6.2f ms | stroke commit call %6.2f ms gpu %6.2f ms",
+                     build, median(drawing), commit.call, commit.gpu))
+
+        // Undo steps: a selection changes no pixels, a fill changes one layer
+        let selection = gpuMilliseconds { harness.viewModel.saveUndoSnapshot(renderer: harness.renderer, description: "Select", changing: .nothing) }
+        harness.viewModel.undoManager.waitForPendingWork()
+        let fill = gpuMilliseconds {
+            harness.viewModel.saveUndoSnapshot(renderer: harness.renderer, description: "Fill", changing: .layer(harness.drawingLayer))
+        }
+        harness.viewModel.undoManager.waitForPendingWork()
+        print(String(format: "BENCHMARK large-canvas undo step (%@) | selection call %6.2f ms gpu %7.2f ms | fill call %6.2f ms gpu %7.2f ms | history %d MB",
+                     build, selection.call, selection.gpu, fill.call, fill.gpu, harness.viewModel.undoManager.textureBytes / 1_048_576))
+    }
+
     /// Cost of a whole-stack undo snapshot, which actions other than strokes still take
     /// (layer changes, fills, pastes, selections).
     /// `call` is how long the caller is blocked; `gpu` is until the copies have finished.
