@@ -148,6 +148,7 @@ class CanvasView: MTKView {
                         textureManager: renderer.textureManager
                     )
                     viewModel.floatingTexture = selectionMoveHandler.floatingTexture
+                    viewModel.floatingHeight = selectionMoveHandler.floatingHeight
                     viewModel.floatingOffset = .zero
                 }
                 NSCursor.closedHand.set()
@@ -272,6 +273,7 @@ class CanvasView: MTKView {
                 renderer.updateThumbnail(for: activeLayer)
             }
             viewModel.floatingTexture = nil
+            viewModel.floatingHeight = nil
             viewModel.floatingOffset = .zero
             moveLastCanvasPoint = nil
             isMovingSelection = false

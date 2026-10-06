@@ -307,6 +307,25 @@ fragment float4 smudgeDepositFragment(
     return mix(layer, paint, k);
 }
 
+// The carried paint's thickness, likewise: a plain mix. The brush's own colour brings
+// no thickness with it.
+fragment float4 smudgeDepositHeightFragment(
+    StampVertexOut in [[stage_in]],
+    texture2d<float> tip [[texture(0)]],
+    texture2d<float> carry [[texture(1)]],
+    texture2d<float> backdrop [[texture(2)]],
+    sampler tipSampler [[sampler(0)]],
+    sampler carrySampler [[sampler(1)]],
+    constant SmudgeParams &params [[buffer(0)]]
+) {
+    float k = tipCoverage(in.uv, params.hardness, params.tipIsTexture, tip, tipSampler) * in.opacity;
+    float layer = backdrop.read(uint2(in.position.xy) - params.backdropOrigin).r;
+    float2 texel = 0.5 + in.uv * (params.carryTexels - 1.0);
+    float carried = carry.sample(carrySampler, texel / float2(carry.get_width(), carry.get_height())).r;
+    carried *= 1.0 - params.colorRate;
+    return float4(mix(layer, carried, k), 0.0, 0.0, 1.0);
+}
+
 struct SmudgePickupParams {
     float2 center;           // the dab, in canvas pixels
     float  size;
@@ -722,8 +741,9 @@ kernel void texturesDifferKernel(
 
 // --- Pigment mixing on its own ---
 
-// Mixes pairs of linear Display P3 colours as pigments: `pairs[2i]` and `pairs[2i + 1]`,
-// the share of the second in `pairs[2i].w`. For tests and tools, not for painting.
+// Mixes pairs of Display P3 colours (gamma-encoded, as the canvas holds them) as
+// pigments: `pairs[2i]` and `pairs[2i + 1]`, the share of the second in `pairs[2i].w`.
+// For tests and tools, not for painting.
 kernel void mixPigmentsKernel(
     constant float4 *pairs [[buffer(0)]],
     device float4 *results [[buffer(1)]],

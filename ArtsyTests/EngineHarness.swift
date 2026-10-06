@@ -144,6 +144,13 @@ final class EngineHarness {
     /// Render a frame through the display shader itself, one canvas pixel per output pixel:
     /// the composite over white with thick paint lit. 8-bit, so values are multiples of 1/255.
     func shown(relief: Float = 1) -> PixelGrid {
+        Self.shown(by: renderer, relief: relief)
+    }
+
+    /// `shown(relief:)` for any renderer — a loaded document's, say.
+    static func shown(by renderer: CanvasRenderer, relief: Float = 1) -> PixelGrid {
+        let context = renderer.context
+        let width = Int(renderer.canvasSize.width), height = Int(renderer.canvasSize.height)
         let desc = MTLTextureDescriptor.texture2DDescriptor(
             pixelFormat: .bgra8Unorm, width: width, height: height, mipmapped: false
         )

@@ -226,4 +226,67 @@ final class ImpastoTests: XCTestCase {
         XCTAssertTrue(try String(contentsOf: file, encoding: .utf8).contains("\"thickness\""))
         XCTAssertEqual(try library.importBrush(from: file).rendering, BrushDescriptor.oil.rendering)
     }
+
+    // MARK: - Smudging and dragging thick paint
+
+    /// A smudge drags thickness along with the colour, and undo puts both back.
+    func testASmudgeDragsThicknessAlong() throws {
+        let harness = try canvasWithAStroke()
+        let heightsBefore = harness.heights(of: harness.drawingLayer)
+        let pixelsBefore = harness.pixels(of: harness.drawingLayer.texture)
+        XCTAssertEqual(heightsBefore.at(x: 100, y: 100).x, 0, accuracy: 0.001, "flat above the stroke")
+
+        var brush = BrushDescriptor.smudge
+        if case .stamp(var settings) = brush.rendering, var smudge = settings.smudge {
+            smudge.strength = 1
+            settings.smudge = smudge
+            brush.rendering = .stamp(settings)
+        }
+        harness.select(brush)
+        harness.viewModel.brushSize = 30
+        harness.draw(StrokeFixtures.line(from: CGPoint(x: 100, y: 60), to: CGPoint(x: 100, y: 110), pressure: 1...1))
+        let heights = harness.heights(of: harness.drawingLayer)
+        XCTAssertGreaterThan(heights.at(x: 100, y: 100).x, 0.1, "thickness dragged out of the stroke")
+        XCTAssertGreaterThan(harness.pixels(of: harness.drawingLayer.texture).at(x: 100, y: 100).w, 0.5, "with its paint")
+
+        harness.viewModel.performUndo(renderer: harness.renderer)
+        XCTAssertEqual(worst(harness.heights(of: harness.drawingLayer), heightsBefore), 0, "undo restores the thickness")
+        XCTAssertEqual(worst(harness.pixels(of: harness.drawingLayer.texture), pixelsBefore), 0, "and the paint")
+    }
+
+    /// While a selection is dragged its relief shows where it is, not where it was, and the
+    /// preview does not allocate textures frame by frame.
+    func testADraggedSelectionShowsItsReliefWhereItIs() throws {
+        let harness = try canvasWithAStroke()
+        let mover = SelectionMoveHandler()
+        mover.begin(selectionPath: CGPath(rect: CGRect(x: 10, y: 30, width: 180, height: 60), transform: nil),
+                    layer: harness.drawingLayer, context: harness.context, textureManager: harness.renderer.textureManager)
+        harness.viewModel.floatingTexture = mover.floatingTexture
+        harness.viewModel.floatingHeight = mover.floatingHeight
+        XCTAssertNotNil(harness.viewModel.floatingHeight)
+        harness.viewModel.floatingOffset = CGPoint(x: 0, y: 40)   // the stroke now shows around y = 100
+        defer {
+            mover.cancel()
+            harness.viewModel.floatingTexture = nil
+            harness.viewModel.floatingHeight = nil
+        }
+
+        let lit = harness.shown(relief: 1), flat = harness.shown(relief: 0)
+        func reliefDifference(y: Int) -> Float {
+            (40...160).map { x in
+                let a = lit.at(x: x, y: y), b = flat.at(x: x, y: y)
+                return abs(a.x - b.x) + abs(a.y - b.y) + abs(a.z - b.z)
+            }.max()!
+        }
+        XCTAssertGreaterThan((95...105).map(reliefDifference(y:)).max()!, 0.05, "lit where the paint is now")
+        XCTAssertLessThan(reliefDifference(y: 60), 0.01, "flat where it was cut from")
+
+        // Dragging on allocates nothing more
+        let allocated = harness.context.device.currentAllocatedSize
+        for step in 1...20 {
+            harness.viewModel.floatingOffset = CGPoint(x: step, y: 40 + step)
+            harness.renderFrame()
+        }
+        XCTAssertLessThan(harness.context.device.currentAllocatedSize - allocated, 1 << 20, "no texture per frame")
+    }
 }

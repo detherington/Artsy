@@ -5,42 +5,43 @@ import XCTest
 final class PigmentMixingTests: XCTestCase {
     private var context: MetalContext { EngineHarness.sharedContext }
 
-    // The canvas is linear Display P3; references are in sRGB.
-    private func linearP3(hex: UInt32) -> SIMD3<Float> {
-        func channel(_ v: UInt32) -> Float {
-            let c = Float(v) / 255
-            return c <= 0.04045 ? c / 12.92 : pow((c + 0.055) / 1.055, 2.4)
-        }
-        let s = SIMD3(channel(hex >> 16 & 0xFF), channel(hex >> 8 & 0xFF), channel(hex & 0xFF))
-        return SIMD3(0.8224621 * s.x + 0.1775380 * s.y,
-                     0.0331941 * s.x + 0.9668058 * s.y,
-                     0.0170827 * s.x + 0.0723974 * s.y + 0.9105199 * s.z)
+    // The canvas holds Display P3 components, gamma-encoded; references are in sRGB.
+    private static func decode(_ c: Float) -> Float { c <= 0.04045 ? c / 12.92 : pow((c + 0.055) / 1.055, 2.4) }
+    private static func encode(_ v: Float) -> Float {
+        let v = max(0, min(1, v))
+        return v <= 0.0031308 ? v * 12.92 : 1.055 * pow(v, 1 / 2.4) - 0.055
     }
 
-    private func sRGB8(linearP3 c: SIMD3<Float>) -> [Int] {
-        let s = SIMD3(1.2249401762805587 * c.x - 0.22494017628055865 * c.y,
-                      -0.04205695470968819 * c.x + 1.0420569547096881 * c.y,
-                      -0.019637554590334483 * c.x - 0.07863604555063188 * c.y + 1.0982736001409685 * c.z)
-        return [s.x, s.y, s.z].map { v in
-            let v = max(0, min(1, v))
-            let g = v <= 0.0031308 ? v * 12.92 : 1.055 * pow(v, 1 / 2.4) - 0.055
-            return Int((g * 255).rounded())
-        }
+    private func p3(hex: UInt32) -> SIMD3<Float> {
+        let s = SIMD3(Self.decode(Float(hex >> 16 & 0xFF) / 255), Self.decode(Float(hex >> 8 & 0xFF) / 255),
+                      Self.decode(Float(hex & 0xFF) / 255))
+        let linear = SIMD3(0.8224621 * s.x + 0.1775380 * s.y,
+                           0.0331941 * s.x + 0.9668058 * s.y,
+                           0.0170827 * s.x + 0.0723974 * s.y + 0.9105199 * s.z)
+        return SIMD3(Self.encode(linear.x), Self.encode(linear.y), Self.encode(linear.z))
+    }
+
+    private func sRGB8(p3 c: SIMD3<Float>) -> [Int] {
+        let l = SIMD3(Self.decode(c.x), Self.decode(c.y), Self.decode(c.z))
+        let s = SIMD3(1.2249401762805587 * l.x - 0.22494017628055865 * l.y,
+                      -0.04205695470968819 * l.x + 1.0420569547096881 * l.y,
+                      -0.019637554590334483 * l.x - 0.07863604555063188 * l.y + 1.0982736001409685 * l.z)
+        return [s.x, s.y, s.z].map { Int((Self.encode($0) * 255).rounded()) }
     }
 
     // MARK: - The model
 
     /// spectral.js's own example: its blue and yellow mixed half and half make this green.
     func testMatchesTheSpectralJSReference() {
-        let mixed = context.mixPigments([(linearP3(hex: 0x002185), linearP3(hex: 0xFCD200), 0.5)])[0]
+        let mixed = context.mixPigments([(p3(hex: 0x002185), p3(hex: 0xFCD200), 0.5)])[0]
         let expected = [0x3D, 0x93, 0x3E]
-        for (got, want) in zip(sRGB8(linearP3: mixed), expected) {
-            XCTAssertEqual(got, want, accuracy: 3, "\(sRGB8(linearP3: mixed)) vs #3D933E")
+        for (got, want) in zip(sRGB8(p3: mixed), expected) {
+            XCTAssertEqual(got, want, accuracy: 3, "\(sRGB8(p3: mixed)) vs #3D933E")
         }
     }
 
     func testEndsComeBackExactlyAndAColourMixedWithItselfIsUnchanged() {
-        let a = linearP3(hex: 0x8040C0), b = linearP3(hex: 0x20A060), black = SIMD3<Float>(0, 0, 0)
+        let a = p3(hex: 0x8040C0), b = p3(hex: 0x20A060), black = SIMD3<Float>(0, 0, 0)
         let results = context.mixPigments([(a, b, 0), (a, b, 1), (a, a, 0.5), (black, a, 0), (a, black, 0.3)])
         for i in 0..<3 {
             XCTAssertEqual(results[0][i], a[i], accuracy: 1e-4, "t = 0 gives the first colour")

@@ -244,9 +244,11 @@ Done:
     white come out 10% grey rather than a dark smear, as plain Kubelka-Munk would.
   - The seven pigments do not reproduce a colour exactly, so each end's error is carried
     across the mix: paint over nothing, or over its own colour, is unchanged to 1e-4.
-  - The canvas is linear Display P3 and the model works in linear sRGB; colours are
-    converted on the way in and out. Kubelka-Munk's inverse is written in a form that
-    does not cancel in single precision (black has a K/S near 10¹⁵).
+  - The canvas holds Display P3 components as the display shows them, gamma-encoded
+    (the picker gives P3 components and the drawable is P3; nothing in between decodes),
+    and the model works in linear sRGB: colours are decoded and converted on the way in,
+    converted and encoded on the way out. Kubelka-Munk's inverse is written in a form
+    that does not cancel in single precision (black has a K/S near 10¹⁵).
   - Applied in three places: the live composite of the stroke over its layer, the merge
     at pen-up (through the scratch texture, since it reads the layer), and a smudge's
     deposit (both the brush colour into the carried paint and the carried paint into
@@ -286,13 +288,12 @@ Done:
     whole-stack snapshots, the move and transform tools, selection cut/move/clear,
     merge down and flatten all carry it; `.artsy` documents save it as a 16-bit grey
     PNG per layer (thickness 0...8).
-  - Smudge brushes do not move thickness yet, and the floating preview while a
-    selection is being dragged shows its colour but not its relief.
+  - Smudge brushes carry thickness along with colour (a second carry per mirror, on the
+    layer's height map), and a dragged selection's preview shows its relief where it is.
 
 Still to do:
 
-- Smudge samples the active layer only ("sample all layers" is not offered), and does
-  not move thickness.
+- Smudge samples the active layer only ("sample all layers" is not offered).
 - Pigment mixing follows spectral.js's weighting; black is a weak pigment there (its
   luminance is ~0), which is tempered only by the squared share. Tinting strength per
   colour is not exposed.
@@ -355,6 +356,25 @@ Done:
 
 Step 6 is done, which closes the plan as written. Not done: tiled layers (see above,
 on evidence), and the hardware pen session that has been owed since step 1.
+
+## Coverage beyond the steps
+
+Three suites run the whole engine rather than one feature at a time:
+
+- **Every brush** (`EveryBrushTests`): for each of the 21 built-ins, on a layer with paint
+  to act on — the result does not depend on how samples fall into frames; undo and redo
+  restore colour and thickness exactly; mid-stroke, the regions recomposited frame by
+  frame equal a full recomposite (through the display, so thickness too) on a blended
+  layer with symmetry; and symmetry changes both halves about equally.
+- **A random session** (`StressTests`): three seeded sessions of 220 steps each — every
+  brush and tool, layer add/remove/move/hide/opacity/blend, selection moves, transforms,
+  clears, merges, shifts, undo and redo — checking after each that no stroke is left
+  open, the active layer is in range, the history is within its limits and memory is
+  bounded, and mid-stroke that the picture equals a full recomposite.
+- **The everything document** (`DocumentGoldenTests`): a canvas using every feature —
+  wash, oil, smudge, a multiply layer, a held shape, a hidden layer, guides, a background
+  — rendered through the display against a golden, then saved, loaded and rendered again
+  within 8-bit-on-disk tolerance.
 
 ## Measurements
 
