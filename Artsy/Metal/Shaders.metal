@@ -293,20 +293,47 @@ fragment float4 compositeNormal(
     return layer.sample(s, in.texCoord) * layerOpacity;
 }
 
-// Generic blend shader — mode: 0=normal, 1=multiply, 2=screen, 3=overlay, 4=darken, 5=lighten
-// Both textures are premultiplied. For blend modes we un-premultiply the src and dst colours,
-// compute the blend, then re-premultiply.
-fragment float4 compositeBlend(
+// Writes transparent black; drawn under a scissor rect to clear part of a texture.
+fragment float4 clearFragment(CompositeVertexOut in [[stage_in]]) {
+    return float4(0.0);
+}
+
+// --- In-progress stroke ---
+//
+// While the pen is down the stroke lives in two textures: `committed` holds the part that
+// will not change again, `tail` the newest part, which is redrawn every frame. Their
+// maximum is the stroke. It is merged into the active layer's colour *before* that layer's
+// opacity and blend mode apply, exactly as it will be once the pen lifts.
+
+struct StrokeMergeParams {
+    float opacity;   // the Opacity slider: caps the whole stroke
+    int   erase;     // 0 = paint over the layer, 1 = erase from it
+};
+
+static inline float4 layerWithStroke(float4 layer, float4 committed, float4 tail, StrokeMergeParams params) {
+    float4 stroke = max(committed, tail) * params.opacity;
+    return params.erase != 0 ? layer * (1.0 - stroke.a)
+                             : stroke + layer * (1.0 - stroke.a);
+}
+
+fragment float4 compositeNormalWithStroke(
     CompositeVertexOut in [[stage_in]],
-    texture2d<float> srcTex [[texture(0)]],
-    texture2d<float> dstTex [[texture(1)]],
+    texture2d<float> layer [[texture(0)]],
+    texture2d<float> committed [[texture(2)]],
+    texture2d<float> tail [[texture(3)]],
     sampler s [[sampler(0)]],
     constant float &layerOpacity [[buffer(0)]],
-    constant int &mode [[buffer(1)]]
+    constant StrokeMergeParams &stroke [[buffer(2)]]
 ) {
-    float4 src = srcTex.sample(s, in.texCoord) * layerOpacity;
-    float4 dst = dstTex.sample(s, in.texCoord);
+    float4 merged = layerWithStroke(layer.sample(s, in.texCoord), committed.sample(s, in.texCoord),
+                                    tail.sample(s, in.texCoord), stroke);
+    return merged * layerOpacity;
+}
 
+// Blend `src` over `dst` — mode: 0=normal, 1=multiply, 2=screen, 3=overlay, 4=darken, 5=lighten.
+// Both are premultiplied. For blend modes we un-premultiply the src and dst colours,
+// compute the blend, then re-premultiply.
+static inline float4 blendOver(float4 src, float4 dst, int mode) {
     float3 srcRGB = src.a > 0.0001 ? src.rgb / src.a : float3(0.0);
     float3 dstRGB = dst.a > 0.0001 ? dst.rgb / dst.a : float3(0.0);
 
@@ -345,6 +372,34 @@ fragment float4 compositeBlend(
     float outA = src.a + dst.a * (1.0 - src.a);
     float3 outRGB = blended * src.a + dst.rgb * (1.0 - src.a);
     return float4(outRGB, outA);
+}
+
+fragment float4 compositeBlend(
+    CompositeVertexOut in [[stage_in]],
+    texture2d<float> srcTex [[texture(0)]],
+    texture2d<float> dstTex [[texture(1)]],
+    sampler s [[sampler(0)]],
+    constant float &layerOpacity [[buffer(0)]],
+    constant int &mode [[buffer(1)]]
+) {
+    float4 src = srcTex.sample(s, in.texCoord) * layerOpacity;
+    return blendOver(src, dstTex.sample(s, in.texCoord), mode);
+}
+
+fragment float4 compositeBlendWithStroke(
+    CompositeVertexOut in [[stage_in]],
+    texture2d<float> srcTex [[texture(0)]],
+    texture2d<float> dstTex [[texture(1)]],
+    texture2d<float> committed [[texture(2)]],
+    texture2d<float> tail [[texture(3)]],
+    sampler s [[sampler(0)]],
+    constant float &layerOpacity [[buffer(0)]],
+    constant int &mode [[buffer(1)]],
+    constant StrokeMergeParams &stroke [[buffer(2)]]
+) {
+    float4 merged = layerWithStroke(srcTex.sample(s, in.texCoord), committed.sample(s, in.texCoord),
+                                    tail.sample(s, in.texCoord), stroke);
+    return blendOver(merged * layerOpacity, dstTex.sample(s, in.texCoord), mode);
 }
 
 // --- Display ---

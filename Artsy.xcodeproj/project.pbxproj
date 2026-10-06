@@ -9,7 +9,7 @@
 /* Begin PBXBuildFile section */
 		02177C5233136639E672BDF0 /* BrushDescriptor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9C62A909BCD9D532B7728EE0 /* BrushDescriptor.swift */; };
 		0591EA527AD0B06CB70EA71F /* CompositorPipeline.swift in Sources */ = {isa = PBXBuildFile; fileRef = 503F3A4D683A28C2D0F3CA61 /* CompositorPipeline.swift */; };
-		09386C46324D038E9A39D68D /* StrokeInterpolator.swift in Sources */ = {isa = PBXBuildFile; fileRef = CABAD15A8043DE4840509F6F /* StrokeInterpolator.swift */; };
+		09386C46324D038E9A39D68D /* StrokePath.swift in Sources */ = {isa = PBXBuildFile; fileRef = CABAD15A8043DE4840509F6F /* StrokePath.swift */; };
 		0E66A305C307AAE73C331D63 /* Tool.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7A8B609744A10C0F5D14636 /* Tool.swift */; };
 		191856BE27F6BB1CC02CF739 /* StrokeSmoothing.swift in Sources */ = {isa = PBXBuildFile; fileRef = 49CF8EADC65864B304E57C66 /* StrokeSmoothing.swift */; };
 		1B650C7F7177AD18DDC7C684 /* StrokeRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = BE58DE4CC964D524A0221361 /* StrokeRenderer.swift */; };
@@ -77,6 +77,10 @@
 		8F31E91AE88185F5F4A4E31F /* EngineHarness.swift in Sources */ = {isa = PBXBuildFile; fileRef = F102158E4D0DF86FBC12CBE7 /* EngineHarness.swift */; };
 		D694A4F107E954DC49731C2D /* StrokeBenchmarkTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0F3F60D008780558D823B84 /* StrokeBenchmarkTests.swift */; };
 		53EFAB27C1E6C2C42894A069 /* StrokeFixtures.swift in Sources */ = {isa = PBXBuildFile; fileRef = 39F8A59D0E92E15370400413 /* StrokeFixtures.swift */; };
+		BB7F2F374B17032A33A61E1A /* StrokePathTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7FC3CB88C597B34A9D26C79B /* StrokePathTests.swift */; };
+		92948045B3372E73DC6E5222 /* IncrementalRenderingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0C6674A940D26CFE75F54F3A /* IncrementalRenderingTests.swift */; };
+		9BE4C7715D7DE2DB4FA554B3 /* UndoTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0AAF037C68F7B4EA643159D6 /* UndoTests.swift */; };
+		11AD04CA99B3741D8873D8B3 /* BrushCursor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6F7C5B97272A60F40BF41ED5 /* BrushCursor.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -139,7 +143,7 @@
 		BE58DE4CC964D524A0221361 /* StrokeRenderer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StrokeRenderer.swift; sourceTree = "<group>"; };
 		C5039E326A13D6BD1B8F7CFA /* TextureManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TextureManager.swift; sourceTree = "<group>"; };
 		C7A8B609744A10C0F5D14636 /* Tool.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Tool.swift; sourceTree = "<group>"; };
-		CABAD15A8043DE4840509F6F /* StrokeInterpolator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StrokeInterpolator.swift; sourceTree = "<group>"; };
+		CABAD15A8043DE4840509F6F /* StrokePath.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StrokePath.swift; sourceTree = "<group>"; };
 		CCB19C4C351A6A11D321C5B0 /* CustomStylePreset.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CustomStylePreset.swift; sourceTree = "<group>"; };
 		D0124C2EB7D7F7E4BDF1541E /* UnsplashManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UnsplashManager.swift; sourceTree = "<group>"; };
 		D3EB4FF7DB7F419C634FDCB4 /* DistractionFreeContainerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DistractionFreeContainerView.swift; sourceTree = "<group>"; };
@@ -164,6 +168,10 @@
 		F102158E4D0DF86FBC12CBE7 /* EngineHarness.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EngineHarness.swift; sourceTree = "<group>"; };
 		F0F3F60D008780558D823B84 /* StrokeBenchmarkTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StrokeBenchmarkTests.swift; sourceTree = "<group>"; };
 		39F8A59D0E92E15370400413 /* StrokeFixtures.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StrokeFixtures.swift; sourceTree = "<group>"; };
+		7FC3CB88C597B34A9D26C79B /* StrokePathTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StrokePathTests.swift; sourceTree = "<group>"; };
+		0C6674A940D26CFE75F54F3A /* IncrementalRenderingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IncrementalRenderingTests.swift; sourceTree = "<group>"; };
+		0AAF037C68F7B4EA643159D6 /* UndoTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UndoTests.swift; sourceTree = "<group>"; };
+		6F7C5B97272A60F40BF41ED5 /* BrushCursor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrushCursor.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXGroup section */
@@ -183,6 +191,7 @@
 				E8EE6EA5AC4600A2173EF389 /* CanvasDocument.swift */,
 				E108BEC3D2CEE80EF8D1DEE0 /* CanvasRenderer.swift */,
 				629A2719AA300B9498B10E44 /* CanvasTransform.swift */,
+				6F7C5B97272A60F40BF41ED5 /* BrushCursor.swift */,
 				7A673F35EA05267841073131 /* CanvasView.swift */,
 				1BAE745B52E51B4C39233DC2 /* CanvasViewModel.swift */,
 				3E8961D5B335007FFFEF2303 /* SelectionMoveHandler.swift */,
@@ -305,6 +314,9 @@
 		B48AF066E85C8962CFFD499C /* ArtsyTests */ = {
 			isa = PBXGroup;
 			children = (
+				0AAF037C68F7B4EA643159D6 /* UndoTests.swift */,
+				0C6674A940D26CFE75F54F3A /* IncrementalRenderingTests.swift */,
+				7FC3CB88C597B34A9D26C79B /* StrokePathTests.swift */,
 				39F8A59D0E92E15370400413 /* StrokeFixtures.swift */,
 				F0F3F60D008780558D823B84 /* StrokeBenchmarkTests.swift */,
 				F102158E4D0DF86FBC12CBE7 /* EngineHarness.swift */,
@@ -390,7 +402,7 @@
 			children = (
 				D358C0D04AE1598A1E332FE0 /* StrokeRecording.swift */,
 				22EA3B8567263273990426D0 /* PressureCurve.swift */,
-				CABAD15A8043DE4840509F6F /* StrokeInterpolator.swift */,
+				CABAD15A8043DE4840509F6F /* StrokePath.swift */,
 				4BAE3461ED09A5C4765BCEC9 /* StrokePoint.swift */,
 				49CF8EADC65864B304E57C66 /* StrokeSmoothing.swift */,
 				AF04E002BBBBBBBBBBBBBBBB /* SymmetryMode.swift */,
@@ -516,6 +528,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				11AD04CA99B3741D8873D8B3 /* BrushCursor.swift in Sources */,
 				2327A645D5D365350A805A1C /* StrokeRecording.swift in Sources */,
 				4D5B08BA130C75EDC7E2B082 /* AIConfiguration.swift in Sources */,
 				88EBC34DBBB9DF740B9D5A27 /* AIPanelView.swift in Sources */,
@@ -561,7 +574,7 @@
 				707E634D2647E81D0E3B73F1 /* SettingsView.swift in Sources */,
 				CE68FED3287DE2BB8EDCD055 /* Shaders.metal in Sources */,
 				23C7D0FA63DAA9E57CBE795D /* StatusBarView.swift in Sources */,
-				09386C46324D038E9A39D68D /* StrokeInterpolator.swift in Sources */,
+				09386C46324D038E9A39D68D /* StrokePath.swift in Sources */,
 				E6A5C0FFCC666057658E3E29 /* StrokePoint.swift in Sources */,
 				1B650C7F7177AD18DDC7C684 /* StrokeRenderer.swift in Sources */,
 				191856BE27F6BB1CC02CF739 /* StrokeSmoothing.swift in Sources */,
@@ -581,6 +594,9 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				9BE4C7715D7DE2DB4FA554B3 /* UndoTests.swift in Sources */,
+				92948045B3372E73DC6E5222 /* IncrementalRenderingTests.swift in Sources */,
+				BB7F2F374B17032A33A61E1A /* StrokePathTests.swift in Sources */,
 				53EFAB27C1E6C2C42894A069 /* StrokeFixtures.swift in Sources */,
 				D694A4F107E954DC49731C2D /* StrokeBenchmarkTests.swift in Sources */,
 				8F31E91AE88185F5F4A4E31F /* EngineHarness.swift in Sources */,

@@ -72,9 +72,41 @@ final class StrokeBenchmarkTests: XCTestCase {
         harness.viewModel.endStroke()
     }
 
-    /// Cost of the undo snapshot taken at pen down, by layer count.
-    /// `call` is how long pen-down is blocked; `gpu` is until the copies have finished.
-    func testUndoSnapshotAtPenDown() throws {
+    /// What committing one stroke costs at pen-up: time until the GPU has merged it, and the
+    /// undo memory it adds. A 600 px stroke with Soft Round.
+    func testStrokeCommit() throws {
+        for layerCount in [2, 8] {
+            let harness = try EngineHarness(width: 2048, height: 2048)
+            while harness.layerStack.layers.count < layerCount { try harness.addLayer() }
+            harness.layerStack.activeLayerIndex = 1
+            harness.select(.softRound)
+
+            var penUp: [Double] = []
+            for stroke in 0..<10 {
+                let y = CGFloat(300 + stroke * 150)
+                let points = StrokeFixtures.line(from: CGPoint(x: 300, y: y), to: CGPoint(x: 900, y: y))
+                harness.renderer.beginStroke()
+                harness.viewModel.beginStroke(point: points[0])
+                points.dropFirst().forEach(harness.viewModel.continueStroke(point:))
+                harness.renderFrame()
+                penUp.append(milliseconds {
+                    harness.renderer.finalizeStroke()
+                    harness.viewModel.endStroke()
+                    let fence = harness.context.commandQueue.makeCommandBuffer()!
+                    fence.commit()
+                    fence.waitUntilCompleted()
+                })
+            }
+            let megabytes = Double(harness.viewModel.undoManager.textureBytes) / 10 / (1024 * 1024)
+            print(String(format: "BENCHMARK stroke-commit (%@) | %d layers at 2048² | pen-up %5.2f ms | %.2f MB of undo per stroke",
+                         build, layerCount, median(penUp), megabytes))
+        }
+    }
+
+    /// Cost of a whole-stack undo snapshot, which actions other than strokes still take
+    /// (layer changes, fills, pastes, selections).
+    /// `call` is how long the caller is blocked; `gpu` is until the copies have finished.
+    func testWholeStackUndoSnapshot() throws {
         for layerCount in [2, 8] {
             let harness = try EngineHarness(width: 2048, height: 2048)
             while harness.layerStack.layers.count < layerCount { try harness.addLayer() }
@@ -93,7 +125,7 @@ final class StrokeBenchmarkTests: XCTestCase {
                 })
             }
             let megabytes = layerCount * 2048 * 2048 * 8 / (1024 * 1024)
-            print(String(format: "BENCHMARK undo-snapshot (%@) | %d layers at 2048² | call %6.2f ms | gpu %6.2f ms | %d MB per undo step",
+            print(String(format: "BENCHMARK whole-stack-snapshot (%@) | %d layers at 2048² | call %6.2f ms | gpu %6.2f ms | %d MB per undo step",
                          build, layerCount, median(call), median(gpu), megabytes))
         }
     }

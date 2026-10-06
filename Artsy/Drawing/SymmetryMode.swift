@@ -83,47 +83,4 @@ enum SymmetryTransform {
             }
         }
     }
-
-    /// Apply all mirror transforms to a StrokePoint array. Returns `transforms.count`
-    /// arrays, each with the same pressure/tilt/etc. as the original, just with
-    /// transformed positions.
-    static func mirror(
-        _ points: [StrokePoint],
-        mode: SymmetryMode,
-        canvasSize: CGSize
-    ) -> [[StrokePoint]] {
-        let fns = transforms(mode: mode, canvasSize: canvasSize)
-        return fns.map { fn in
-            points.map { p in
-                StrokePoint(
-                    position: fn(p.position),
-                    pressure: p.pressure,
-                    tiltX: p.tiltX,
-                    tiltY: p.tiltY,
-                    rotation: p.rotation,
-                    timestamp: p.timestamp
-                )
-            }
-        }
-    }
-
-    /// Apply all mirror transforms to an InterpolatedPoint array.
-    static func mirror(
-        _ points: [InterpolatedPoint],
-        mode: SymmetryMode,
-        canvasSize: CGSize
-    ) -> [[InterpolatedPoint]] {
-        let fns = transforms(mode: mode, canvasSize: canvasSize)
-        return fns.map { fn in
-            points.map { p in
-                InterpolatedPoint(
-                    position: fn(p.position),
-                    pressure: p.pressure,
-                    width: p.width,
-                    opacity: p.opacity,
-                    angle: p.angle
-                )
-            }
-        }
-    }
 }

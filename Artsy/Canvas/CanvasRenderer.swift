@@ -8,15 +8,31 @@ final class CanvasRenderer: NSObject, MTKViewDelegate {
     let compositor: CompositorPipeline
 
     // Canvas textures
+    /// The in-progress stroke is split across two textures. This one holds the part that
+    /// has settled and is drawn once; `strokeTailTexture` holds the newest part, which is
+    /// redrawn every frame because the next pen sample can still reshape it.
     var activeStrokeTexture: MTLTexture!
+    var strokeTailTexture: MTLTexture!
     var compositeTexture: MTLTexture!
     var blendTempTexture: MTLTexture!
 
     let canvasSize: CGSize
     weak var viewModel: CanvasViewModel?
 
-    private var lastRenderedPointCount = 0
     private var hasInitializedTransform = false
+
+    // In-progress stroke. Regions are texture pixels (origin top-left).
+    /// Index of the last path point whose geometry is in `activeStrokeTexture`.
+    private var committedThrough: Int?
+    private var renderedRevision = 0
+    /// Where the tail was drawn last frame.
+    private var tailRegions: [MTLScissorRect] = []
+    /// Everything drawn into `activeStrokeTexture` by this stroke.
+    private var strokeRegion: MTLScissorRect?
+    /// What has changed since `compositeTexture` was last brought up to date.
+    private var pendingRegions: [MTLScissorRect] = []
+    /// The scene `compositeTexture` currently shows, while a stroke is in progress.
+    private var compositeSignature: CompositeSignature?
 
     init(context: MetalContext, canvasSize: CGSize) throws {
         self.context = context
@@ -31,11 +47,13 @@ final class CanvasRenderer: NSObject, MTKViewDelegate {
         let h = Int(canvasSize.height)
 
         activeStrokeTexture = try textureManager.makeCanvasTexture(width: w, height: h, label: "Active Stroke")
+        strokeTailTexture = try textureManager.makeCanvasTexture(width: w, height: h, label: "Stroke Tail")
         compositeTexture = try textureManager.makeCanvasTexture(width: w, height: h, label: "Composite")
         blendTempTexture = try textureManager.makeCanvasTexture(width: w, height: h, label: "Blend Temp")
 
         guard let commandBuffer = context.commandQueue.makeCommandBuffer() else { return }
         textureManager.clearTexture(activeStrokeTexture, commandBuffer: commandBuffer)
+        textureManager.clearTexture(strokeTailTexture, commandBuffer: commandBuffer)
         textureManager.clearTexture(compositeTexture, commandBuffer: commandBuffer)
         commandBuffer.commit()
         commandBuffer.waitUntilCompleted()
@@ -101,42 +119,44 @@ final class CanvasRenderer: NSObject, MTKViewDelegate {
 
         encodeActiveStroke(into: commandBuffer)
 
-        textureManager.clearTexture(compositeTexture, commandBuffer: commandBuffer)
+        // While the pen is down, only the pixels the stroke touched since the last frame can
+        // have changed — provided nothing else about the scene did. Otherwise redo all of it.
+        let signature = CompositeSignature(viewModel: viewModel, layerStack: layerStack)
+        let strokeOnly = viewModel.isDrawing && viewModel.transformSession == nil && viewModel.floatingTexture == nil
+        let regions: [MTLScissorRect]? =
+            strokeOnly && signature == compositeSignature ? Self.disjoint(pendingRegions) : nil
+        compositeSignature = strokeOnly ? signature : nil
+        pendingRegions.removeAll()
+
+        if let regions {
+            guard !regions.isEmpty else { return }
+            compositor.clear(compositeTexture, regions: regions, commandBuffer: commandBuffer)
+        } else {
+            textureManager.clearTexture(compositeTexture, commandBuffer: commandBuffer)
+        }
+
+        let stroke = viewModel.isDrawing
+            ? CompositorPipeline.StrokeOverlay(committed: activeStrokeTexture, tail: strokeTailTexture,
+                                               opacity: viewModel.brushOpacity, erase: isErasing)
+            : nil
 
         for (i, layer) in layerStack.layers.enumerated() {
             guard layer.isVisible else { continue }
+            let isActive = i == layerStack.activeLayerIndex
 
-            // Bottom layer always uses normal blending (no destination to blend with)
-            // Upper layers use their configured blend mode
-            if i == 0 {
-                compositor.compositeNormal(
-                    source: layer.texture,
-                    onto: compositeTexture,
-                    opacity: layer.opacity,
-                    commandBuffer: commandBuffer
-                )
-            } else {
-                compositor.compositeWithBlendMode(
-                    source: layer.texture,
-                    onto: compositeTexture,
-                    opacity: layer.opacity,
-                    blendMode: layer.blendMode,
-                    tempTexture: blendTempTexture,
-                    commandBuffer: commandBuffer
-                )
-            }
+            compositor.compositeLayer(
+                source: layer.texture,
+                onto: compositeTexture,
+                opacity: layer.opacity,
+                // Bottom layer always uses normal blending (no destination to blend with)
+                blendMode: i == 0 ? .normal : layer.blendMode,
+                stroke: isActive ? stroke : nil,
+                tempTexture: blendTempTexture,
+                regions: regions,
+                commandBuffer: commandBuffer
+            )
 
-            if i == layerStack.activeLayerIndex {
-                // Composite active stroke if drawing
-                if viewModel.isDrawing && !isErasing {
-                    compositor.compositeNormal(
-                        source: activeStrokeTexture,
-                        onto: compositeTexture,
-                        opacity: viewModel.brushOpacity,
-                        commandBuffer: commandBuffer
-                    )
-                }
-
+            if isActive {
                 // Transform tool preview — composite the source snapshot warped by
                 // the session's current affine transform over its sourceBounds.
                 if let session = viewModel.transformSession, session.targetLayer.id == layer.id {
@@ -203,55 +223,138 @@ final class CanvasRenderer: NSObject, MTKViewDelegate {
         }
     }
 
-    /// Bring the in-progress stroke up to date with the points received so far.
-    private func encodeActiveStroke(into commandBuffer: MTLCommandBuffer) {
-        guard let viewModel = viewModel, let layerStack = viewModel.layerStack else { return }
+    /// Bring the stroke textures up to date with the pen samples received so far.
+    ///
+    /// Points that have settled are drawn into `activeStrokeTexture` once and never again;
+    /// the rest (the tail) is redrawn into `strokeTailTexture`. That keeps the cost of a
+    /// frame independent of how long the stroke already is.
+    ///
+    /// - Parameter finishing: the pen has lifted, so every point is settled.
+    private func encodeActiveStroke(into commandBuffer: MTLCommandBuffer, finishing: Bool = false) {
+        guard let viewModel = viewModel, viewModel.isDrawing, let path = viewModel.activePath else { return }
+        guard finishing || path.revision != renderedRevision else { return }
+        renderedRevision = path.revision
 
-        let isErasing = viewModel.currentBrush.category == .utility
-        if viewModel.isDrawing {
-            let points = viewModel.currentInterpolatedPoints()
-            if points.count != lastRenderedPointCount {
-                // Build the mirror set once. `strokes[0]` is the primary stroke.
-                let strokes = viewModel.currentInterpolatedStrokeSet()
+        let points = path.points
+        guard !points.isEmpty else { return }
 
-                if isErasing {
-                    // Eraser renders directly onto the layer texture (destination-out blending).
-                    // Render the NEW tail of each mirror stroke incrementally.
-                    if let activeLayer = layerStack.activeLayer {
-                        for mirroredStroke in strokes {
-                            let newPoints: [InterpolatedPoint]
-                            if lastRenderedPointCount > 0 && lastRenderedPointCount < mirroredStroke.count {
-                                newPoints = Array(mirroredStroke[max(0, lastRenderedPointCount - 1)...])
-                            } else {
-                                newPoints = mirroredStroke
-                            }
-                            strokeRenderer.render(
-                                points: newPoints,
-                                brush: viewModel.currentBrush,
-                                color: StrokeColor(red: 1, green: 1, blue: 1, alpha: viewModel.brushOpacity),
-                                targetTexture: activeLayer.texture,
-                                commandBuffer: commandBuffer,
-                                canvasSize: canvasSize,
-                                isEraser: true
-                            )
-                        }
-                    }
-                } else {
-                    // Normal brush: redraw every mirror into the active stroke texture each frame.
-                    textureManager.clearTexture(activeStrokeTexture, commandBuffer: commandBuffer)
-                    for mirroredStroke in strokes {
-                        strokeRenderer.render(
-                            points: mirroredStroke,
-                            brush: viewModel.currentBrush,
-                            color: viewModel.currentColor,
-                            targetTexture: activeStrokeTexture,
-                            commandBuffer: commandBuffer,
-                            canvasSize: canvasSize
-                        )
-                    }
-                }
-                lastRenderedPointCount = points.count
+        let brush = viewModel.currentBrush
+        // An eraser stroke is built like any other; its coverage is subtracted when it is
+        // merged, so the colour is irrelevant.
+        let color = brush.category == .utility ? StrokeColor.white : viewModel.currentColor
+        let mirrors = SymmetryTransform.transforms(mode: viewModel.symmetryMode, canvasSize: canvasSize)
+        let nothingCommitted = committedThrough == nil
+        let from = committedThrough ?? 0
+
+        // 1. Newly settled points. Stop one short of the last settled point so the ribbon's
+        //    edge where this piece ends is computed from settled neighbours on both sides —
+        //    the next piece then starts from exactly the same edge.
+        let settleThrough = finishing ? points.count - 1 : path.settledCount - 2
+        var committedRegions: [MTLScissorRect] = []
+        if finishing || settleThrough > from {
+            let pass = MTLRenderPassDescriptor()
+            pass.colorAttachments[0].texture = activeStrokeTexture
+            pass.colorAttachments[0].loadAction = .load
+            pass.colorAttachments[0].storeAction = .store
+            if let encoder = commandBuffer.makeRenderCommandEncoder(descriptor: pass) {
+                committedRegions = strokeRenderer.encode(
+                    points: points, range: from...settleThrough, brush: brush, color: color,
+                    startCap: nothingCommitted, endCap: finishing,
+                    mirrors: mirrors, encoder: encoder, canvasSize: canvasSize
+                ).compactMap(region(for:))
+                encoder.endEncoding()
             }
+            committedThrough = settleThrough
+            for region in committedRegions {
+                strokeRegion = strokeRegion.map { Self.union($0, region) } ?? region
+            }
+        }
+
+        // 2. The tail: erase last frame's, draw this frame's.
+        var newTailRegions: [MTLScissorRect] = []
+        if !tailRegions.isEmpty || !finishing {
+            let pass = MTLRenderPassDescriptor()
+            pass.colorAttachments[0].texture = strokeTailTexture
+            pass.colorAttachments[0].loadAction = .load
+            pass.colorAttachments[0].storeAction = .store
+            if let encoder = commandBuffer.makeRenderCommandEncoder(descriptor: pass) {
+                compositor.encodeClear(regions: tailRegions, in: encoder, of: strokeTailTexture)
+                if !finishing {
+                    newTailRegions = strokeRenderer.encode(
+                        points: points, range: (committedThrough ?? 0)...(points.count - 1),
+                        brush: brush, color: color,
+                        startCap: committedThrough == nil, endCap: true,
+                        mirrors: mirrors, encoder: encoder, canvasSize: canvasSize
+                    ).compactMap(region(for:))
+                }
+                encoder.endEncoding()
+            }
+        }
+
+        pendingRegions += committedRegions + tailRegions + newTailRegions
+        tailRegions = newTailRegions
+    }
+
+    // MARK: - Regions
+
+    /// Canvas-space bounds (Y up) as a rectangle of texture pixels (Y down), padded so
+    /// antialiased edges are inside it. Nil if it misses the canvas.
+    private func region(for bounds: CGRect) -> MTLScissorRect? {
+        guard !bounds.isNull else { return nil }
+        let width = Int(canvasSize.width)
+        let height = Int(canvasSize.height)
+        let minX = max(0, Int(bounds.minX.rounded(.down)) - 2)
+        let maxX = min(width, Int(bounds.maxX.rounded(.up)) + 2)
+        let minY = max(0, height - Int(bounds.maxY.rounded(.up)) - 2)
+        let maxY = min(height, height - Int(bounds.minY.rounded(.down)) + 2)
+        guard maxX > minX, maxY > minY else { return nil }
+        return MTLScissorRect(x: minX, y: minY, width: maxX - minX, height: maxY - minY)
+    }
+
+    private static func union(_ a: MTLScissorRect, _ b: MTLScissorRect) -> MTLScissorRect {
+        let minX = min(a.x, b.x), minY = min(a.y, b.y)
+        let maxX = max(a.x + a.width, b.x + b.width), maxY = max(a.y + a.height, b.y + b.height)
+        return MTLScissorRect(x: minX, y: minY, width: maxX - minX, height: maxY - minY)
+    }
+
+    private static func intersects(_ a: MTLScissorRect, _ b: MTLScissorRect) -> Bool {
+        a.x < b.x + b.width && b.x < a.x + a.width && a.y < b.y + b.height && b.y < a.y + a.height
+    }
+
+    /// Merge overlapping rectangles until none overlap. Compositing blends each layer once
+    /// per rectangle, so a pixel covered twice would have the layer applied twice.
+    static func disjoint(_ regions: [MTLScissorRect]) -> [MTLScissorRect] {
+        var result: [MTLScissorRect] = []
+        for var region in regions {
+            while let index = result.firstIndex(where: { intersects($0, region) }) {
+                region = union(region, result.remove(at: index))
+            }
+            result.append(region)
+        }
+        return result
+    }
+
+    /// What a composite depends on besides the stroke itself. If any of it changes while
+    /// the pen is down, the next frame recomposites everything.
+    private struct CompositeSignature: Equatable {
+        struct LayerState: Equatable {
+            let id: UUID
+            let isVisible: Bool
+            let opacity: Float
+            let blendMode: LayerBlendMode
+        }
+        let layers: [LayerState]
+        let activeLayerIndex: Int
+        let strokeOpacity: Float
+        let brushID: UUID
+
+        init(viewModel: CanvasViewModel, layerStack: LayerStack) {
+            layers = layerStack.layers.map {
+                LayerState(id: $0.id, isVisible: $0.isVisible, opacity: $0.opacity, blendMode: $0.blendMode)
+            }
+            activeLayerIndex = layerStack.activeLayerIndex
+            strokeOpacity = viewModel.brushOpacity
+            brushID = viewModel.currentBrush.id
         }
     }
 
@@ -660,12 +763,27 @@ final class CanvasRenderer: NSObject, MTKViewDelegate {
     // MARK: - Stroke Lifecycle
 
     func beginStroke() {
-        lastRenderedPointCount = 0
         guard let commandBuffer = context.commandQueue.makeCommandBuffer() else { return }
-        textureManager.clearTexture(activeStrokeTexture, commandBuffer: commandBuffer)
+        // A stroke that never reached finalizeStroke (tool switched mid-drag, say) leaves
+        // its pixels behind; a finished one has already cleaned up.
+        if let strokeRegion {
+            compositor.clear(activeStrokeTexture, regions: [strokeRegion], commandBuffer: commandBuffer)
+        }
+        compositor.clear(strokeTailTexture, regions: tailRegions, commandBuffer: commandBuffer)
         commandBuffer.commit()
+        resetStrokeState()
     }
 
+    private func resetStrokeState() {
+        committedThrough = nil
+        renderedRevision = 0
+        tailRegions = []
+        strokeRegion = nil
+        pendingRegions = []
+        compositeSignature = nil
+    }
+
+    /// Merge the finished stroke into the active layer. Call before `viewModel.endStroke()`.
     func finalizeStroke() {
         guard let viewModel = viewModel,
               let layerStack = viewModel.layerStack,
@@ -675,24 +793,34 @@ final class CanvasRenderer: NSObject, MTKViewDelegate {
 
         guard let commandBuffer = context.commandQueue.makeCommandBuffer() else { return }
 
-        // Samples that arrived since the last displayed frame haven't been drawn yet.
-        encodeActiveStroke(into: commandBuffer)
+        // Draw the samples that arrived since the last displayed frame, and settle the tail.
+        encodeActiveStroke(into: commandBuffer, finishing: true)
 
-        if !isErasing {
-            // Normal brush: merge active stroke texture into layer
-            compositor.compositeNormal(
-                source: activeStrokeTexture,
-                onto: activeLayer.texture,
-                opacity: viewModel.brushOpacity,
+        if let strokeRegion {
+            // Undo only needs the pixels this stroke is about to change.
+            viewModel.undoManager.saveRegion(
+                of: activeLayer, region: strokeRegion, context: context,
+                description: isErasing ? "Erase" : viewModel.currentBrush.name,
                 commandBuffer: commandBuffer
             )
-        }
-        // Eraser already rendered directly onto the layer — nothing to merge
+            viewModel.markDirty()
 
-        textureManager.clearTexture(activeStrokeTexture, commandBuffer: commandBuffer)
+            if isErasing {
+                compositor.erase(
+                    source: activeStrokeTexture, from: activeLayer.texture,
+                    opacity: viewModel.brushOpacity, regions: [strokeRegion], commandBuffer: commandBuffer
+                )
+            } else {
+                compositor.compositeNormal(
+                    source: activeStrokeTexture, onto: activeLayer.texture,
+                    opacity: viewModel.brushOpacity, regions: [strokeRegion], commandBuffer: commandBuffer
+                )
+            }
+            compositor.clear(activeStrokeTexture, regions: [strokeRegion], commandBuffer: commandBuffer)
+        }
+
         commandBuffer.commit()
-        commandBuffer.waitUntilCompleted()
-        lastRenderedPointCount = 0
+        resetStrokeState()
 
         // Update thumbnail off the main thread to avoid blocking drawing
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in

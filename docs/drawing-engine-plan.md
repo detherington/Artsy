@@ -1,7 +1,7 @@
 # Drawing engine plan
 
 Goal: make drawing and painting the first-class feature of Artsy. Written 2026-10-05 from a
-code audit of v0.6.1 plus outside research; step 1 was done the same day.
+code audit of v0.6.1 plus outside research. Step 1 is merged; step 2 is under way.
 
 **Direction:** keep the current ribbon renderer for inking pens, and build a stamp (dab)
 engine beside it for everything meant to be paint or dry media. Fix feel and correctness
@@ -63,29 +63,43 @@ Sizes are relative to each other.
 - **Pen-up fix.** Samples that arrived after the last displayed frame were never drawn, so
   strokes ended up to a frame short. `finalizeStroke()` now draws them before merging.
 
-### 2. Feel (medium)
+### 2. Feel (medium) — in progress
 
-- Full-rate input: coalescing off during strokes; `tabletPoint` funnelled with mouse events.
-  **Start with a hardware test** — see the first risk below.
-- Render only the new part of the stroke each frame; cache the layers below and above the
-  active one. Target: the frame-cost benchmark is flat across stroke lengths.
+Done:
+
+- **Incremental strokes.** `StrokePath` settles each segment once the next pen sample has
+  arrived. `CanvasRenderer` draws settled points into the stroke texture once and redraws
+  only the unsettled tail (a second texture) each frame, then recomposites just the
+  rectangles that changed. A frame now costs the same however long the stroke is.
+- **Preview equals result.** The stroke is merged into the active layer's colour inside the
+  compositing shader, before that layer's opacity and blend mode, so nothing changes at pen-up.
+- **Eraser through the stroke buffer** (pulled forward from step 3, because the old path
+  could not be made incremental). Its coverage is subtracted when it merges, which removes
+  the beading. The eraser now erases fully at any pressure; before, it only seemed to
+  because the overlapping increments compounded. The Opacity slider erases partially.
+- **Dirty-rectangle undo.** A stroke saves the rectangle it touched on its layer, at pen-up.
+  Other actions still snapshot the whole stack; both kinds share one history.
+- **Input.** Mouse coalescing is off while a stroke is in progress. `tabletPoint(with:)`
+  feeds the stroke, so pressing harder without moving grows the mark (it keeps the firmest
+  pressure seen at a spot). Tested with synthesized tablet events only — see the first risk.
+- **Brush cursor.** A ring the size of the tip on screen, following brush size and zoom;
+  a crosshair below 6 pt or above 512 pt.
+
+Still to do:
+
+- **Hardware check of the input rate** — see the first risk below. Draw with stroke
+  recording on and look at the spacing of the sample times.
 - Stabilisation: on by default, per-brush amount, pressure smoothed with position, catch-up
   to the pen on lift, start and end taper. Centripetal Catmull-Rom instead of uniform.
-- Brush-size outline cursor.
-- Dirty-rectangle undo instead of whole-stack snapshots.
-- Found during step 1, to fix here:
-  - The in-progress stroke is previewed with normal blending at full layer opacity, then
-    merged into the layer, so on a layer with reduced opacity or a blend mode it changes
-    appearance at pen-up.
-  - Every stroke end reads the whole layer back to the CPU to rebuild a 64 px thumbnail.
+  Worth tuning with a pen in hand rather than blind.
+- Every stroke end reads the whole layer back to the CPU to rebuild a 64 px thumbnail.
+- Undo depth is still 25 steps. Strokes are now cheap enough to keep many more; the limit
+  should become a memory budget.
 
 ### 3. Stamp engine (large)
 
 - Instanced dabs with tip textures, spacing, and flow versus opacity (wash and build-up modes).
 - Scatter and jitter; tilt, rotation and velocity dynamics; moving and static grain.
-- Route the eraser through the stroke buffer. Today it draws straight into the layer in
-  overlapping increments, which shows as beading at partial opacity (visible in
-  `Golden/eraser.png`).
 - Re-author pencil, chalk, pastel, airbrush, marker, acrylic and oil on stamps.
 - Select the shader by a field on the brush, not by its name.
 
@@ -106,26 +120,31 @@ wet edges, paper granulation, impasto height map with lighting.
 
 Tiled layers, more than 8 layers, larger canvases, 16-bit export, hold-to-snap shapes, guides.
 
-## Baseline measurements
+## Measurements
 
-M4 Pro, optimised build, 2048² canvas, Soft Round at 24 px, two layers unless noted.
-From `StrokeBenchmarkTests` on 2026-10-05, before any step 2 work.
+M4 Pro, optimised build, 2048² canvas, Soft Round at 24 px. From `StrokeBenchmarkTests`,
+2026-10-05.
 
-| Stroke path so far | Main-thread encode | Whole frame incl. GPU |
+One frame while a stroke is in progress (main-thread encode / whole frame including GPU):
+
+| Stroke path so far | v0.6.1 + step 1 | After incremental strokes |
 |---|---|---|
-| 2,000 px | 0.39 ms | 2.31 ms |
-| 10,000 px | 1.29 ms | 3.03 ms |
-| 30,000 px | 3.63 ms | 5.71 ms |
-| 60,000 px | 7.33 ms | 9.32 ms |
+| 2,000 px | 0.39 / 2.31 ms | 0.05 / 0.42 ms |
+| 10,000 px | 1.29 / 3.03 ms | 0.05 / 0.26 ms |
+| 30,000 px | 3.63 / 5.71 ms | 0.05 / 0.27 ms |
+| 60,000 px | 7.33 / 9.32 ms | 0.05 / 0.27 ms |
 
-A 120 Hz frame is 8.3 ms. A second run was within 10% of these.
+A 120 Hz frame is 8.3 ms.
 
-| Undo snapshot at pen-down | Call | Until GPU copies finish | Memory per undo step |
-|---|---|---|---|
-| 2 layers | 0.3 ms | 3–16 ms | 64 MB |
-| 8 layers | 0.5–0.8 ms | 30–63 ms | 256 MB |
+Undo cost of one 600 px stroke:
 
-The GPU figures for the snapshot varied that much across three runs; treat them as a range.
+| | v0.6.1 + step 1 | After dirty-rectangle undo |
+|---|---|---|
+| 2 layers | 64 MB, copied at pen-down | 0.12 MB, about 1 ms at pen-up |
+| 8 layers | 256 MB, copied at pen-down | 0.12 MB, about 1.2 ms at pen-up |
+
+A whole-stack snapshot (still used by layer changes, fills, pastes and selections) took
+3–17 ms of GPU time with 2 layers and 30–63 ms with 8 across runs; treat those as a range.
 
 ## Testing the engine
 

@@ -327,7 +327,9 @@ extension BrushDescriptor {
         baseSize: 24,
         pressureDynamics: PressureDynamics(
             sizeRange: 0.5...1.0,
-            opacityRange: 0.5...1.0
+            // Erases fully at any pressure (a mouse reports 0.7); the Opacity slider is
+            // the way to erase partially.
+            opacityRange: 1.0...1.0
         ),
         opacity: 1.0,
         fixedNibAngle: nil

@@ -27,7 +27,7 @@ final class TabletEventHandler {
         let tiltY: Float
         let rotation: Float
 
-        if event.subtype == .tabletPoint {
+        if isTabletEvent(event) {
             pressure = event.pressure
             tiltX = Float(event.tilt.x)
             tiltY = Float(event.tilt.y)
@@ -49,8 +49,9 @@ final class TabletEventHandler {
         )
     }
 
-    /// Detect whether a tablet is providing the event.
+    /// Detect whether a tablet is providing the event. Pen data arrives on native tablet
+    /// events and on mouse events tagged as tablet points; `subtype` is only valid on the latter.
     static func isTabletEvent(_ event: NSEvent) -> Bool {
-        event.subtype == .tabletPoint
+        event.type == .tabletPoint || event.subtype == .tabletPoint
     }
 }

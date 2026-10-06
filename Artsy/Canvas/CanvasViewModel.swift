@@ -56,7 +56,7 @@ final class CanvasViewModel: ObservableObject {
     @Published var isDistractionFree = false
 
     // Active stroke being drawn
-    var activeStrokePoints: [StrokePoint] = []
+    private(set) var activePath: StrokePath?
     var isDrawing = false
 
     // Layer stack (set up by renderer)
@@ -64,9 +64,6 @@ final class CanvasViewModel: ObservableObject {
 
     // Undo manager
     let undoManager = CanvasUndoManager()
-
-    // Interpolator
-    let interpolator = StrokeInterpolator()
 
     // Stroke smoothing
     let smoother = StrokeSmoother()
@@ -120,60 +117,28 @@ final class CanvasViewModel: ObservableObject {
         smoother.mode = smoothingMode
         smoother.strength = smoothingStrength
         smoother.begin()
-        let smoothed = smoother.filter(point)
-        activeStrokePoints = [smoothed]
+        let path = StrokePath(style: StrokePath.Style(
+            brushSize: brushSize,
+            pressureCurve: pressureCurve,
+            dynamics: currentBrush.pressureDynamics
+        ))
+        path.append(smoother.filter(point))
+        activePath = path
         isDrawing = true
     }
 
     func continueStroke(point: StrokePoint) {
         recorder?.append(point)
-        let smoothed = smoother.filter(point)
-        activeStrokePoints.append(smoothed)
+        guard isDrawing else { return }
+        activePath?.append(smoother.filter(point))
     }
 
     /// Call after the renderer has finalized the stroke — it still needs the points.
     func endStroke() {
         smoother.end()
         recorder?.endStroke()
-        activeStrokePoints = []
+        activePath = nil
         isDrawing = false
-    }
-
-    /// Interpolated points for every symmetry mirror (first array = original).
-    /// When symmetryMode == .off this returns a single-element array.
-    func currentInterpolatedStrokeSet() -> [[InterpolatedPoint]] {
-        let primary = currentInterpolatedPoints()
-        guard symmetryMode.isOn, !primary.isEmpty else { return [primary] }
-        return SymmetryTransform.mirror(primary, mode: symmetryMode, canvasSize: canvasSize)
-    }
-
-    /// Raw stroke points mirrored — used for the eraser which renders raw points.
-    func currentStrokeSet() -> [[StrokePoint]] {
-        guard symmetryMode.isOn, !activeStrokePoints.isEmpty else { return [activeStrokePoints] }
-        return SymmetryTransform.mirror(activeStrokePoints, mode: symmetryMode, canvasSize: canvasSize)
-    }
-
-    func currentInterpolatedPoints() -> [InterpolatedPoint] {
-        guard activeStrokePoints.count >= 2 else {
-            if let p = activeStrokePoints.first {
-                let mapped = pressureCurve.map(p.pressure)
-                return [InterpolatedPoint(
-                    position: p.position,
-                    pressure: mapped,
-                    width: currentBrush.pressureDynamics.size(for: mapped) * brushSize,
-                    opacity: currentBrush.pressureDynamics.opacity(for: mapped),
-                    angle: 0
-                )]
-            }
-            return []
-        }
-
-        return interpolator.interpolate(
-            points: activeStrokePoints,
-            brushSize: brushSize,
-            pressureCurve: pressureCurve,
-            dynamics: currentBrush.pressureDynamics
-        )
     }
 
     // MARK: - Undo / Redo
