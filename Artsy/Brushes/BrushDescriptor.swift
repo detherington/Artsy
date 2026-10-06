@@ -54,8 +54,6 @@ enum BrushCategory: String, Codable, CaseIterable {
 enum RibbonShader: String, Codable {
     case procedural   // Hard/soft round via smoothstep
     case watercolor   // Soft edges with wet-edge darkening
-    case acrylic      // Thick opaque with subtle texture
-    case oil          // Impasto with pronounced bristles + canvas grain
 }
 
 /// Settings for a brush drawn with dabs.
@@ -66,6 +64,9 @@ struct StampSettings: Codable, Equatable {
         case round
         /// A rough-edged, blotchy disc, like the end of a stick of chalk.
         case chalk
+        /// A disc with a ragged edge, the footprint of a loaded bristle brush. The bristle
+        /// streaks themselves come from stroke-attached `bristles` grain.
+        case bristle
     }
 
     /// How dabs add up within one stroke.
@@ -86,7 +87,22 @@ struct StampSettings: Codable, Equatable {
             /// valleys too. This is what makes graphite and chalk look dry.
             case height
         }
+        enum Texture: String, Codable {
+            /// The tooth of cold-press paper.
+            case paper
+            /// Streaks along the stroke, the marks of individual bristles.
+            case bristles
+        }
+        enum Attachment: String, Codable {
+            /// Fixed to the canvas: every stroke meets the same texture, as with real paper.
+            case canvas
+            /// Follows the stroke: the texture runs along the path and bends with it, as
+            /// bristle marks do.
+            case stroke
+        }
         var mode: Mode
+        var texture: Texture = .paper
+        var attachment: Attachment = .canvas
         /// Paper texture pixels per canvas pixel: larger is finer.
         var scale: Float
         /// 0 (no grain) to 1 (strongest). For `height`, the pressure it takes to reach
@@ -192,15 +208,22 @@ extension BrushDescriptor {
         id: UUID(uuidString: "00000000-0005-0000-0000-000000000005")!,
         name: "Marker",
         category: .painting,
-        hardness: 0.3,
+        hardness: 0.6,
         baseSize: 32,
         pressureDynamics: PressureDynamics(
-            sizeRange: 0.8...1.0,
-            opacityRange: 0.6...0.9
+            sizeRange: 0.85...1.0,
+            opacityRange: 0.8...1.0
         ),
-        opacity: 0.7,
+        opacity: 0.7,          // translucent: each separate stroke darkens the last
         smoothing: 0.3,
-        fixedNibAngle: nil
+        fixedNibAngle: nil,
+        // A wash, so going back over a stroke without lifting stays flat; faint streaks
+        // run along the stroke the way a felt tip leaves them.
+        rendering: .stamp(StampSettings(
+            spacing: 0.08, flow: 0.85, accumulation: .wash,
+            grain: .init(mode: .multiply, texture: .bristles, attachment: .stroke, scale: 1.6, depth: 0.2),
+            followsDirection: true
+        ))
     )
 
     static let watercolor = BrushDescriptor(
@@ -225,16 +248,20 @@ extension BrushDescriptor {
         id: UUID(uuidString: "00000000-0008-0000-0000-000000000008")!,
         name: "Acrylic",
         category: .painting,
-        hardness: 0.15,      // Slightly soft edge but mostly opaque
+        hardness: 0.75,
         baseSize: 28,
         pressureDynamics: PressureDynamics(
             sizeRange: 0.5...1.0,
             opacityRange: 0.6...1.0   // Heavy coverage
         ),
-        opacity: 0.9,
+        opacity: 0.95,
         smoothing: 0.3,
         fixedNibAngle: nil,
-        rendering: .ribbon(.acrylic)
+        rendering: .stamp(StampSettings(
+            tip: .bristle, spacing: 0.05, flow: 0.6, accumulation: .wash,
+            grain: .init(mode: .multiply, texture: .bristles, attachment: .stroke, scale: 1.2, depth: 0.55),
+            opacityJitter: 0.1, followsDirection: true
+        ))
     )
 
     static let technicalPen = BrushDescriptor(
@@ -343,7 +370,7 @@ extension BrushDescriptor {
         id: UUID(uuidString: "00000000-0014-0000-0000-000000000014")!,
         name: "Oil",
         category: .painting,
-        hardness: 0.6,          // firm-ish edge with slight softness
+        hardness: 0.8,
         baseSize: 30,
         pressureDynamics: PressureDynamics(
             sizeRange: 0.45...1.0,
@@ -352,7 +379,12 @@ extension BrushDescriptor {
         opacity: 0.95,
         smoothing: 0.3,
         fixedNibAngle: nil,
-        rendering: .ribbon(.oil)
+        // Thicker paint than acrylic: deeper bristle furrows
+        rendering: .stamp(StampSettings(
+            tip: .bristle, spacing: 0.05, flow: 0.75, accumulation: .wash,
+            grain: .init(mode: .multiply, texture: .bristles, attachment: .stroke, scale: 1.0, depth: 0.7),
+            sizeJitter: 0.05, opacityJitter: 0.1, followsDirection: true
+        ))
     )
 
     static let airbrush = BrushDescriptor(

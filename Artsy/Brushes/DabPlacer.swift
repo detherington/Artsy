@@ -15,6 +15,8 @@ struct Dab {
     /// 0...1: how firmly the dab is pressed into the paper. Only matters to height grain,
     /// where it decides how far into the paper's valleys the pigment gets.
     var reach: Float = 1
+    /// How far along the stroke the dab sits; stroke-attached grain runs along it.
+    var pathDistance: Float = 0
 }
 
 /// Walks a stroke's path and lays dabs along it at the brush's spacing.
@@ -95,7 +97,8 @@ struct DabPlacer {
             }
 
             result.append(Dab(center: center, size: max(size, 0.5), angle: angle, aspect: aspect,
-                              opacity: opacity, seed: random(0), reach: usesReach ? pressed : 1))
+                              opacity: opacity, seed: random(0), reach: usesReach ? pressed : 1,
+                              pathDistance: Float(nextDistance)))
             index += 1
 
             // Each copy of a tap's dab gets its own index, and so its own jitter.

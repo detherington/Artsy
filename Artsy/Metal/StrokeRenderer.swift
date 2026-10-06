@@ -81,6 +81,7 @@ final class StrokeRenderer {
         var grainMode: Int32
         var grainScale: Float
         var grainDepth: Float
+        var grainOnStroke: Int32
     }
 
     /// Draw dabs into an open render pass on a stroke texture, once per entry in `mirrors`
@@ -100,6 +101,7 @@ final class StrokeRenderer {
         canvasSize: CGSize
     ) -> [CGRect] {
         guard !dabs.isEmpty, let paper = context.brushTextures.paperGrain else { return [] }
+        let grainTexture = settings.grain.flatMap { context.brushTextures.grainTexture(for: $0.texture) } ?? paper
 
         var transform = orthographicProjection(
             left: 0, right: Float(canvasSize.width),
@@ -113,7 +115,8 @@ final class StrokeRenderer {
             tipIsTexture: tipTexture == nil ? 0 : 1,
             grainMode: { switch settings.grain?.mode { case .multiply: return 1; case .height: return 2; case nil: return 0 } }(),
             grainScale: settings.grain?.scale ?? 1,
-            grainDepth: settings.grain?.depth ?? 0
+            grainDepth: settings.grain?.depth ?? 0,
+            grainOnStroke: settings.grain?.attachment == .stroke ? 1 : 0
         )
 
         encoder.setRenderPipelineState(context.stampPipelineState)
@@ -121,15 +124,15 @@ final class StrokeRenderer {
         encoder.setFragmentBytes(&params, length: MemoryLayout<StampParams>.stride, index: 0)
         // Both slots need a texture even when the shader won't sample one of them.
         encoder.setFragmentTexture(tipTexture ?? paper, index: 0)
-        encoder.setFragmentTexture(paper, index: 1)
+        encoder.setFragmentTexture(grainTexture, index: 1)
         encoder.setFragmentSamplerState(context.tipSampler, index: 0)
         encoder.setFragmentSamplerState(context.grainSampler, index: 1)
 
         var drawn: [CGRect] = []
         for mirror in mirrors {
-            // Eight floats per dab, matching `StampInstance` in Shaders.metal
+            // Nine floats per dab, matching `StampInstance` in Shaders.metal
             var instances: [Float] = []
-            instances.reserveCapacity(dabs.count * 8)
+            instances.reserveCapacity(dabs.count * 9)
             var bounds = CGRect.null
 
             for dab in dabs {
@@ -139,7 +142,7 @@ final class StrokeRenderer {
                                            y: dab.center.y + CGFloat(sin(dab.angle))))
                 let angle = Float(atan2(ahead.y - center.y, ahead.x - center.x))
                 instances += [Float(center.x), Float(center.y), dab.size, angle,
-                              dab.opacity * opacityScale, dab.seed, dab.reach, dab.aspect]
+                              dab.opacity * opacityScale, dab.seed, dab.reach, dab.aspect, dab.pathDistance]
 
                 // Half the diagonal covers the quad at any rotation
                 let reach = CGFloat(dab.size * max(dab.aspect, 1)) * 0.7072
@@ -165,16 +168,12 @@ final class StrokeRenderer {
         switch ribbonShader(of: brush) {
         case .procedural: return context.strokeProceduralPipelineState
         case .watercolor: return context.strokeWatercolorPipelineState
-        case .acrylic: return context.strokeAcrylicPipelineState
-        case .oil: return context.strokeOilPipelineState
         }
     }
 
     private func radialCapPipelineState(brush: BrushDescriptor) -> MTLRenderPipelineState {
         switch ribbonShader(of: brush) {
         case .watercolor: return context.strokeRadialWatercolorPipelineState
-        case .acrylic: return context.strokeRadialAcrylicPipelineState
-        case .oil: return context.strokeRadialOilPipelineState
         case .procedural: return context.strokeRadialPipelineState
         }
     }
