@@ -126,6 +126,9 @@ struct StampSettings: Codable, Equatable {
     var scatter: Float = 0
     /// Turn each dab to face along the stroke.
     var followsDirection: Bool = false
+    /// Dabs per second laid where the pen rests without moving. 0 means a resting pen adds
+    /// nothing, as a pencil wouldn't; an airbrush keeps spraying.
+    var holdRate: Float = 0
 }
 
 // MARK: - Default Brushes
@@ -400,8 +403,9 @@ extension BrushDescriptor {
         opacity: 1.0,
         smoothing: 0.3,
         fixedNibAngle: nil,
-        // Faint dabs with no cap: paint keeps building as you go back over it.
-        rendering: .stamp(StampSettings(spacing: 0.06, flow: 0.07, accumulation: .buildUp))
+        // Faint dabs with no cap: paint keeps building as you go back over it, or as you
+        // hold the pen in one place.
+        rendering: .stamp(StampSettings(spacing: 0.06, flow: 0.07, accumulation: .buildUp, holdRate: 60))
     )
 
     static let chalk = BrushDescriptor(

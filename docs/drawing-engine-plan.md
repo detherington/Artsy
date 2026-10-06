@@ -140,6 +140,11 @@ Done:
   Oil (ragged bristle tip; streaks that run along the stroke and bend with it).
 - **Stroke-attached grain.** Grain can be fixed to the canvas (paper, every stroke meets the
   same tooth) or run along the stroke (bristle streaks). Both textures are generated.
+- **A resting pen.** Each frame with the pen down and no new input, the view feeds the
+  stroke a sample at the pen's position (`holdStroke`). Smoothing catches up to a resting
+  pen, and a brush with a `holdRate` (the Airbrush) keeps laying dabs where it rests. Rests
+  are timed from the samples, not the frames, and recorded like any other input, so a
+  replay rests for just as long and lays the same dabs whenever frames happen to run.
 - **Dynamics.** `TiltDynamics`: as the pen leans towards flat, the mark broadens, pales and
   elongates along the lean (the dry media shade with their side). `VelocityDynamics`: a
   loaded brush thins as it is swept faster (Ink Brush, Sumi-e; Watercolor also dries).
@@ -154,8 +159,6 @@ Still to do:
   step 5's wet edges and diffusion. Acrylic and Oil are flat paint until step 5 adds
   smudge and impasto.
 - Tips and grain from image files (with step 4's import).
-- An airbrush that keeps spraying while held still. Needs a clock the replay harness can
-  drive, or recordings will not reproduce it.
 - The values in the re-authored brushes and the dynamics are a first pass judged from
   test renders. Tilt in particular needs a pen: the direction convention is a guess.
 

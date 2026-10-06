@@ -162,6 +162,54 @@ final class StampBrushTests: XCTestCase {
         XCTAssertLessThan(halved, single * 0.7, "the opacity slider thins every dab")
     }
 
+    // MARK: - Resting pen
+
+    private func resting(at point: CGPoint, for seconds: Double) -> [StrokePoint] {
+        // A touch, then the per-frame samples the view sends while the pen rests
+        (0...Int(seconds * 120)).map { frame in
+            StrokePoint(position: point, pressure: 0.7, tiltX: 0, tiltY: 0, rotation: 0, timestamp: Double(frame) / 120)
+        }
+    }
+
+    /// An airbrush held in one place keeps spraying; a pencil held still adds nothing.
+    func testAnAirbrushKeepsSprayingWhereThePenRests() throws {
+        func darkness(_ brush: BrushDescriptor, seconds: Double) throws -> Float {
+            let harness = try EngineHarness(width: 120, height: 120)
+            harness.select(brush)
+            harness.viewModel.brushSize = 40
+            harness.draw(resting(at: CGPoint(x: 60, y: 60), for: seconds), pointsPerFrame: 7)
+            return 1 - harness.displayed().at(x: 60, y: 60).x
+        }
+        let touch = try darkness(.airbrush, seconds: 0)
+        let held = try darkness(.airbrush, seconds: 1)
+        let heldLonger = try darkness(.airbrush, seconds: 2)
+        XCTAssertGreaterThan(held, touch * 1.5, "a second's rest adds paint: \(touch) → \(held)")
+        XCTAssertGreaterThan(heldLonger, held)
+
+        XCTAssertEqual(try darkness(.pencil, seconds: 1), try darkness(.pencil, seconds: 0), accuracy: 0.001)
+    }
+
+    /// Spraying while resting depends on the samples' times, not on frames, and it does not
+    /// disturb the dabs laid along the path afterwards.
+    func testRestingSprayIsRepeatableAndLeavesThePathDabsAlone() throws {
+        let stroke = resting(at: CGPoint(x: 30, y: 60), for: 0.5)
+            + StrokeFixtures.line(from: CGPoint(x: 30, y: 60), to: CGPoint(x: 170, y: 60)).dropFirst()
+                .map { StrokePoint(position: $0.position, pressure: $0.pressure, tiltX: 0, tiltY: 0, rotation: 0, timestamp: $0.timestamp + 0.5) }
+        func render(pointsPerFrame: Int) throws -> PixelGrid {
+            let harness = try EngineHarness(width: 200, height: 120)
+            harness.select(.airbrush)
+            harness.viewModel.brushSize = 40
+            harness.draw(stroke, pointsPerFrame: pointsPerFrame)
+            return harness.composite()
+        }
+        let a = try render(pointsPerFrame: 3), b = try render(pointsPerFrame: 50)
+        var worst: Float = 0
+        for i in a.values.indices { worst = max(worst, abs(a.values[i] - b.values[i])) }
+        XCTAssertLessThan(worst, 0.008)
+        XCTAssertGreaterThan(1 - a.flattenedOverWhite().at(x: 30, y: 60).x, 1 - a.flattenedOverWhite().at(x: 120, y: 60).x,
+                             "darker where the pen rested than along the move")
+    }
+
     // MARK: - Grain
 
     /// The paper's tooth belongs to the canvas, not the stroke: drawing the same stroke on

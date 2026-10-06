@@ -14,6 +14,9 @@ final class StrokePath {
         var dynamics: PressureDynamics
         var tilt: TiltDynamics? = nil
         var velocity: VelocityDynamics? = nil
+        /// True when the brush lays dabs while the pen rests, so resting has to count as
+        /// a change worth redrawing.
+        var spraysWhileResting = false
         /// For input with no pressure of its own (a mouse): the distance over which pressure
         /// eases in from nothing at the start of the stroke and back out at its end, as if a
         /// pen were touching down and lifting off. 0 turns it off.
@@ -26,7 +29,31 @@ final class StrokePath {
     private(set) var samples: [StrokePoint] = []
     /// Goes up every time `points` changes.
     private(set) var revision = 0
+    /// How long the pen has rested at the end of the stroke, in seconds.
+    private(set) var holdDuration: TimeInterval = 0
+    private var restingSince: TimeInterval = 0
     private let style: Style
+
+    /// A pause with the pen down.
+    struct Rest: Equatable {
+        /// The sample the pen rested on.
+        let sampleIndex: Int
+        let duration: TimeInterval
+    }
+    /// Rests the pen has already moved on from, oldest first.
+    private(set) var rests: [Rest] = []
+    /// The rest in progress at the end of the stroke, if the pen is resting.
+    var currentRest: Rest? {
+        holdDuration > 0 ? Rest(sampleIndex: samples.count - 1, duration: holdDuration) : nil
+    }
+    /// For each sample, the index of the point that sits exactly on it.
+    private var samplePointIndex: [Int] = []
+
+    /// The point that sits on `samples[sampleIndex]`.
+    func pointIndex(forSample sampleIndex: Int) -> Int? {
+        guard sampleIndex < samplePointIndex.count, samplePointIndex[sampleIndex] < points.count else { return nil }
+        return samplePointIndex[sampleIndex]
+    }
 
     /// A point before pressure is turned into width and opacity.
     private struct Base {
@@ -56,15 +83,24 @@ final class StrokePath {
     func append(_ sample: StrokePoint) {
         if let last = samples.last,
            hypot(sample.position.x - last.position.x, sample.position.y - last.position.y) <= 0.01 {
-            // The pen hasn't moved, only its pressure has. Keep the firmest pressure seen at
+            // The pen hasn't moved. Count the rest, and keep the firmest pressure seen at
             // this spot: a mark can grow where the pen rests, but easing off doesn't shrink it.
-            guard sample.pressure > last.pressure else { return }
+            holdDuration = max(0, sample.timestamp - restingSince)
+            guard sample.pressure > last.pressure else {
+                if style.spraysWhileResting { revision += 1 }
+                return
+            }
             samples[samples.count - 1] = StrokePoint(
                 position: last.position, pressure: sample.pressure,
                 tiltX: sample.tiltX, tiltY: sample.tiltY, rotation: sample.rotation,
                 timestamp: sample.timestamp
             )
         } else {
+            if holdDuration > 0 {
+                rests.append(Rest(sampleIndex: samples.count - 1, duration: holdDuration))
+            }
+            restingSince = sample.timestamp
+            holdDuration = 0
             if let last = samples.last {
                 let dt = Float(max(sample.timestamp - last.timestamp, 0.0005))
                 let instantaneous = Float(hypot(sample.position.x - last.position.x, sample.position.y - last.position.y)) / dt
@@ -74,10 +110,12 @@ final class StrokePath {
                 speeds.append(0)
             }
             samples.append(sample)
+            samplePointIndex.append(0)
             // The segment before the newest one now has the sample after it: settle it.
             if samples.count >= 3 {
                 base.removeSubrange(settledBaseCount...)
                 emitSegment(samples.count - 3)
+                samplePointIndex[samples.count - 2] = base.count - 1
                 settledBaseCount = base.count
             }
         }
@@ -93,6 +131,8 @@ final class StrokePath {
             base = [Base(position: samples[0].position, rawPressure: samples[0].pressure, angle: 0, distance: 0,
                          tilt: SIMD2(samples[0].tiltX, samples[0].tiltY), rotation: samples[0].rotation, speed: 0)]
         }
+        // Each segment ends exactly on its sample, so the newest sample sits on the last point.
+        samplePointIndex[samples.count - 1] = base.count - 1
 
         resolvePoints()
         revision += 1
