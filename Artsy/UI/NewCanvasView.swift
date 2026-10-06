@@ -12,6 +12,7 @@ struct CanvasSizePreset: Identifiable {
         .init(name: "Small", width: 1024, height: 1024),
         .init(name: "Medium", width: 2048, height: 2048),
         .init(name: "Large", width: 4096, height: 4096),
+        .init(name: "Huge", width: 8192, height: 8192),
         .init(name: "HD Landscape", width: 1920, height: 1080),
         .init(name: "HD Portrait", width: 1080, height: 1920),
         .init(name: "A4 @ 300dpi", width: 2480, height: 3508),

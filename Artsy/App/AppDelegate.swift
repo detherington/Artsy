@@ -561,6 +561,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         fileMenu.addItem(withTitle: "Save...", action: #selector(handleSave), keyEquivalent: "s")
         fileMenu.addItem(NSMenuItem.separator())
         fileMenu.addItem(withTitle: "Export PNG...", action: #selector(handleExportPNG), keyEquivalent: "e")
+        fileMenu.addItem(withTitle: "Export PNG (16-bit)...", action: #selector(handleExportPNG16), keyEquivalent: "")
         let exportJPEGItem = NSMenuItem(title: "Export JPEG...", action: #selector(handleExportJPEG), keyEquivalent: "e")
         exportJPEGItem.keyEquivalentModifierMask = [.command, .shift]
         fileMenu.addItem(exportJPEGItem)
@@ -1011,6 +1012,17 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         panel.begin { response in
             guard response == .OK, let url = panel.url else { return }
             try? ImageExporter.exportPNG(renderer: store.canvasView.renderer, to: url)
+        }
+    }
+
+    @objc private func handleExportPNG16() {
+        guard let store = activeStore else { return }
+        let panel = NSSavePanel()
+        panel.allowedContentTypes = [.png]
+        panel.nameFieldStringValue = "canvas-16bit.png"
+        panel.begin { response in
+            guard response == .OK, let url = panel.url else { return }
+            try? ImageExporter.exportPNG(renderer: store.canvasView.renderer, to: url, bitsPerChannel: 16)
         }
     }
 

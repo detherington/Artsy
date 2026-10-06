@@ -41,6 +41,10 @@ final class MetalContext {
     /// Shrinks a texture to a quarter of its size with a box filter.
     let downsamplePipelineState: MTLRenderPipelineState
     let displayPipelineState: MTLRenderPipelineState
+    /// The display pass into a half-float target, for 16-bit export
+    let display16PipelineState: MTLRenderPipelineState
+    /// Flags textures that differ, for undo snapshots that share unchanged layers
+    let texturesDifferPipelineState: MTLComputePipelineState
     let maskedCutPipelineState: MTLComputePipelineState
     let maskedClearPipelineState: MTLComputePipelineState
 
@@ -227,6 +231,8 @@ final class MetalContext {
         displayDesc.vertexDescriptor = compVD
         displayDesc.colorAttachments[0].pixelFormat = .bgra8Unorm
         self.displayPipelineState = try device.makeRenderPipelineState(descriptor: displayDesc)
+        displayDesc.colorAttachments[0].pixelFormat = .rgba16Float
+        self.display16PipelineState = try device.makeRenderPipelineState(descriptor: displayDesc)
 
         // --- Compute Pipelines ---
 
@@ -239,6 +245,11 @@ final class MetalContext {
             throw MetalError.pipelineCreationFailed("maskedClearKernel not found")
         }
         self.maskedClearPipelineState = try device.makeComputePipelineState(function: maskedClearFunc)
+
+        guard let texturesDifferFunc = library.makeFunction(name: "texturesDifferKernel") else {
+            throw MetalError.pipelineCreationFailed("texturesDifferKernel not found")
+        }
+        self.texturesDifferPipelineState = try device.makeComputePipelineState(function: texturesDifferFunc)
 
         guard let mixPigmentsFunc = library.makeFunction(name: "mixPigmentsKernel") else {
             throw MetalError.pipelineCreationFailed("mixPigmentsKernel not found")

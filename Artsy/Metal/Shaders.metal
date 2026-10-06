@@ -704,6 +704,22 @@ fragment float4 displayWhiteFragment(
     return float4(saturate(result), 1.0);
 }
 
+// --- Textures compared ---
+
+// Sets the flag if any texel of `a` differs from `b`; for finding layers an undo snapshot
+// need not copy again. Reads half4, so it serves rgba16Float and r16Float alike.
+kernel void texturesDifferKernel(
+    texture2d<half, access::read> a [[texture(0)]],
+    texture2d<half, access::read> b [[texture(1)]],
+    device atomic_uint *differ [[buffer(0)]],
+    uint2 gid [[thread_position_in_grid]]
+) {
+    if (gid.x >= a.get_width() || gid.y >= a.get_height()) return;
+    if (any(a.read(gid) != b.read(gid))) {
+        atomic_store_explicit(differ, 1u, memory_order_relaxed);
+    }
+}
+
 // --- Pigment mixing on its own ---
 
 // Mixes pairs of linear Display P3 colours as pigments: `pairs[2i]` and `pairs[2i + 1]`,

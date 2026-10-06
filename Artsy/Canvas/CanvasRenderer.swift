@@ -76,6 +76,8 @@ final class CanvasRenderer: NSObject, MTKViewDelegate {
 
     /// Set up the layer stack on the view model.
     func setupLayerStack(for viewModel: CanvasViewModel) throws {
+        // Undo history may use a share of the GPU's memory, whatever the canvas size
+        viewModel.undoManager.memoryCap = textureManager.memoryBudget / 4
         let layerStack = LayerStack(
             textureManager: textureManager,
             canvasWidth: Int(canvasSize.width),

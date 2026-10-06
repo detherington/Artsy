@@ -50,6 +50,10 @@ struct StatusBarView: View {
             Text("Canvas: \(Int(viewModel.canvasSize.width))×\(Int(viewModel.canvasSize.height))")
                 .font(.system(size: 11, design: .monospaced))
 
+            Text("Memory: \(ByteCountFormatter.string(fromByteCount: Int64(viewModel.memoryUseBytes), countStyle: .memory))")
+                .font(.system(size: 11, design: .monospaced))
+                .help("Layers, undo history and the drawing engine's scratch textures")
+
             if !viewModel.isRightPanelVisible {
                 Button(action: { viewModel.toggleRightPanel() }) {
                     Image(systemName: "sidebar.trailing")

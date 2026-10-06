@@ -300,9 +300,36 @@ Still to do:
   from test renders of straight strokes; wet-into-wet (a wash diffusing into a wet one)
   is not modelled — a second wash over a dried one glazes it.
 
-### 6. Scale (large, optional)
+### 6. Scale (large, optional) — in progress
 
-Tiled layers, more than 8 layers, larger canvases, 16-bit export, hold-to-snap shapes, guides.
+Done:
+
+- **More layers, bounded by memory.** Up to 32 layers; a canvas gets fewer when more
+  would not fit half of the GPU's recommended working set (`LayerStack.layerLimit`: a
+  layer costs 8 bytes a pixel, 10 with thick paint). An 8192² canvas gets 12 on a
+  16 GB budget, 3 on 4 GB. The layer panel and the error message follow the limit.
+- **Undo history under a cap.** The budget of 25 whole-stack snapshots is now also
+  capped at a quarter of the GPU's working set, whatever the canvas. And whole-stack
+  snapshots share layers: every layer is copied, then compared on the GPU with the
+  previous whole-stack snapshot's copy, and layers found unchanged drop their copy and
+  point at the previous one. Most actions change one layer or none, so a history of
+  whole-stack steps costs little more than the layers that actually changed. The
+  comparison runs after the copies, off the main thread, so saving a snapshot still
+  does not block.
+- A **memory readout** in the status bar: layers, undo history and scratch textures.
+- A **Huge (8192²)** preset.
+- **16-bit PNG export** (File → Export PNG (16-bit)…), through the same lit display pass
+  as the 8-bit one. Both are now tagged Display P3, the colour space the canvas is
+  drawn in; they were tagged sRGB, which shifted colours in exported files.
+- **Not done: tiled or sparse layers.** A spike with Metal sparse heaps on an M4 Pro
+  showed the heap committing its whole size at creation, one mapped tile reporting the
+  entire texture as used, and a clear writing through to "unmapped" pixels — no memory
+  saving and not the semantics a tiled layer would need. Real tiling (every pipeline
+  compositing from tiles) is a rewrite of the engine for a benefit that only shows at
+  8192² with many mostly-empty layers; the memory-bounded limits above cover that case
+  honestly instead.
+
+Still to do: hold-to-snap shapes, guides.
 
 ## Measurements
 
