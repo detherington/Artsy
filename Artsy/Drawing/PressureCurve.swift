@@ -75,10 +75,10 @@ struct PressureCurve: Codable, Equatable {
 }
 
 struct PressureDynamics: Codable, Equatable {
-    let sizeMin: Float
-    let sizeMax: Float
-    let opacityMin: Float
-    let opacityMax: Float
+    var sizeMin: Float
+    var sizeMax: Float
+    var opacityMin: Float
+    var opacityMax: Float
 
     var sizeRange: ClosedRange<Float> { sizeMin...sizeMax }
     var opacityRange: ClosedRange<Float> { opacityMin...opacityMax }

@@ -89,6 +89,10 @@
 		04CD806D5BB241B5F9C70E70 /* BrushLibrary.swift in Sources */ = {isa = PBXBuildFile; fileRef = 291E5D911CD0878CCB8677D9 /* BrushLibrary.swift */; };
 		06F8F7B6082937000447E997 /* BrushLibraryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1F572D2559A20268F20B9A36 /* BrushLibraryTests.swift */; };
 		ABF8AED229B1468403D7DCF8 /* CanvasTransformTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 50AC0CC3520CBED11BD5BFEF /* CanvasTransformTests.swift */; };
+		F41CD98FFD330398B2EFA239 /* BrushPreview.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8FA9073D89B79C2CC8E1EB9C /* BrushPreview.swift */; };
+		27B838236931D2C9FFFDD2C8 /* BrushStudioModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8703FC1608A50633266AE490 /* BrushStudioModel.swift */; };
+		6CBC1FE714F59954B6879D8D /* BrushStudioView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 32665618ECA2DBF35451A0FC /* BrushStudioView.swift */; };
+		438094AC1208B8BD1689406A /* BrushStudioTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5DE7886E38559B2215F3216 /* BrushStudioTests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -188,6 +192,10 @@
 		291E5D911CD0878CCB8677D9 /* BrushLibrary.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrushLibrary.swift; sourceTree = "<group>"; };
 		1F572D2559A20268F20B9A36 /* BrushLibraryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrushLibraryTests.swift; sourceTree = "<group>"; };
 		50AC0CC3520CBED11BD5BFEF /* CanvasTransformTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CanvasTransformTests.swift; sourceTree = "<group>"; };
+		8FA9073D89B79C2CC8E1EB9C /* BrushPreview.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrushPreview.swift; sourceTree = "<group>"; };
+		8703FC1608A50633266AE490 /* BrushStudioModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrushStudioModel.swift; sourceTree = "<group>"; };
+		32665618ECA2DBF35451A0FC /* BrushStudioView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrushStudioView.swift; sourceTree = "<group>"; };
+		B5DE7886E38559B2215F3216 /* BrushStudioTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrushStudioTests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXGroup section */
@@ -234,6 +242,7 @@
 				4A78876D6B37CD12F5E38C89 /* ToolPaletteView.swift */,
 				9BB66B16CCCE0203E60E9A49 /* AIPanel */,
 				ACE5880AE63A8E10898D3826 /* UnsplashPanel */,
+				E59856583A00462341D34609 /* BrushStudio */,
 				AF02C100CCCCCCCCCCCCCCCC /* ColorPicker */,
 			);
 			path = UI;
@@ -257,6 +266,7 @@
 				72646CFD240043CF20A1222F /* DabPlacer.swift */,
 				5DF19525F83000E8AE6C162A /* BrushDynamics.swift */,
 				291E5D911CD0878CCB8677D9 /* BrushLibrary.swift */,
+				8FA9073D89B79C2CC8E1EB9C /* BrushPreview.swift */,
 				2D8F7EDA762E3FA8B6C4FA45 /* BrushEngine.swift */,
 			);
 			path = Brushes;
@@ -333,6 +343,7 @@
 		B48AF066E85C8962CFFD499C /* ArtsyTests */ = {
 			isa = PBXGroup;
 			children = (
+				B5DE7886E38559B2215F3216 /* BrushStudioTests.swift */,
 				50AC0CC3520CBED11BD5BFEF /* CanvasTransformTests.swift */,
 				1F572D2559A20268F20B9A36 /* BrushLibraryTests.swift */,
 				2E6B0104D2D5FB98F6BB9B9E /* StampBrushTests.swift */,
@@ -433,6 +444,15 @@
 				F44532810C60B86CBAA65204 /* TabletEventHandler.swift */,
 			);
 			path = Drawing;
+			sourceTree = "<group>";
+		};
+		E59856583A00462341D34609 /* BrushStudio */ = {
+			isa = PBXGroup;
+			children = (
+				8703FC1608A50633266AE490 /* BrushStudioModel.swift */,
+				32665618ECA2DBF35451A0FC /* BrushStudioView.swift */,
+			);
+			path = BrushStudio;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -552,6 +572,9 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				6CBC1FE714F59954B6879D8D /* BrushStudioView.swift in Sources */,
+				27B838236931D2C9FFFDD2C8 /* BrushStudioModel.swift in Sources */,
+				F41CD98FFD330398B2EFA239 /* BrushPreview.swift in Sources */,
 				04CD806D5BB241B5F9C70E70 /* BrushLibrary.swift in Sources */,
 				9EF123B79AD0F421F86D499F /* BrushDynamics.swift in Sources */,
 				5315BF99627A7069E4D072A2 /* BrushTextureLibrary.swift in Sources */,
@@ -622,6 +645,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				438094AC1208B8BD1689406A /* BrushStudioTests.swift in Sources */,
 				ABF8AED229B1468403D7DCF8 /* CanvasTransformTests.swift in Sources */,
 				06F8F7B6082937000447E997 /* BrushLibraryTests.swift in Sources */,
 				4FCAE957E9C4989FA6EBF757 /* StampBrushTests.swift in Sources */,
