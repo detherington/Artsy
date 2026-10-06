@@ -213,7 +213,7 @@ final class SmudgeBrushTests: XCTestCase {
     }
 
     func testStrengthIsNormalisedToSpacing() {
-        // Smearing: the same paint carries the same distance whatever the spacing
+        // Smearing: the per-dab share compounds to the same amount per diameter whatever the spacing
         let smear = StampSettings.Smudge(mode: .smearing, strength: 0.75, colorRate: 0)
         XCTAssertEqual(pow(smear.depositFraction(spacing: 0.05), 20), pow(smear.depositFraction(spacing: 0.25), 4), accuracy: 1e-5)
         XCTAssertEqual(smear.depositFraction(spacing: 0.25), 0.75, accuracy: 1e-6)

@@ -14,6 +14,10 @@ final class MetalContext {
     /// Smudge brushes: lays carried paint into the layer, then picks up what is under the dab
     let smudgeDepositPipelineState: MTLRenderPipelineState
     let smudgePickupPipelineState: MTLRenderPipelineState
+    /// Merges a finished stroke into its layer with pigment mixing
+    let compositePigmentMergePipelineState: MTLRenderPipelineState
+    /// Mixes colours as pigments, for tests and tools
+    let mixPigmentsPipelineState: MTLComputePipelineState
     /// Tips and paper grain for stamp brushes.
     let brushTextures: BrushTextureLibrary
     // Radial-distance variants for stroke caps (rounded endpoints, Procreate-style)
@@ -120,21 +124,13 @@ final class MetalContext {
         stampAttachment.destinationAlphaBlendFactor = .oneMinusSourceAlpha
         self.stampPipelineState = try device.makeRenderPipelineState(descriptor: stampDesc)
 
-        // Smudge deposit: the same quads, blended into the layer by a per-pixel weight that
-        // comes out of the fragment's second output (dual-source blending), so alpha is
-        // interpolated too rather than composited.
+        // Smudge deposit: the same quads, drawn straight onto the layer. The fragment reads
+        // the layer from a copy of the patch under the dab and writes the mix itself.
         let smudgeDesc = MTLRenderPipelineDescriptor()
         smudgeDesc.vertexFunction = library.makeFunction(name: "stampVertex")
         smudgeDesc.fragmentFunction = library.makeFunction(name: "smudgeDepositFragment")
         smudgeDesc.colorAttachments[0].pixelFormat = .rgba16Float
-        let smudgeAttachment = smudgeDesc.colorAttachments[0]!
-        smudgeAttachment.isBlendingEnabled = true
-        smudgeAttachment.rgbBlendOperation = .add
-        smudgeAttachment.alphaBlendOperation = .add
-        smudgeAttachment.sourceRGBBlendFactor = .one
-        smudgeAttachment.destinationRGBBlendFactor = .oneMinusSource1Alpha
-        smudgeAttachment.sourceAlphaBlendFactor = .one
-        smudgeAttachment.destinationAlphaBlendFactor = .oneMinusSource1Alpha
+        smudgeDesc.colorAttachments[0].isBlendingEnabled = false
         self.smudgeDepositPipelineState = try device.makeRenderPipelineState(descriptor: smudgeDesc)
 
         let pickupDesc = MTLRenderPipelineDescriptor()
@@ -176,6 +172,11 @@ final class MetalContext {
             fragmentFunction: "compositeBlendWithStroke", blending: .replace
         )
 
+        self.compositePigmentMergePipelineState = try MetalContext.makeCompositePipeline(
+            device: device, library: library, vertexDescriptor: compVD,
+            fragmentFunction: "compositePigmentMerge", blending: .replace
+        )
+
         self.compositeErasePipelineState = try MetalContext.makeCompositePipeline(
             device: device, library: library, vertexDescriptor: compVD,
             fragmentFunction: "compositeNormal", blending: .destinationOut
@@ -208,6 +209,11 @@ final class MetalContext {
             throw MetalError.pipelineCreationFailed("maskedClearKernel not found")
         }
         self.maskedClearPipelineState = try device.makeComputePipelineState(function: maskedClearFunc)
+
+        guard let mixPigmentsFunc = library.makeFunction(name: "mixPigmentsKernel") else {
+            throw MetalError.pipelineCreationFailed("mixPigmentsKernel not found")
+        }
+        self.mixPigmentsPipelineState = try device.makeComputePipelineState(function: mixPigmentsFunc)
 
         // --- Samplers ---
 
@@ -347,5 +353,32 @@ enum MetalError: LocalizedError {
         case .textureCreationFailed: return "Failed to create texture"
         case .pipelineCreationFailed(let msg): return "Pipeline creation failed: \(msg)"
         }
+    }
+}
+
+extension MetalContext {
+    /// Mix pairs of linear Display P3 colours as pigments, `t` being the share of the second.
+    /// Runs the same code the brushes use; meant for tests and tools, and it waits for the GPU.
+    func mixPigments(_ pairs: [(SIMD3<Float>, SIMD3<Float>, Float)]) -> [SIMD3<Float>] {
+        guard !pairs.isEmpty else { return [] }
+        var input: [SIMD4<Float>] = []
+        for (a, b, t) in pairs {
+            input.append(SIMD4(a, t))
+            input.append(SIMD4(b, 0))
+        }
+        guard let inBuffer = device.makeBuffer(bytes: input, length: input.count * 16, options: .storageModeShared),
+              let outBuffer = device.makeBuffer(length: pairs.count * 16, options: .storageModeShared),
+              let commandBuffer = commandQueue.makeCommandBuffer(),
+              let encoder = commandBuffer.makeComputeCommandEncoder() else { return [] }
+        encoder.setComputePipelineState(mixPigmentsPipelineState)
+        encoder.setBuffer(inBuffer, offset: 0, index: 0)
+        encoder.setBuffer(outBuffer, offset: 0, index: 1)
+        encoder.dispatchThreads(MTLSize(width: pairs.count, height: 1, depth: 1),
+                                threadsPerThreadgroup: MTLSize(width: min(pairs.count, 32), height: 1, depth: 1))
+        encoder.endEncoding()
+        commandBuffer.commit()
+        commandBuffer.waitUntilCompleted()
+        let results = outBuffer.contents().bindMemory(to: SIMD4<Float>.self, capacity: pairs.count)
+        return (0..<pairs.count).map { SIMD3(results[$0].x, results[$0].y, results[$0].z) }
     }
 }

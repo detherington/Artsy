@@ -407,7 +407,8 @@ final class CanvasRenderer: NSObject, MTKViewDelegate {
         }
         return CompositorPipeline.StrokeOverlay(
             committed: activeStrokeTexture, tail: strokeTailTexture,
-            opacity: opacity, erase: brush.category == .utility, accumulates: accumulates
+            opacity: opacity, erase: brush.category == .utility, accumulates: accumulates,
+            mixesPigments: brush.mixesPigments
         )
     }
 
@@ -971,6 +972,11 @@ final class CanvasRenderer: NSObject, MTKViewDelegate {
             let opacity = strokeOverlay(for: viewModel)?.opacity ?? 1
             if isSmudging {
                 // Already in the layer
+            } else if viewModel.currentBrush.mixesPigments {
+                compositor.mergePigments(
+                    source: activeStrokeTexture, onto: activeLayer.texture, opacity: opacity,
+                    tempTexture: blendTempTexture, regions: [strokeRegion], commandBuffer: commandBuffer
+                )
             } else if isErasing {
                 compositor.erase(
                     source: activeStrokeTexture, from: activeLayer.texture,

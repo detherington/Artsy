@@ -225,14 +225,42 @@ Done:
     the changed regions are recomposited like any stroke's. The layer is copied at
     pen-down (one canvas-size texture, made on first use) and the undo step is cut from
     that copy at pen-up, so undo costs what any stroke's does.
-  - Each dab is two small render passes in strict order, so a frame costs two encoders per
-    dab laid; at the built-in's spacing that is a few per frame.
+  - Each dab is three small encoders in strict order (copy the patch under the dab, lay
+    down, pick up). A fast stroke with the 36 px built-in (~11 dabs a frame) costs 0.7 ms
+    a frame at 2048², against 0.3 ms for an ordinary stroke; a 200 px smudge, 0.3 ms
+    (`testSmudgeFrameCost`).
+  - A smudge with *Add brush colour* between 0 and 1 is a wet paint brush: it lays its own
+    colour and drags what is there along with it.
+
+- **Pigment mixing** (`BrushDescriptor.mixesPigments`; Brush Studio → Stroke → "Mix
+  colours like paint"; on for Oil, Acrylic and Smudge). The stroke's colour mixes with
+  the paint under it as pigments do — Kubelka-Munk over a reflectance curve made of seven
+  base pigments, a port of spectral.js's GLSL ([Spectral.h](../Artsy/Metal/Spectral.h),
+  MIT) — so yellow over blue makes green instead of grey. It reproduces spectral.js's
+  own example to within 3/255.
+  - Coverage still adds up as for any stroke; only the colour of the overlap differs. The
+    share of the new paint is its alpha's share of the result's, with spectral.js's
+    weighting (share squared, times luminance) — which is what makes a 10% black over
+    white come out 10% grey rather than a dark smear, as plain Kubelka-Munk would.
+  - The seven pigments do not reproduce a colour exactly, so each end's error is carried
+    across the mix: paint over nothing, or over its own colour, is unchanged to 1e-4.
+  - The canvas is linear Display P3 and the model works in linear sRGB; colours are
+    converted on the way in and out. Kubelka-Munk's inverse is written in a form that
+    does not cancel in single precision (black has a K/S near 10¹⁵).
+  - Applied in three places: the live composite of the stroke over its layer, the merge
+    at pen-up (through the scratch texture, since it reads the layer), and a smudge's
+    deposit (both the brush colour into the carried paint and the carried paint into
+    the layer). Dulling's average is still an average of light.
+  - A mix costs ~40 × (7 + 3) multiply-adds per pixel, on dirty regions only.
 
 Still to do:
 
-- Wet-mix controls, a per-brush pigment-mixing toggle (spectral.js port), wet edges,
-  paper granulation, impasto height map with lighting; redo Watercolor on them.
+- Wet edges, paper granulation, impasto height map with lighting; redo Watercolor on
+  them (its mixing should be multiplicative, as a glaze, not pigment).
 - Smudge samples the active layer only ("sample all layers" is not offered).
+- Pigment mixing follows spectral.js's weighting; black is a weak pigment there (its
+  luminance is ~0), which is tempered only by the squared share. Tinting strength per
+  colour is not exposed.
 
 ### 6. Scale (large, optional)
 

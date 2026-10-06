@@ -72,6 +72,50 @@ final class StrokeBenchmarkTests: XCTestCase {
         harness.viewModel.endStroke()
     }
 
+    /// Cost of one frame of smudging, which lays every dab straight into the layer with
+    /// three encoders each. A fast stroke (≈ 25 px per frame) with the built-in Smudge at
+    /// 36 px, and the same with a 200 px brush, over paint.
+    func testSmudgeFrameCost() throws {
+        for size in [Float(36), 200] {
+            let harness = try EngineHarness(width: 2048, height: 2048)
+            harness.fill(harness.drawingLayer, red: 0.8, green: 0.3, blue: 0.2)
+            harness.select(.smudge)
+            harness.viewModel.brushSize = size
+
+            var x = 200.0
+            var timestamp = 0.0
+            func nextPoint() -> StrokePoint {
+                x += 25
+                timestamp += 1.0 / 120
+                return StrokePoint(position: CGPoint(x: x, y: 1000 + 200 * sin(x / 300)), pressure: 0.8,
+                                   tiltX: 0, tiltY: 0, rotation: 0, timestamp: timestamp)
+            }
+            harness.renderer.beginStroke()
+            harness.viewModel.beginStroke(point: nextPoint())
+            harness.viewModel.continueStroke(point: nextPoint())
+            harness.renderFrame()
+
+            var cpu: [Double] = []
+            var frame: [Double] = []
+            for _ in 0..<40 {
+                harness.viewModel.continueStroke(point: nextPoint())
+                let commandBuffer = harness.context.commandQueue.makeCommandBuffer()!
+                var encode = 0.0
+                frame.append(milliseconds {
+                    encode = milliseconds { harness.renderer.encodeFrame(into: commandBuffer) }
+                    commandBuffer.commit()
+                    commandBuffer.waitUntilCompleted()
+                })
+                cpu.append(encode)
+            }
+            harness.renderer.finalizeStroke()
+            harness.viewModel.endStroke()
+            let dabsPerFrame = 25 / (0.08 * Double(size) * 0.8)
+            print(String(format: "BENCHMARK smudge-frame (%@) | %3.0f px brush, ~%2.0f dabs per frame | cpu %5.2f ms | frame %5.2f ms",
+                         build, size, dabsPerFrame, median(cpu), median(frame)))
+        }
+    }
+
     /// What committing one stroke costs at pen-up: time until the GPU has merged it, and the
     /// undo memory it adds. A 600 px stroke with Soft Round.
     func testStrokeCommit() throws {

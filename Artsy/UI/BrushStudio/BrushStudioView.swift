@@ -254,6 +254,7 @@ struct BrushStudioView: View {
             slider("Starting size", model.binding(\.baseSize), in: 1...200, unit: " px")
             slider("Opacity", model.binding(\.opacity), in: 0.05...1, percent: true)
             slider("Smoothing", model.binding(\.smoothing), in: 0...1, percent: true)
+            Toggle("Mix colours like paint (yellow over blue makes green)", isOn: model.binding(\.mixesPigments))
         }
     }
 
