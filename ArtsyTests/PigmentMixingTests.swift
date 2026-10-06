@@ -71,7 +71,7 @@ final class PigmentMixingTests: XCTestCase {
             let harness = try EngineHarness(width: 200, height: 100)
             harness.fill(harness.drawingLayer, red: 0.05, green: 0.1, blue: 0.8)
             var brush = BrushDescriptor.oil
-            brush.mixesPigments = mixing
+            brush.mixing = mixing ? .pigment : .light
             harness.select(brush)
             harness.viewModel.brushSize = 40
             harness.viewModel.brushOpacity = 0.5
@@ -94,7 +94,7 @@ final class PigmentMixingTests: XCTestCase {
             let harness = try EngineHarness(width: 160, height: 80)
             if let fill { harness.fill(harness.drawingLayer, red: Double(fill.red), green: Double(fill.green), blue: Double(fill.blue)) }
             var brush = BrushDescriptor.acrylic
-            brush.mixesPigments = mixing
+            brush.mixing = mixing ? .pigment : .light
             harness.select(brush)
             harness.viewModel.currentColor = yellow
             harness.draw(StrokeFixtures.wave(from: CGPoint(x: 10, y: 40), length: 140, amplitude: 15, cycles: 1.5))
@@ -143,7 +143,7 @@ final class PigmentMixingTests: XCTestCase {
             harness.viewModel.currentColor = blue
             harness.draw(StrokeFixtures.line(from: CGPoint(x: 0, y: 50), to: CGPoint(x: 60, y: 50), pressure: 1...1))
             var brush = BrushDescriptor.smudge
-            brush.mixesPigments = mixing
+            brush.mixing = mixing ? .pigment : .light
             harness.select(brush)
             harness.viewModel.brushSize = 36
             harness.draw(StrokeFixtures.line(from: CGPoint(x: 90, y: 50), to: CGPoint(x: 150, y: 50), pressure: 1...1))
@@ -166,14 +166,21 @@ final class PigmentMixingTests: XCTestCase {
         let file = directory.appendingPathComponent("oil.artsybrush")
         try library.export(.oil, to: file)
         let json = try String(contentsOf: file, encoding: .utf8)
-        XCTAssertTrue(json.contains("\"mixesPigments\" : true"))
-        XCTAssertTrue(try library.importBrush(from: file).mixesPigments)
+        XCTAssertTrue(json.contains("\"mixing\" : \"pigment\""))
+        XCTAssertEqual(try library.importBrush(from: file).mixing, .pigment)
 
-        let older = json.replacingOccurrences(of: "\"mixesPigments\" : true,", with: "")
-            .replacingOccurrences(of: ",\n    \"mixesPigments\" : true", with: "")
-        XCTAssertFalse(older.contains("mixesPigments"), "the key is gone from the older file")
+        // Before `mixing` the setting was a boolean
+        let legacy = json.replacingOccurrences(of: "\"mixing\" : \"pigment\"", with: "\"mixesPigments\" : true")
+        let legacyFile = directory.appendingPathComponent("legacy.artsybrush")
+        try legacy.write(to: legacyFile, atomically: true, encoding: .utf8)
+        XCTAssertEqual(try library.importBrush(from: legacyFile).mixing, .pigment)
+
+        // And before that there was nothing
+        let older = json.replacingOccurrences(of: "\"mixing\" : \"pigment\",", with: "")
+            .replacingOccurrences(of: ",\n    \"mixing\" : \"pigment\"", with: "")
+        XCTAssertFalse(older.contains("mixing"), "the key is gone from the older file")
         let olderFile = directory.appendingPathComponent("older.artsybrush")
         try older.write(to: olderFile, atomically: true, encoding: .utf8)
-        XCTAssertFalse(try library.importBrush(from: olderFile).mixesPigments)
+        XCTAssertEqual(try library.importBrush(from: olderFile).mixing, .light)
     }
 }

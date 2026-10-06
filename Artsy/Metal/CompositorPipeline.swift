@@ -41,8 +41,10 @@ final class CompositorPipeline {
         /// True for dabs, which layer (tail over committed); false for a ribbon, whose two
         /// halves are combined by taking their maximum.
         let accumulates: Bool
-        /// The stroke's colour mixes with the layer's as paint would.
-        let mixesPigments: Bool
+        /// How the stroke's colour meets the layer's.
+        let mixing: PaintMixing
+        /// Set for a stroke that dries as a wash.
+        let wet: BrushDescriptor.Wet?
     }
 
     /// Mirrors `StrokeMergeParams` in Shaders.metal.
@@ -50,7 +52,20 @@ final class CompositorPipeline {
         var opacity: Float
         var erase: Int32
         var accumulates: Int32
-        var mixPigments: Int32
+        var mixing: Int32
+        var wetEdges: Float
+        var granulation: Float
+        var grainScale: Float
+
+        init(_ stroke: StrokeOverlay?) {
+            opacity = stroke?.opacity ?? 0
+            erase = stroke?.erase == true ? 1 : 0
+            accumulates = stroke?.accumulates == true ? 1 : 0
+            mixing = stroke?.mixing.shaderValue ?? 0
+            wetEdges = stroke?.wet?.edges ?? 0
+            granulation = stroke?.wet?.granulation ?? 0
+            grainScale = stroke?.wet?.grainScale ?? 1
+        }
     }
 
     /// Draw the full-canvas quad once, or once per scissor rect when `regions` is given.
@@ -98,9 +113,7 @@ final class CompositorPipeline {
 
         var layerOpacity = opacity
         var identity = float4x4(diagonal: SIMD4<Float>(1, 1, 1, 1))
-        var strokeParams = StrokeMergeParams(opacity: stroke?.opacity ?? 0, erase: stroke?.erase == true ? 1 : 0,
-                                             accumulates: stroke?.accumulates == true ? 1 : 0,
-                                             mixPigments: stroke?.mixesPigments == true ? 1 : 0)
+        var strokeParams = StrokeMergeParams(stroke)
 
         func bindCommon(_ encoder: MTLRenderCommandEncoder) {
             encoder.setVertexBuffer(quadVertexBuffer, offset: 0, index: 0)
@@ -111,6 +124,7 @@ final class CompositorPipeline {
             if let stroke {
                 encoder.setFragmentTexture(stroke.committed, index: 2)
                 encoder.setFragmentTexture(stroke.tail, index: 3)
+                bindPaper(encoder)
                 encoder.setFragmentBytes(&strokeParams, length: MemoryLayout<StrokeMergeParams>.size, index: 2)
             }
         }
@@ -160,18 +174,27 @@ final class CompositorPipeline {
         copyBack(from: tempTexture, to: destination, regions: regions, commandBuffer: commandBuffer)
     }
 
-    /// Merge a finished stroke into `destination` with its colour mixed into the layer's as
-    /// pigments. Reads the layer, so it renders into `tempTexture` and copies back.
-    func mergePigments(
-        source: MTLTexture,
+    /// Paper, for strokes that dry as a wash.
+    private func bindPaper(_ encoder: MTLRenderCommandEncoder) {
+        if let paper = context.brushTextures.paperGrain {
+            encoder.setFragmentTexture(paper, index: 4)
+        }
+        encoder.setFragmentSamplerState(context.grainSampler, index: 1)
+    }
+
+    /// Merge a finished stroke (its `committed` texture; the tail is empty by then) into
+    /// `destination` the way the live composite showed it, for strokes fixed-function
+    /// blending cannot merge: pigment or glaze mixing, a wash. Reads the layer, so it
+    /// renders into `tempTexture` and copies back.
+    func mergeStroke(
+        _ stroke: StrokeOverlay,
         onto destination: MTLTexture,
-        opacity: Float,
         tempTexture: MTLTexture,
         regions: [MTLScissorRect]? = nil,
         commandBuffer: MTLCommandBuffer
     ) {
         if let regions, regions.isEmpty { return }
-        var strokeOpacity = opacity
+        var params = StrokeMergeParams(stroke)
         var identity = float4x4(diagonal: SIMD4<Float>(1, 1, 1, 1))
 
         let passDesc = MTLRenderPassDescriptor()
@@ -179,13 +202,14 @@ final class CompositorPipeline {
         passDesc.colorAttachments[0].loadAction = .dontCare
         passDesc.colorAttachments[0].storeAction = .store
         guard let encoder = commandBuffer.makeRenderCommandEncoder(descriptor: passDesc) else { return }
-        encoder.setRenderPipelineState(context.compositePigmentMergePipelineState)
+        encoder.setRenderPipelineState(context.compositeStrokeMergePipelineState)
         encoder.setVertexBuffer(quadVertexBuffer, offset: 0, index: 0)
         encoder.setVertexBytes(&identity, length: MemoryLayout<float4x4>.size, index: 1)
-        encoder.setFragmentTexture(source, index: 0)
+        encoder.setFragmentTexture(stroke.committed, index: 0)
         encoder.setFragmentTexture(destination, index: 1)
         encoder.setFragmentSamplerState(context.linearSampler, index: 0)
-        encoder.setFragmentBytes(&strokeOpacity, length: MemoryLayout<Float>.size, index: 0)
+        bindPaper(encoder)
+        encoder.setFragmentBytes(&params, length: MemoryLayout<StrokeMergeParams>.size, index: 2)
         drawQuad(encoder, regions: regions)
         encoder.endEncoding()
 

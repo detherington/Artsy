@@ -50,7 +50,7 @@ final class BrushStudioTests: XCTestCase {
         XCTAssertEqual(model.brush.pressureDynamics.sizeMin, 0.1)
 
         model.setRendersWithDabs(false)
-        XCTAssertEqual(model.ribbonShader, .procedural)
+        XCTAssertEqual(model.brush.rendering, .ribbon(.procedural))
         XCTAssertNil(model.stampSettings)
         model.stampBinding(\.flow, default: 0).wrappedValue = 0.2   // no stamp settings: nothing to change
         XCTAssertNil(model.stampSettings)

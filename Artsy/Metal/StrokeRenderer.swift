@@ -46,7 +46,7 @@ final class StrokeRenderer {
 
             if !geometry.ribbonIndices.isEmpty,
                let vb = makeBuffer(geometry.ribbonVertices), let ib = makeIndexBuffer(geometry.ribbonIndices) {
-                encoder.setRenderPipelineState(ribbonPipelineState(brush: brush))
+                encoder.setRenderPipelineState(context.strokeProceduralPipelineState)
                 encoder.setVertexBuffer(vb, offset: 0, index: 0)
                 encoder.setVertexBytes(&transform, length: MemoryLayout<float4x4>.size, index: 1)
                 encoder.setFragmentBytes(&brushColor, length: MemoryLayout<SIMD4<Float>>.size, index: 0)
@@ -59,7 +59,7 @@ final class StrokeRenderer {
 
             if !geometry.capIndices.isEmpty,
                let capVB = makeBuffer(geometry.capVertices), let capIB = makeIndexBuffer(geometry.capIndices) {
-                encoder.setRenderPipelineState(radialCapPipelineState(brush: brush))
+                encoder.setRenderPipelineState(context.strokeRadialPipelineState)
                 encoder.setVertexBuffer(capVB, offset: 0, index: 0)
                 encoder.setVertexBytes(&transform, length: MemoryLayout<float4x4>.size, index: 1)
                 encoder.setFragmentBytes(&brushColor, length: MemoryLayout<SIMD4<Float>>.size, index: 0)
@@ -162,27 +162,6 @@ final class StrokeRenderer {
             drawn.append(bounds)
         }
         return drawn
-    }
-
-    // MARK: - Pipeline Selection
-
-    private func ribbonShader(of brush: BrushDescriptor) -> RibbonShader {
-        if case .ribbon(let shader) = brush.rendering { return shader }
-        return .procedural
-    }
-
-    private func ribbonPipelineState(brush: BrushDescriptor) -> MTLRenderPipelineState {
-        switch ribbonShader(of: brush) {
-        case .procedural: return context.strokeProceduralPipelineState
-        case .watercolor: return context.strokeWatercolorPipelineState
-        }
-    }
-
-    private func radialCapPipelineState(brush: BrushDescriptor) -> MTLRenderPipelineState {
-        switch ribbonShader(of: brush) {
-        case .watercolor: return context.strokeRadialWatercolorPipelineState
-        case .procedural: return context.strokeRadialPipelineState
-        }
     }
 
     // MARK: - Buffer Helpers

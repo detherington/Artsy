@@ -115,7 +115,7 @@ final class SmudgeRenderer {
                     var params = DepositParams(color: color.simd, hardness: brush.hardness, tipIsTexture: tipIsTexture,
                                                colorRate: smudge.colorRate, carryTexels: texels,
                                                backdropOrigin: SIMD2(UInt32(patch.x), UInt32(patch.y)),
-                                               mixPigments: brush.mixesPigments ? 1 : 0)
+                                               mixPigments: brush.mixing == .pigment ? 1 : 0)
                     encoder.setRenderPipelineState(context.smudgeDepositPipelineState)
                     encoder.setVertexBytes(&instance, length: instance.count * MemoryLayout<Float>.size, index: 0)
                     encoder.setVertexBytes(&transform, length: MemoryLayout<float4x4>.size, index: 1)

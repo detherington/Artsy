@@ -18,6 +18,7 @@ struct BrushStudioView: View {
                     grainSection
                     jitterSection
                 }
+                wetSection
                 pressureSection
                 tiltSection
                 speedSection
@@ -110,13 +111,6 @@ struct BrushStudioView: View {
                 Toggle("Turn dabs to face along the stroke", isOn: model.stampBinding(\.followsDirection, default: false))
                 slider("Spray while resting", model.stampBinding(\.holdRate, default: 0), in: 0...120, unit: " dabs/s")
             } else {
-                Picker("Edge", selection: Binding(
-                    get: { model.ribbonShader ?? .procedural },
-                    set: { shader in model.apply { $0.rendering = .ribbon(shader) } }
-                )) {
-                    Text("Plain").tag(RibbonShader.procedural)
-                    Text("Watercolor").tag(RibbonShader.watercolor)
-                }
                 Toggle("Fixed nib (calligraphy)", isOn: Binding(
                     get: { model.brush.fixedNibAngle != nil },
                     set: { on in model.apply { $0.fixedNibAngle = on ? .pi / 4 : nil } }
@@ -254,7 +248,25 @@ struct BrushStudioView: View {
             slider("Starting size", model.binding(\.baseSize), in: 1...200, unit: " px")
             slider("Opacity", model.binding(\.opacity), in: 0.05...1, percent: true)
             slider("Smoothing", model.binding(\.smoothing), in: 0...1, percent: true)
-            Toggle("Mix colours like paint (yellow over blue makes green)", isOn: model.binding(\.mixesPigments))
+            Picker("Colour mixing", selection: model.binding(\.mixing)) {
+                Text("Light — colours average, as on a screen").tag(PaintMixing.light)
+                Text("Pigment — yellow over blue makes green").tag(PaintMixing.pigment)
+                Text("Glaze — a transparent wash that darkens what is under it").tag(PaintMixing.glaze)
+            }
+        }
+    }
+
+    private var wetSection: some View {
+        Section("Wet") {
+            Toggle("Dries as a wash: crisp edges where the pigment gathers", isOn: Binding(
+                get: { model.brush.wet != nil },
+                set: { on in model.apply { $0.wet = on ? BrushDescriptor.Wet() : nil } }
+            ))
+            if let wet = model.brush.wet {
+                slider("Edges", wetBinding(\.edges, wet), in: 0...1, percent: true)
+                slider("Granulation", wetBinding(\.granulation, wet), in: 0...1, percent: true)
+                slider("Paper scale", wetBinding(\.grainScale, wet), in: 0.2...4, unit: "×")
+            }
         }
     }
 
@@ -292,6 +304,20 @@ struct BrushStudioView: View {
                 var second = model.stampSettings?.secondTip ?? current
                 second[keyPath: keyPath] = value
                 model.stampBinding(\.secondTip, default: nil).wrappedValue = second
+            }
+        )
+    }
+
+    private func wetBinding<Value>(_ keyPath: WritableKeyPath<BrushDescriptor.Wet, Value>,
+                                   _ current: BrushDescriptor.Wet) -> Binding<Value> {
+        Binding(
+            get: { (model.brush.wet ?? current)[keyPath: keyPath] },
+            set: { value in
+                model.apply { brush in
+                    var wet = brush.wet ?? current
+                    wet[keyPath: keyPath] = value
+                    brush.wet = wet
+                }
             }
         )
     }
