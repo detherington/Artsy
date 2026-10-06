@@ -324,6 +324,7 @@ class CanvasView: MTKView {
         }
 
         let point = TabletEventHandler.strokePoint(from: event, in: self)
+        lastRawViewPoint = point.position
         let canvasPoint = viewToCanvasPoint(point)
 
         // A tablet reports several times per display frame. AppKit merges those reports by
@@ -338,6 +339,7 @@ class CanvasView: MTKView {
         guard let viewModel = viewModel else { return }
 
         let point = TabletEventHandler.strokePoint(from: event, in: self)
+        lastRawViewPoint = point.position
         let canvasPoint = viewToCanvasPoint(point)
         viewModel.continueStroke(point: canvasPoint)
     }
@@ -1226,10 +1228,24 @@ class CanvasView: MTKView {
 
     /// Pen samples normally arrive as mouse events. When only the pressure changes — the
     /// pen is pressed harder without moving — AppKit sends a tablet event here instead.
+    ///
+    /// It also sends one here for every few samples that already came as mouse events,
+    /// repeating their position and pressure with a timestamp from when it was delivered,
+    /// a frame or so late (seen with an XP-Pen on macOS 27: a fifth of all samples). Taken
+    /// as samples, those stand the pen still for a frame and then run the clock backwards,
+    /// which throws velocity dynamics and smoothing. A repeat is dropped.
     override func tabletPoint(with event: NSEvent) {
         guard let viewModel = viewModel, viewModel.isDrawing else { return }
+        let point = TabletEventHandler.strokePoint(from: event, in: self)
+        if let last = viewModel.lastRawInput, let lastView = lastRawViewPoint,
+           lastView == point.position, last.pressure == point.pressure {
+            return
+        }
         handleDrawingMouseDragged(event)
     }
+
+    /// Where the last pen sample was in the view, for telling a repeat from a new sample.
+    private var lastRawViewPoint: CGPoint?
 
     override func tabletProximity(with event: NSEvent) {
         // Handled by app-level event monitor

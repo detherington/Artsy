@@ -220,4 +220,22 @@ final class CanvasViewModelTests: XCTestCase {
         harness.renderer.finalizeStroke()
         viewModel.endStroke()
     }
+
+    /// Adaptive smoothing depends on the zoom, so a recording keeps it and a replay sets it.
+    func testARecordedStrokeRemembersItsZoom() throws {
+        let harness = try EngineHarness(width: 64, height: 64)
+        harness.viewModel.transform.scale = 0.45
+        let stroke = RecordedStroke(settingsFrom: harness.viewModel)
+        XCTAssertEqual(stroke.zoom, 0.45)
+
+        let other = try EngineHarness(width: 64, height: 64)
+        XCTAssertTrue(stroke.applySettings(to: other.viewModel))
+        XCTAssertEqual(other.viewModel.transform.scale, 0.45)
+
+        var older = stroke
+        older.zoom = nil
+        other.viewModel.transform.scale = 2
+        XCTAssertTrue(older.applySettings(to: other.viewModel))
+        XCTAssertEqual(other.viewModel.transform.scale, 2, "an older recording leaves the zoom as it is")
+    }
 }

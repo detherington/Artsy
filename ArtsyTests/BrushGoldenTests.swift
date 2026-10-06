@@ -233,4 +233,47 @@ final class BrushGoldenTests: XCTestCase {
             Golden.assertMatches(harness.displayed(), named: "recording-\(slug(file.deletingPathExtension().lastPathComponent))")
         }
     }
+
+    /// A session brought back from another Mac: `ARTSY_SESSION_RECORDING` names its stroke
+    /// recording and `ARTSY_SESSION_DOCUMENT` the document it saved. The recording is
+    /// replayed here, at each zoom in `ARTSY_SESSION_ZOOMS` (adaptive smoothing depends on
+    /// it), and compared with the document's drawing layer; the replay, the saved layer and
+    /// their difference are written to `ARTSY_SESSION_OUT`, and `SESSION` lines say how far
+    /// apart they are.
+    func testReplaysASessionFromDisk() throws {
+        let environment = ProcessInfo.processInfo.environment
+        guard let recordingPath = environment["ARTSY_SESSION_RECORDING"], let documentPath = environment["ARTSY_SESSION_DOCUMENT"] else {
+            throw XCTSkip("set ARTSY_SESSION_RECORDING and ARTSY_SESSION_DOCUMENT")
+        }
+        let out = environment["ARTSY_SESSION_OUT"].map { URL(fileURLWithPath: $0) }
+        let zooms = (environment["ARTSY_SESSION_ZOOMS"] ?? "1").split(separator: ",").compactMap { Double($0) }
+        let recording = try JSONDecoder().decode(StrokeRecording.self, from: Data(contentsOf: URL(fileURLWithPath: recordingPath)))
+        let document = try CanvasDocument.load(from: URL(fileURLWithPath: documentPath), metalContext: EngineHarness.sharedContext)
+        let harness = try EngineHarness(width: recording.canvasWidth, height: recording.canvasHeight)
+        let saved = harness.pixels(of: document.viewModel.layerStack.layers[document.viewModel.layerStack.activeLayerIndex].texture)
+        if let out { try Golden.write(saved, to: out.appendingPathComponent("saved.png")) }
+
+        for zoom in zooms {
+            let replay = try EngineHarness(width: recording.canvasWidth, height: recording.canvasHeight)
+            replay.viewModel.transform.scale = zoom   // each stroke brings its own smoothing mode
+            for stroke in recording.strokes { replay.draw(stroke) }
+            let drawn = replay.pixels(of: replay.drawingLayer.texture)
+
+            // Alpha is what a drawing layer differs in; colour follows it
+            var differing = 0, inkSaved: Float = 0, inkDrawn: Float = 0, worst: Float = 0
+            var diff = PixelGrid(width: drawn.width, height: drawn.height, values: [Float](repeating: 1, count: drawn.values.count))
+            for i in stride(from: 3, to: drawn.values.count, by: 4) {
+                let d = abs(drawn.values[i] - saved.values[i])
+                inkSaved += saved.values[i]; inkDrawn += drawn.values[i]; worst = max(worst, d)
+                if d > 0.1 { differing += 1; diff.values[i - 3] = 1; diff.values[i - 2] = 1 - d; diff.values[i - 1] = 1 - d }
+            }
+            print(String(format: "SESSION zoom %.2f: %d of %d pixels differ by more than 0.1 (%.2f%%), ink drawn/saved %.3f, worst %.2f",
+                         zoom, differing, drawn.width * drawn.height, Double(differing) * 100 / Double(drawn.width * drawn.height),
+                         inkDrawn / max(inkSaved, 1), worst))
+            if let out {
+                try Golden.write(drawn, to: out.appendingPathComponent(String(format: "replay-%.2f.png", zoom)))
+                try Golden.write(diff, to: out.appendingPathComponent(String(format: "diff-%.2f.png", zoom)))
+            }
+        }
+    }
 }

@@ -25,6 +25,9 @@ struct RecordedStroke: Codable, Equatable {
     var symmetry: String
     /// False for a mouse or trackpad. Absent in older recordings, which were all treated as pens.
     var hasPressure: Bool?
+    /// The canvas zoom the stroke was drawn at, which adaptive smoothing depends on. Absent
+    /// in older recordings, which replay at whatever zoom the replayer has.
+    var zoom: Double?
     var points: [RecordedPoint]
 
     /// Snapshot the view model's current drawing settings; points are added as they arrive.
@@ -38,6 +41,7 @@ struct RecordedStroke: Codable, Equatable {
         self.smoothingStrength = viewModel.smoothingStrength
         self.symmetry = viewModel.symmetryMode.recordingKey
         self.hasPressure = viewModel.strokeHasPressure
+        self.zoom = Double(viewModel.transform.scale)
         self.points = points
     }
 
@@ -54,6 +58,7 @@ struct RecordedStroke: Codable, Equatable {
         viewModel.smoothingMode = smoothingMode
         viewModel.smoothingStrength = smoothingStrength
         viewModel.symmetryMode = SymmetryMode(recordingKey: symmetry)
+        if let zoom { viewModel.transform.scale = CGFloat(zoom) }
         return true
     }
 }
