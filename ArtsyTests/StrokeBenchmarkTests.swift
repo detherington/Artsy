@@ -211,6 +211,34 @@ final class StrokeBenchmarkTests: XCTestCase {
         harness.viewModel.undoManager.waitForPendingWork()
         print(String(format: "BENCHMARK large-canvas undo step (%@) | selection call %6.2f ms gpu %7.2f ms | fill call %6.2f ms gpu %7.2f ms | history %d MB",
                      build, selection.call, selection.gpu, fill.call, fill.gpu, harness.viewModel.undoManager.textureBytes / 1_048_576))
+
+        // The display pass alone, GPU time: the composite and its height sampled onto a
+        // screen the size of a 2304×1296 Retina view, with the canvas fitted to it (zoom
+        // 0.09, as a session on an 8192² canvas ran) and at 1:1. Every idle frame pays this.
+        let viewSize = CGSize(width: 4608, height: 2592)
+        let screenDesc = MTLTextureDescriptor.texture2DDescriptor(pixelFormat: .bgra8Unorm, width: Int(viewSize.width),
+                                                                  height: Int(viewSize.height), mipmapped: false)
+        screenDesc.usage = [.renderTarget, .shaderRead]
+        screenDesc.storageMode = .private
+        let screen = device.makeTexture(descriptor: screenDesc)!
+        func displayMilliseconds(fitted: Bool, relief: Float) -> Double {
+            var transform = CanvasTransform()
+            if fitted { transform.zoomToFit(canvasSize: harness.viewModel.canvasSize, viewSize: viewSize) }
+            var times: [Double] = []
+            for _ in 0..<3 {
+                let commandBuffer = harness.context.commandQueue.makeCommandBuffer()!
+                harness.renderer.compositor.renderToScreen(
+                    composite: harness.renderer.compositeTexture, height: harness.renderer.compositeHeightTexture, relief: relief,
+                    drawable: screen, transform: transform, viewSize: viewSize, commandBuffer: commandBuffer
+                )
+                times.append(milliseconds { commandBuffer.commit(); commandBuffer.waitUntilCompleted() })
+            }
+            return median(times)
+        }
+        harness.renderFrame()
+        print(String(format: "BENCHMARK large-canvas display pass (%@) | fitted: relief %6.2f ms, flat %6.2f ms | 1:1: relief %6.2f ms, flat %6.2f ms",
+                     build, displayMilliseconds(fitted: true, relief: 1), displayMilliseconds(fitted: true, relief: 0),
+                     displayMilliseconds(fitted: false, relief: 1), displayMilliseconds(fitted: false, relief: 0)))
     }
 
     /// Cost of a whole-stack undo snapshot, which actions other than strokes still take

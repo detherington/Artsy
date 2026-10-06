@@ -43,7 +43,7 @@ final class CanvasRenderer: NSObject, MTKViewDelegate {
     /// Whether the last `encodeFrame` rebuilt the composite; for tests.
     private(set) var lastFrameRecomposited = false
     /// Idle, the composite is rebuilt at least this often, in case a change went unnoted.
-    static let idleRecompositeInterval: TimeInterval = 0.25
+    static let idleRecompositeInterval: TimeInterval = 1.0
 
     /// Make the next frame rebuild the composite from the layers.
     func invalidateComposite() {
@@ -142,6 +142,11 @@ final class CanvasRenderer: NSObject, MTKViewDelegate {
         if let line = frameTimings.frame(encodeMilliseconds: encodeMilliseconds, recomposited: lastFrameRecomposited,
                                          drawing: viewModel.isDrawing, at: now) {
             DiagnosticsLog.shared.note(.frame, line)
+        }
+        // What the GPU spent on this frame, once it has run it
+        let timings = frameTimings
+        commandBuffer.addCompletedHandler { buffer in
+            timings.gpu(milliseconds: (buffer.gpuEndTime - buffer.gpuStartTime) * 1000)
         }
 
         // Display
