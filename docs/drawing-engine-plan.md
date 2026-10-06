@@ -1,7 +1,7 @@
 # Drawing engine plan
 
 Goal: make drawing and painting the first-class feature of Artsy. Written 2026-10-05 from a
-code audit of v0.6.1 plus outside research. Steps 1 to 3 are merged; step 4 is under way.
+code audit of v0.6.1 plus outside research. Steps 1 to 4 are merged or in review; step 5 is next.
 
 **Direction:** keep the current ribbon renderer for inking pens, and build a stamp (dab)
 engine beside it for everything meant to be paint or dry media. Fix feel and correctness
@@ -160,7 +160,7 @@ Still to do:
 - The values in the re-authored brushes and the dynamics are a first pass judged from
   test renders. Tilt in particular needs a pen: the direction convention is a guess.
 
-### 4. Brush Studio and canvas handling (medium) — in progress
+### 4. Brush Studio and canvas handling (medium) — done, untested by hand
 
 Done:
 
@@ -198,9 +198,10 @@ Done:
   what GIMP, Krita and the Procreate community worked out, and were tested only on files
   built from those descriptions, not on real exports.
 
-Still to do:
-
-- A dual tip, once the editor can expose it.
+- **Second tip.** A stamp brush can mask each dab with a second tip (chalk, bristle or an
+  imported image) at its own size and random rotation: wherever the second tip is clear
+  the dab is too, which breaks a plain tip up into texture. In the Brush Studio under
+  "Second tip".
 
 ### 5. Wet media (large)
 

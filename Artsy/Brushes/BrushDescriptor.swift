@@ -128,7 +128,19 @@ struct StampSettings: Codable, Equatable {
         var depth: Float
     }
 
+    /// A second tip laid over each dab, masking it: wherever the second tip is clear the
+    /// dab is too. Breaks a plain tip up into texture (Photoshop's dual brush, Krita's
+    /// masked brush).
+    struct SecondTip: Codable, Equatable {
+        var tip: Tip
+        /// Size relative to the dab; below 1 the second tip tiles across it.
+        var scale: Float = 1
+        /// Random rotation per dab, as a fraction of a full turn.
+        var angleJitter: Float = 0
+    }
+
     var tip: Tip = .round
+    var secondTip: SecondTip? = nil
     /// Distance between dabs, as a fraction of the dab's diameter.
     var spacing: Float
     /// Opacity of a single dab, before pressure.

@@ -162,6 +162,58 @@ final class StampBrushTests: XCTestCase {
         XCTAssertLessThan(halved, single * 0.7, "the opacity slider thins every dab")
     }
 
+    // MARK: - Second tip
+
+    /// A second tip masks each dab: where it is clear, nothing is painted.
+    func testASecondTipMasksTheDab() throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("ArtsySecondTip-\(UUID().uuidString)", isDirectory: true)
+        defer {
+            try? FileManager.default.removeItem(at: directory)
+            EngineHarness.sharedContext.brushTextures.userTextureDirectory = nil
+        }
+        let library = BrushLibrary(directory: directory)
+        // An image that is opaque on its left half only
+        let size = 32
+        var rgba = [UInt8](repeating: 0, count: size * size * 4)
+        for y in 0..<size { for x in 0..<(size / 2) { rgba[(y * size + x) * 4 + 3] = 255 } }
+        let source = directory.appendingPathComponent("left half.png")
+        try Golden.write(PixelGrid(width: size, height: size, values: rgba.map { Float($0) / 255 }), to: source)
+        let name = try library.importTexture(from: source)
+        EngineHarness.sharedContext.brushTextures.userTextureDirectory = library.texturesDirectory
+
+        var brush = BrushDescriptor(copying: .hardRound, id: UUID(), name: "Masked")
+        var settings = StampSettings(spacing: 0.3, flow: 1)
+        settings.secondTip = .init(tip: .image(name), scale: 1, angleJitter: 0)
+        brush.rendering = .stamp(settings)
+
+        let harness = try EngineHarness(width: 120, height: 120)
+        harness.select(brush)
+        harness.viewModel.brushSize = 40
+        harness.draw(StrokeFixtures.dot(at: CGPoint(x: 60, y: 60), pressure: 1))
+        let shown = harness.displayed()
+        XCTAssertLessThan(shown.at(x: 60 - 10, y: 60).x, 0.1, "the left of the dab is painted")
+        XCTAssertEqual(shown.at(x: 60 + 10, y: 60).x, 1, accuracy: 0.01, "the right is masked away")
+
+        // The built-in chalk tip as a mask breaks up a plain dab
+        var chalky = StampSettings(spacing: 0.3, flow: 1)
+        chalky.secondTip = .init(tip: .chalk, scale: 1, angleJitter: 1)
+        brush.rendering = .stamp(chalky)
+        let masked = try EngineHarness(width: 120, height: 120)
+        masked.select(brush)
+        masked.viewModel.brushSize = 40
+        masked.draw(StrokeFixtures.dot(at: CGPoint(x: 60, y: 60), pressure: 1))
+        let plain = try EngineHarness(width: 120, height: 120)
+        brush.rendering = .stamp(StampSettings(spacing: 0.3, flow: 1))
+        plain.select(brush)
+        plain.viewModel.brushSize = 40
+        plain.draw(StrokeFixtures.dot(at: CGPoint(x: 60, y: 60), pressure: 1))
+        func ink(_ grid: PixelGrid) -> Float { (40...80).reduce(0) { $0 + (1 - grid.at(x: $1, y: 60).x) } }
+        let maskedInk = ink(masked.displayed()), plainInk = ink(plain.displayed())
+        XCTAssertLessThan(maskedInk, plainInk * 0.9)
+        XCTAssertGreaterThan(maskedInk, plainInk * 0.2)
+    }
+
     // MARK: - Resting pen
 
     private func resting(at point: CGPoint, for seconds: Double) -> [StrokePoint] {

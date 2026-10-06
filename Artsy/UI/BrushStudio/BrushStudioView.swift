@@ -13,6 +13,7 @@ struct BrushStudioView: View {
             Form {
                 shapeSection
                 if model.stampSettings != nil {
+                    secondTipSection
                     grainSection
                     jitterSection
                 }
@@ -129,6 +130,29 @@ struct BrushStudioView: View {
         }
     }
 
+    private var secondTipSection: some View {
+        Section("Second tip") {
+            Toggle("Mask each dab with a second tip", isOn: Binding(
+                get: { model.stampSettings?.secondTip != nil },
+                set: { on in
+                    model.stampBinding(\.secondTip, default: nil).wrappedValue =
+                        on ? StampSettings.SecondTip(tip: .chalk, scale: 1, angleJitter: 1) : nil
+                }
+            ))
+            if let second = model.stampSettings?.secondTip {
+                Picker("Tip", selection: secondTipBinding(\.tip, second)) {
+                    Text("Chalk").tag(StampSettings.Tip.chalk)
+                    Text("Bristle").tag(StampSettings.Tip.bristle)
+                    ForEach(library.textureNames, id: \.self) { name in
+                        Text(name).tag(StampSettings.Tip.image(name))
+                    }
+                }
+                slider("Size", secondTipBinding(\.scale, second), in: 0.2...3, unit: "×")
+                slider("Angle jitter", secondTipBinding(\.angleJitter, second), in: 0...1, percent: true)
+            }
+        }
+    }
+
     private var grainSection: some View {
         Section("Grain") {
             Toggle("Paper grain", isOn: Binding(
@@ -223,6 +247,18 @@ struct BrushStudioView: View {
                 var grain = model.stampSettings?.grain ?? current
                 grain[keyPath: keyPath] = value
                 model.stampBinding(\.grain, default: nil).wrappedValue = grain
+            }
+        )
+    }
+
+    private func secondTipBinding<Value>(_ keyPath: WritableKeyPath<StampSettings.SecondTip, Value>,
+                                         _ current: StampSettings.SecondTip) -> Binding<Value> {
+        Binding(
+            get: { (model.stampSettings?.secondTip ?? current)[keyPath: keyPath] },
+            set: { value in
+                var second = model.stampSettings?.secondTip ?? current
+                second[keyPath: keyPath] = value
+                model.stampBinding(\.secondTip, default: nil).wrappedValue = second
             }
         )
     }
