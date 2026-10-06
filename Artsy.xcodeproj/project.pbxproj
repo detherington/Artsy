@@ -7,6 +7,8 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		08608ECD7F5F1176B6C435F8 /* SmudgeBrushTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0075B40DC2354EE098F1E0CD /* SmudgeBrushTests.swift */; };
+		6DA92A8D6FA9F9F203D1F23B /* SmudgeRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = A49F88C8AEA2D1CC2C459AE0 /* SmudgeRenderer.swift */; };
 		02177C5233136639E672BDF0 /* BrushDescriptor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9C62A909BCD9D532B7728EE0 /* BrushDescriptor.swift */; };
 		0591EA527AD0B06CB70EA71F /* CompositorPipeline.swift in Sources */ = {isa = PBXBuildFile; fileRef = 503F3A4D683A28C2D0F3CA61 /* CompositorPipeline.swift */; };
 		09386C46324D038E9A39D68D /* StrokePath.swift in Sources */ = {isa = PBXBuildFile; fileRef = CABAD15A8043DE4840509F6F /* StrokePath.swift */; };
@@ -111,6 +113,8 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		0075B40DC2354EE098F1E0CD /* SmudgeBrushTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SmudgeBrushTests.swift; sourceTree = "<group>"; };
+		A49F88C8AEA2D1CC2C459AE0 /* SmudgeRenderer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SmudgeRenderer.swift; sourceTree = "<group>"; };
 		1BAE745B52E51B4C39233DC2 /* CanvasViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CanvasViewModel.swift; sourceTree = "<group>"; };
 		1EA099CE5CB6D694FA248491 /* NewCanvasView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NewCanvasView.swift; sourceTree = "<group>"; };
 		22EA3B8567263273990426D0 /* PressureCurve.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PressureCurve.swift; sourceTree = "<group>"; };
@@ -355,6 +359,7 @@
 		B48AF066E85C8962CFFD499C /* ArtsyTests */ = {
 			isa = PBXGroup;
 			children = (
+				0075B40DC2354EE098F1E0CD /* SmudgeBrushTests.swift */,
 				4C0CCBA518F10051372D8279 /* BrushImportTests.swift */,
 				B5DE7886E38559B2215F3216 /* BrushStudioTests.swift */,
 				50AC0CC3520CBED11BD5BFEF /* CanvasTransformTests.swift */,
@@ -421,6 +426,7 @@
 		D144A5F7E552DC1AE9ED79EC /* Metal */ = {
 			isa = PBXGroup;
 			children = (
+				A49F88C8AEA2D1CC2C459AE0 /* SmudgeRenderer.swift */,
 				503F3A4D683A28C2D0F3CA61 /* CompositorPipeline.swift */,
 				63B590EB2937F982E7AD387D /* BrushTextureLibrary.swift */,
 				59797061B065607E467C8C83 /* MetalContext.swift */,
@@ -595,6 +601,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				6DA92A8D6FA9F9F203D1F23B /* SmudgeRenderer.swift in Sources */,
 				71057E79579C2004D1BB93F7 /* ProcreateBrushFile.swift in Sources */,
 				E60591416C0567A586D67B85 /* PhotoshopBrushFile.swift in Sources */,
 				EB1545353BB49811F55F7FC5 /* ZipArchive.swift in Sources */,
@@ -672,6 +679,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				08608ECD7F5F1176B6C435F8 /* SmudgeBrushTests.swift in Sources */,
 				26CC8D1B03C141D7211C1C37 /* BrushImportTests.swift in Sources */,
 				438094AC1208B8BD1689406A /* BrushStudioTests.swift in Sources */,
 				ABF8AED229B1468403D7DCF8 /* CanvasTransformTests.swift in Sources */,

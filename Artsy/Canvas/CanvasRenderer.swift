@@ -5,6 +5,7 @@ final class CanvasRenderer: NSObject, MTKViewDelegate {
     let context: MetalContext
     let textureManager: TextureManager
     let strokeRenderer: StrokeRenderer
+    let smudgeRenderer: SmudgeRenderer
     let compositor: CompositorPipeline
 
     // Canvas textures
@@ -31,8 +32,12 @@ final class CanvasRenderer: NSObject, MTKViewDelegate {
     private var renderedRevision = 0
     /// Where the tail was drawn last frame.
     private var tailRegions: [MTLScissorRect] = []
-    /// Everything drawn into `activeStrokeTexture` by this stroke.
+    /// Everything drawn into `activeStrokeTexture` by this stroke — or, for a smudge brush,
+    /// everything it has changed on the layer.
     private var strokeRegion: MTLScissorRect?
+    /// The active layer as it was at pen-down, for the undo step of a brush that changes the
+    /// layer as it goes (smudge). Made the first time one is used.
+    private var layerBeforeStroke: MTLTexture?
     /// What has changed since `compositeTexture` was last brought up to date.
     private var pendingRegions: [MTLScissorRect] = []
     /// The scene `compositeTexture` currently shows, while a stroke is in progress.
@@ -43,6 +48,7 @@ final class CanvasRenderer: NSObject, MTKViewDelegate {
         self.canvasSize = canvasSize
         self.textureManager = TextureManager(device: context.device)
         self.strokeRenderer = StrokeRenderer(context: context)
+        self.smudgeRenderer = SmudgeRenderer(context: context)
         self.compositor = CompositorPipeline(context: context)
 
         super.init()
@@ -305,13 +311,30 @@ final class CanvasRenderer: NSObject, MTKViewDelegate {
                 }
             }
 
+            dabPlacer = placer
+
+            // A smudge brush works on the layer itself, and only where the path has settled:
+            // what it does cannot be redrawn next frame. The pixels it changes still need
+            // recompositing, and remembering for the undo step.
+            if let smudge = settings.smudge {
+                guard let layer = viewModel.layerStack?.activeLayer else { return }
+                let regions = smudgeRenderer.encode(
+                    dabs: dabs, brush: brush, settings: settings, smudge: smudge, color: color, opacityScale: dabScale,
+                    mirrors: mirrors, layer: layer.texture, commandBuffer: commandBuffer, canvasSize: size
+                ).compactMap(region(for:))
+                for region in regions {
+                    strokeRegion = strokeRegion.map { Self.union($0, region) } ?? region
+                }
+                pendingRegions += regions
+                return
+            }
+
             if !dabs.isEmpty {
                 drawSettled = { encoder in
                     renderer.encode(dabs: dabs, brush: brush, settings: settings, color: color, opacityScale: dabScale,
                                     mirrors: mirrors, encoder: encoder, canvasSize: size)
                 }
             }
-            dabPlacer = placer
 
             // The rest are laid with a copy of the placer, so next frame starts over from
             // the same place.
@@ -371,12 +394,14 @@ final class CanvasRenderer: NSObject, MTKViewDelegate {
         return x &* 0x9E3779B97F4A7C15 ^ y &* 0xC2B2AE3D27D4EB4F
     }
 
-    /// How the stroke in progress combines with the layer it is on.
-    private func strokeOverlay(for viewModel: CanvasViewModel) -> CompositorPipeline.StrokeOverlay {
+    /// How the stroke in progress combines with the layer it is on. Nil for a smudge brush,
+    /// whose stroke is already in the layer.
+    private func strokeOverlay(for viewModel: CanvasViewModel) -> CompositorPipeline.StrokeOverlay? {
         let brush = viewModel.currentBrush
         var opacity = viewModel.brushOpacity
         var accumulates = false
         if case .stamp(let settings) = brush.rendering {
+            if settings.smudge != nil { return nil }
             accumulates = true
             opacity = settings.accumulation == .wash ? brush.opacity * viewModel.brushOpacity : 1
         }
@@ -888,6 +913,20 @@ final class CanvasRenderer: NSObject, MTKViewDelegate {
             compositor.clear(activeStrokeTexture, regions: [strokeRegion], commandBuffer: commandBuffer)
         }
         compositor.clear(strokeTailTexture, regions: tailRegions, commandBuffer: commandBuffer)
+
+        // A smudge brush changes the layer as it goes, so keep a copy of it for the undo step.
+        if viewModel?.currentBrush.smudgeSettings != nil, let layer = viewModel?.layerStack?.activeLayer {
+            if layerBeforeStroke == nil {
+                layerBeforeStroke = try? textureManager.makeCanvasTexture(
+                    width: layer.texture.width, height: layer.texture.height, label: "LayerBeforeStroke"
+                )
+            }
+            if let copy = layerBeforeStroke, let blit = commandBuffer.makeBlitCommandEncoder() {
+                blit.copy(from: layer.texture, to: copy)
+                blit.endEncoding()
+            }
+        }
+        smudgeRenderer.beginStroke()
         commandBuffer.commit()
         resetStrokeState()
     }
@@ -910,6 +949,7 @@ final class CanvasRenderer: NSObject, MTKViewDelegate {
               let activeLayer = layerStack.activeLayer else { return }
 
         let isErasing = viewModel.currentBrush.category == .utility
+        let isSmudging = viewModel.currentBrush.smudgeSettings != nil
 
         guard let commandBuffer = context.commandQueue.makeCommandBuffer() else { return }
 
@@ -918,16 +958,20 @@ final class CanvasRenderer: NSObject, MTKViewDelegate {
         encodeActiveStroke(into: commandBuffer, finishing: true)
 
         if let strokeRegion {
-            // Undo only needs the pixels this stroke is about to change.
+            // Undo only needs the pixels this stroke changes. A smudge has changed them
+            // already; its copy of the layer from pen-down has the originals.
             viewModel.undoManager.saveRegion(
-                of: activeLayer, in: layerStack, region: strokeRegion, context: context,
+                of: activeLayer, in: layerStack, region: strokeRegion,
+                from: isSmudging ? layerBeforeStroke : nil, context: context,
                 description: isErasing ? "Erase" : viewModel.currentBrush.name,
                 commandBuffer: commandBuffer
             )
             viewModel.markDirty()
 
-            let opacity = strokeOverlay(for: viewModel).opacity
-            if isErasing {
+            let opacity = strokeOverlay(for: viewModel)?.opacity ?? 1
+            if isSmudging {
+                // Already in the layer
+            } else if isErasing {
                 compositor.erase(
                     source: activeStrokeTexture, from: activeLayer.texture,
                     opacity: opacity, regions: [strokeRegion], commandBuffer: commandBuffer

@@ -11,6 +11,9 @@ final class MetalContext {
     let strokeWatercolorPipelineState: MTLRenderPipelineState
     /// Dabs of a stamp brush, blended source-over into the stroke texture.
     let stampPipelineState: MTLRenderPipelineState
+    /// Smudge brushes: lays carried paint into the layer, then picks up what is under the dab
+    let smudgeDepositPipelineState: MTLRenderPipelineState
+    let smudgePickupPipelineState: MTLRenderPipelineState
     /// Tips and paper grain for stamp brushes.
     let brushTextures: BrushTextureLibrary
     // Radial-distance variants for stroke caps (rounded endpoints, Procreate-style)
@@ -116,6 +119,30 @@ final class MetalContext {
         stampAttachment.sourceAlphaBlendFactor = .one
         stampAttachment.destinationAlphaBlendFactor = .oneMinusSourceAlpha
         self.stampPipelineState = try device.makeRenderPipelineState(descriptor: stampDesc)
+
+        // Smudge deposit: the same quads, blended into the layer by a per-pixel weight that
+        // comes out of the fragment's second output (dual-source blending), so alpha is
+        // interpolated too rather than composited.
+        let smudgeDesc = MTLRenderPipelineDescriptor()
+        smudgeDesc.vertexFunction = library.makeFunction(name: "stampVertex")
+        smudgeDesc.fragmentFunction = library.makeFunction(name: "smudgeDepositFragment")
+        smudgeDesc.colorAttachments[0].pixelFormat = .rgba16Float
+        let smudgeAttachment = smudgeDesc.colorAttachments[0]!
+        smudgeAttachment.isBlendingEnabled = true
+        smudgeAttachment.rgbBlendOperation = .add
+        smudgeAttachment.alphaBlendOperation = .add
+        smudgeAttachment.sourceRGBBlendFactor = .one
+        smudgeAttachment.destinationRGBBlendFactor = .oneMinusSource1Alpha
+        smudgeAttachment.sourceAlphaBlendFactor = .one
+        smudgeAttachment.destinationAlphaBlendFactor = .oneMinusSource1Alpha
+        self.smudgeDepositPipelineState = try device.makeRenderPipelineState(descriptor: smudgeDesc)
+
+        let pickupDesc = MTLRenderPipelineDescriptor()
+        pickupDesc.vertexFunction = library.makeFunction(name: "smudgePickupVertex")
+        pickupDesc.fragmentFunction = library.makeFunction(name: "smudgePickupFragment")
+        pickupDesc.colorAttachments[0].pixelFormat = .rgba16Float
+        pickupDesc.colorAttachments[0].isBlendingEnabled = false
+        self.smudgePickupPipelineState = try device.makeRenderPipelineState(descriptor: pickupDesc)
         self.brushTextures = BrushTextureLibrary(device: device)
 
         // Radial cap variants

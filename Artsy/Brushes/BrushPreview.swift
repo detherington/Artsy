@@ -32,13 +32,25 @@ final class BrushPreview {
         renderer.textureManager.clearTexture(layer.texture, commandBuffer: clear)
         clear.commit()
 
+        let w = size.width, h = size.height
+        viewModel.brushOpacity = 1
+
+        // A smudge brush shows nothing on a blank pad: give it bands of paint to drag.
+        if brush.smudgeSettings != nil {
+            viewModel.currentBrush = .hardRound
+            viewModel.brushSize = Float(h) * 0.5
+            for (index, band) in Self.paintBands.enumerated() {
+                viewModel.currentColor = band
+                let x = w * (0.22 + 0.28 * CGFloat(index))
+                draw(samples(count: 20, duration: 0.1) { t in (CGPoint(x: x, y: h * (0.15 + 0.7 * t)), 1) })
+            }
+        }
+
         viewModel.currentBrush = brush
         viewModel.brushSize = min(brushSize, Float(size.height) * 0.45)
-        viewModel.brushOpacity = 1
         viewModel.currentColor = color
         viewModel.undoManager.clear()
 
-        let w = size.width, h = size.height
         draw(samples(count: 160, duration: 0.8) { t in
             (CGPoint(x: w * (0.07 + 0.86 * t), y: h * (0.5 + 0.22 * sin(t * 2 * .pi))),
              Float(0.1 + 0.9 * sin(t * .pi)))
@@ -56,6 +68,12 @@ final class BrushPreview {
         commandBuffer.waitUntilCompleted()
         return Self.image(from: readback)
     }
+
+    static let paintBands = [
+        StrokeColor(red: 0.85, green: 0.20, blue: 0.18, alpha: 1),
+        StrokeColor(red: 0.95, green: 0.75, blue: 0.15, alpha: 1),
+        StrokeColor(red: 0.15, green: 0.40, blue: 0.80, alpha: 1),
+    ]
 
     private func samples(count: Int, duration: Double, _ path: (Double) -> (CGPoint, Float)) -> [StrokePoint] {
         (0...count).map { i in
