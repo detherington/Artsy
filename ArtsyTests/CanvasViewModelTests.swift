@@ -82,9 +82,9 @@ final class CanvasViewModelTests: XCTestCase {
         XCTAssertLessThan(mouseUneased.start, 0.1, "the preference turns it off")
     }
 
-    /// Each frame the view tells the stroke the pen is still there. That only counts once
-    /// real input has gone quiet, and it is recorded like any other sample so a replay
-    /// rests for just as long.
+    /// Each frame the view tells the stroke the pen is still there. That only counts for a
+    /// frame no sample arrived before, and it is recorded like any other sample so a
+    /// replay rests for just as long.
     func testHoldingThePenIsFedToTheStrokeAndRecorded() throws {
         let harness = try EngineHarness(width: 100, height: 100)
         let recorder = StrokeRecorder(canvasSize: harness.viewModel.canvasSize, fileURL: nil)
@@ -97,22 +97,65 @@ final class CanvasViewModelTests: XCTestCase {
         harness.renderer.beginStroke()
         viewModel.beginStroke(point: sample(10, 100))
         viewModel.continueStroke(point: sample(20, 100.005))
-        viewModel.holdStroke(at: 100.006)   // too soon after real input to count
+        viewModel.holdStroke(at: 100.006)   // a sample arrived before this frame: not a rest
         XCTAssertEqual(viewModel.activePath?.samples.count, 2)
+        XCTAssertEqual(viewModel.restSamplesInStroke, 0)
         viewModel.holdStroke(at: 100.3)
         viewModel.holdStroke(at: 100.6)
         XCTAssertEqual(viewModel.activePath?.samples.count, 2, "resting adds no points to the path")
-        XCTAssertEqual(viewModel.activePath?.holdDuration ?? 0, 0.595, accuracy: 0.001)
+        XCTAssertEqual(viewModel.restSamplesInStroke, 2)
+        // The rests are a frame on from the sample, on its clock: 0.294 s and 0.3 s more
+        XCTAssertEqual(viewModel.activePath?.holdDuration ?? 0, 0.594, accuracy: 0.0005)
         harness.renderer.finalizeStroke()
         viewModel.endStroke()
 
         let stroke = try XCTUnwrap(recorder.recording.strokes.first)
         XCTAssertEqual(stroke.points.count, 4, "the two holds are recorded")
-        XCTAssertEqual(stroke.points.last?.time ?? 0, 0.6, accuracy: 0.0001)
+        XCTAssertEqual(stroke.points.last?.time ?? 0, 0.599, accuracy: 0.0001)
         XCTAssertEqual(stroke.points.last?.x ?? 0, 20, accuracy: 0.001)
 
         viewModel.holdStroke(at: 101)
         XCTAssertNil(viewModel.activePath, "nothing happens once the pen is up")
+    }
+
+    /// A rest is a frame that no sample arrived before — not a sample older than the frame,
+    /// which on an XP-Pen is every sample: its driver delivers them 20–70 ms late. (Two
+    /// releases took the rests that made for repeated events, and filtered this view's
+    /// input for copies that never came.) And a rest is stamped on the pen's clock, so the
+    /// real sample after it is not in its past.
+    func testAFrameWithASampleBeforeItIsNoRestHoweverLateTheSampleWas() throws {
+        let harness = try EngineHarness(width: 100, height: 100)
+        let recorder = StrokeRecorder(canvasSize: harness.viewModel.canvasSize, fileURL: nil)
+        harness.viewModel.recorder = recorder
+        let viewModel = harness.viewModel
+
+        func sample(_ x: CGFloat, _ t: Double) -> StrokePoint {
+            StrokePoint(position: CGPoint(x: x, y: 50), pressure: 0.5, tiltX: 0, tiltY: 0, rotation: 0, timestamp: t)
+        }
+        harness.renderer.beginStroke()
+        viewModel.beginStroke(point: sample(10, 100))
+        // Samples stamped 4 ms apart, each in hand 40 ms later; frames 16 ms apart
+        viewModel.continueStroke(point: sample(11, 100.004))
+        viewModel.holdStroke(at: 100.050)
+        viewModel.continueStroke(point: sample(12, 100.008))
+        viewModel.continueStroke(point: sample(13, 100.012))
+        viewModel.holdStroke(at: 100.066)
+        XCTAssertEqual(viewModel.restSamplesInStroke, 0, "the pen was moving")
+        XCTAssertEqual(viewModel.activePath?.holdDuration ?? 0, 0)
+
+        // Then it stops: two frames pass with nothing new
+        viewModel.holdStroke(at: 100.082)
+        viewModel.holdStroke(at: 100.098)
+        XCTAssertEqual(viewModel.restSamplesInStroke, 2)
+        XCTAssertEqual(viewModel.activePath?.holdDuration ?? 0, 0.032, accuracy: 0.0005, "a frame each")
+
+        // And moves on. The sample is later than the rests: the clock never ran backwards
+        viewModel.continueStroke(point: sample(14, 100.060))
+        harness.renderer.finalizeStroke()
+        viewModel.endStroke()
+        let times = try XCTUnwrap(recorder.recording.strokes.first).points.map(\.time)
+        XCTAssertEqual(times.count, 7, "five samples and two rests")
+        XCTAssertEqual(times, times.sorted(), "\(times)")
     }
 
     func testRecorderCapturesRawInputAndSettings() throws {

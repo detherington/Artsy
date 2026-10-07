@@ -143,8 +143,9 @@ final class CanvasViewModel: ObservableObject {
         for layer in layerStack?.layers ?? [] {
             bytes += pixels * (layer.heightTexture == nil ? 8 : 10)
         }
-        // Composite, blend scratch, two stroke textures and the composite height map
-        bytes += pixels * (8 * 4 + 2)
+        // Composite and its height map, each with mip levels (a third again), blend
+        // scratch and two stroke textures
+        bytes += pixels * (8 + 2) * 4 / 3 + pixels * 8 * 3
         bytes += undoManager.textureBytes
         return bytes
     }
@@ -205,24 +206,39 @@ final class CanvasViewModel: ObservableObject {
         path.append(smoother.filter(point))
         activePath = path
         lastInput = point
-        lastRawInput = rawPoint
+        sampleArrivedSinceFrame = true
+        lastFrameTime = nil
+        restSamplesInStroke = 0
         strokeIsSettled = false
         isDrawing = true
     }
 
     /// The last sample the pen sent, before smoothing.
     private var lastInput: StrokePoint?
-    /// The last sample as it arrived, before guides; what a repeat of it is checked against.
-    private(set) var lastRawInput: StrokePoint?
+    /// Whether a sample has arrived since the last frame, and when that frame was.
+    private var sampleArrivedSinceFrame = false
+    private var lastFrameTime: TimeInterval?
+    /// Rest samples `holdStroke` has added since pen-down, for the diagnostics log.
+    private(set) var restSamplesInStroke = 0
 
-    /// Call once per frame while the pen is down. If no sample has arrived since the last
-    /// frame the pen is resting, which the stroke still needs to know about: smoothing
+    /// Call once per frame while the pen is down. A frame that no sample arrived before
+    /// means the pen is resting, which the stroke still needs to know about: smoothing
     /// catches up to a resting pen, and an airbrush keeps spraying.
+    ///
+    /// Resting is a frame without a sample, not a sample older than the frame: a tablet's
+    /// samples reach the app late (20–70 ms behind the frame clock on an XP-Pen), so by
+    /// age every sample would look like a rest, and a rest a frame would be added to every
+    /// frame of a moving stroke. The rest sample keeps the pen's own clock, a frame on from
+    /// the last sample, so the next real sample is not in its past: the smoother goes by
+    /// time, and a sample from the past reads as a pen moving impossibly fast.
     func holdStroke(at time: TimeInterval) {
-        guard isDrawing, let last = lastInput, time - last.timestamp > 0.004 else { return }
-        continueStroke(point: StrokePoint(
+        guard isDrawing, let last = lastInput else { return }
+        defer { sampleArrivedSinceFrame = false; lastFrameTime = time }
+        guard !sampleArrivedSinceFrame, let lastFrame = lastFrameTime else { return }
+        restSamplesInStroke += 1
+        feed(StrokePoint(
             position: last.position, pressure: last.pressure, tiltX: last.tiltX, tiltY: last.tiltY,
-            rotation: last.rotation, timestamp: time
+            rotation: last.rotation, timestamp: last.timestamp + (time - lastFrame)
         ))
     }
 
@@ -246,12 +262,17 @@ final class CanvasViewModel: ObservableObject {
     }
 
     func continueStroke(point rawPoint: StrokePoint) {
+        sampleArrivedSinceFrame = true
+        feed(rawPoint)
+    }
+
+    /// A sample from the pen, or a rest sample standing in for one, into the stroke.
+    private func feed(_ rawPoint: StrokePoint) {
         guard rawPoint.isFinite else { return }
         recorder?.append(rawPoint)
         guard isDrawing else { return }
         let point = snappedToGuides(rawPoint)
         lastInput = point
-        lastRawInput = rawPoint
         activePath?.append(smoother.filter(point))
         checkShapeSnap()
     }
@@ -314,9 +335,10 @@ final class CanvasViewModel: ObservableObject {
         let pressures = samples.map(\.pressure)
         let tilt = samples.map { hypot($0.tiltX, $0.tiltY) }.max() ?? 0
         let length = path.points.last?.distance ?? 0
-        return String(format: "%@ %.0f px: %d samples in %.2f s (%.0f/s), %.0f px long, pressure %.2f–%.2f, tilt %.2f, held %.2f s%@%@",
+        return String(format: "%@ %.0f px: %d samples in %.2f s (%.0f/s), %.0f px long, pressure %.2f–%.2f, tilt %.2f, held %.2f s%@%@%@",
                       currentBrush.name, brushSize, samples.count, duration, duration > 0 ? Double(samples.count) / duration : 0,
                       Double(length), pressures.min() ?? 0, pressures.max() ?? 0, tilt, path.holdDuration,
+                      restSamplesInStroke > 0 ? ", \(restSamplesInStroke) rest samples" : "",
                       strokeHasPressure ? "" : ", no pressure", snappedShapeName.map { ", snapped to \($0)" } ?? "")
     }
 

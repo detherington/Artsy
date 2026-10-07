@@ -390,8 +390,10 @@ Two changes made the difference:
   changes, and every frame rebuilt the composite from all the layers. Now the renderer
   keeps the composite when the scene (layer list and settings), the view model's
   content version (bumped by `markDirty` and by every tool that writes pixels) and the
-  stroke state are unchanged — and rebuilds it at least every second regardless, in
-  case a change went unnoted. The display pass still runs every frame.
+  stroke state are unchanged. (Until the fourth pen session it also rebuilt it once a
+  second regardless, in case a change went unnoted; none did, and at 8192² each rebuild
+  was 60–110 ms of GPU.) Between strokes, a frame that would show the same picture
+  again — nothing recomposited, the view not moved — is not drawn at all.
 - **Undo snapshots copy only what the action will change.** `saveUndoSnapshot` takes a
   scope: `.nothing` for a selection or a change to the layer list, `.layer(x)` for a
   fill, transform, cut, shape or move, `.everything` only when the caller cannot say.
@@ -568,16 +570,22 @@ paint yet.
   harness matches the document's drawing layer to within 0.3% of pixels, all on stroke
   edges (8-bit on disk, antialiasing), once replayed at the session's zoom. Adaptive
   smoothing depends on the zoom, which recordings did not keep; they do now.
-- **A fifth of the pen samples were repeats.** AppKit delivers a `tabletPoint` event for
-  every few samples that already came as mouse events, repeating position and pressure
-  with a timestamp from delivery, 20–25 ms late. The view fed them in: the stroke path
-  absorbed them as rests (so brush velocity and the geometry were unharmed), but the
-  smoother runs before that and goes by timestamps — the pen stood still for a frame,
-  then the next real sample ran its clock backwards (clamped to a millisecond, so its
-  speed read as thousands of pixels a second and smoothing let go for a sample). That
-  happened every five samples. Repeats are dropped now; pressure-only changes, which
-  those events exist for, are kept. The real report rate is about 200 a second, not the
-  260 the log counted, and recordings from 0.7.0 carry the repeats.
+- **A fifth of the pen samples were repeats** — of the view model's own making, as the
+  fourth session found. The explanation given here at the time, that AppKit delivered a
+  second copy of every few samples 20–25 ms late, was wrong, and two releases built on
+  it filtered the view's input for copies that never came. The repeats were rest
+  samples: each frame the renderer tells the stroke the pen is still there, so that a
+  resting pen's smoothing catches up and an airbrush keeps spraying, and it decided the
+  pen was resting when its last sample was older than 4 ms. The tablet's samples reach
+  the app 20–70 ms after their timestamps (the driver's latency), so by age every
+  sample looked like a rest, and every frame of a moving stroke got one: a fifth of the
+  samples at 250 a second and 60 frames. The stroke path absorbed them as rests, so
+  brush velocity and the geometry were unharmed, but the smoother runs before that and
+  goes by timestamps — the rest stood the pen still for a frame, then the next real
+  sample, stamped before the rest, ran its clock backwards (clamped to a millisecond, so
+  its speed read as thousands of pixels a second and smoothing let go for a sample).
+  The tablet's real rate is the 250 a second the log counts; the recordings from 0.7.0
+  to 0.7.2 carry the rests, and replay with them.
 - **Pressure never reached 0.87.** A third of all samples sit at 0.6–0.7; the pen's
   top tenth is unused. Hard Round at 12 px drew at little over half width most of the
   time. The Soft pressure curve (saved for that pen in the curve editor) or a per-pen
@@ -615,6 +623,8 @@ saved layer to 103 pixels in 67 million, now that every stroke carries its zoom.
   the stroke line in the log counts the repeats it dropped, so the next session shows it
   working or not. The lesson taken: the test that covered it had passed without proving
   anything, since the stroke path absorbs repeats anyway; it asserts on the count now.
+  (The next session showed it not working: it dropped nothing, and the fourth session
+  found why — there were no repeats to drop.)
 - **35–50 frames a second on 8192², idle as well as drawing**, where 2048² ran at 60.
   The display pass alone measures 3 ms fitted here (M4 Pro; relief 3.0, flat 2.5, 1:1
   0.3), so that is not it. The fallback recomposite ran four times a second, at 8192² a
@@ -623,6 +633,52 @@ saved layer to 103 pixels in 67 million, now that every stroke carries its zoom.
   from here on, so the next session says what the rest is.
 - Pressure reached 0.97, and the Soft curve is on for that pen. The first thick stroke
   logged its height map being made (8192², no slow frame with it).
+
+The fourth session ran 0.7.2: a 2048² document of Hard Round, Ink Brush and Sumi-e
+strokes, then an 8192² one of eleven strokes across the whole canvas, each saved. Both
+replay here to within 11 pixels in 4 million and 57 in 67 million.
+
+- **The repeats were the app's own rest samples.** 0.7.2's filter dropped nothing — no
+  stroke line said otherwise — yet the recording still had a fifth of its samples
+  repeated, each right after its original with a timestamp 23–70 ms later. The one path
+  that bypasses the filter is `holdStroke`, which the renderer calls every frame to tell
+  a stroke its pen is resting, and it decided that by age: a sample older than 4 ms. On
+  that Mac every sample is, since the tablet's samples arrive 20–70 ms after their
+  timestamps. So every frame of a moving stroke got a rest, stamped with the frame's
+  time, and the next real sample, stamped earlier, ran the smoother's clock backwards.
+  A rest is now a frame that no sample arrived before, and it is stamped on the pen's
+  clock, a frame on from the last sample, so the clock only runs forwards. The stroke
+  line in the log counts the rest samples a stroke got (none while moving, from now
+  on); the filter in the view is gone with its test, and the test that covers rests
+  feeds its samples late, as the tablet does.
+- **8192² on the M4: 5 ms a frame idle, 60–110 ms once a second, and at every pen-up.**
+  The GPU times said what the third session could not. With nothing happening, the
+  display pass took 5.4 ms a frame (0.6 ms on 2048²), and once a second a frame took
+  60–110 ms — the fallback rebuild of the whole composite — so 41–52 frames a second
+  with the pen on the desk, and a hitch every second while panning. At pen-up the same
+  rebuild ran again, for every stroke, because a stroke's commit bumps the content
+  version. Three changes. The fallback is gone: no change went unnoted in four
+  sessions, and the one case that needed it, a tool's preview painted into the
+  composite, is handled by name. The frame after pen-up recomposites where the stroke
+  was. And the composite keeps mip levels (six for 8192²), brought up to date where it
+  changes, a 2×2 box per level, a third of a region's area over all of them; the
+  display pass reads the level near the view's size instead of one texel in eleven of
+  level 0. Fitted to a window, an 8192² canvas now shows every stroke averaged rather
+  than whichever texels the sampling landed on, and thick paint is lit from the slope
+  across one screen pixel, brought back to a slope per texel, so it looks the same
+  zoomed out as at 1:1 with detail finer than a pixel averaged away.
+- **Frames with nothing new are not drawn.** The view asks for 120 a second; between
+  strokes, one that would show the same composite at the same view is skipped before a
+  drawable is taken,
+  and the frame line counts them ("N skipped"). A view left alone still reports, with
+  "0 frames".
+- Saves: 2048² in 0.12 s, 8192² in 2.2 s, off the main thread.
+
+On the M4 Pro here (`testLargeCanvasCosts`, 8192² with twelve layers, debug build): the
+frame after pen-up 12 ms, against 123 ms for the whole composite; a drawing frame 3.5 ms
+with the levels kept up; the display pass fitted to a 2304×1296 view 1.5 ms with relief
+and 1.3 ms flat, from 3.0 and 2.5 (0.46 ms at 1:1). The M4, with less cache, will say
+how much of its 5.4 ms that took away.
 
 ## Risks to check early
 

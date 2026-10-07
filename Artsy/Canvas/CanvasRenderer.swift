@@ -34,16 +34,41 @@ final class CanvasRenderer: NSObject, MTKViewDelegate {
     private var renderedRevision = 0
     /// Which path the stroke textures hold: a stroke that snaps to a shape swaps paths.
     private var renderedPathID: ObjectIdentifier?
-    /// What the composite texture holds: the scene it was built from, the content version
-    /// and the time, so an idle frame can skip rebuilding it. Twelve layers at 8192² take
-    /// over 100 ms to composite; the display pass that follows takes a fraction of that.
+    /// What the composite texture holds: the scene it was built from and the content
+    /// version, so a frame that changes neither leaves it alone, and whether it holds a
+    /// tool's preview (a transform or a dragged selection), which the frame after the
+    /// preview ends has to paint out. Twelve layers at 8192² take over 100 ms to composite;
+    /// two take 60–110 ms on an M4.
     private var compositedSignature: CompositeSignature?
     private var compositedContentVersion = -1
-    private var compositedAt: TimeInterval = 0
-    /// Whether the last `encodeFrame` rebuilt the composite; for tests.
+    private var compositedWithPreview = false
+    /// Whether the last `encodeFrame` changed the composite; for tests and the display.
     private(set) var lastFrameRecomposited = false
-    /// Idle, the composite is rebuilt at least this often, in case a change went unnoted.
-    static let idleRecompositeInterval: TimeInterval = 1.0
+    /// Where it changed it: nil when it rebuilt all of it. For tests.
+    private(set) var lastFrameRegions: [MTLScissorRect]?
+    /// Where a content change the renderer made itself landed (a stroke's pixels merged
+    /// into its layer at pen-up), with the content version that made: the next frame
+    /// recomposites only that, instead of the whole canvas for every stroke.
+    private var contentRegions: (version: Int, regions: [MTLScissorRect])?
+    /// The composite's mip levels and its height map's, level 0 (the texture itself) first.
+    /// The display pass samples them when the canvas is shown smaller than 1:1: an 8192²
+    /// canvas fitted to a window had been reading one texel in eleven of level 0, which
+    /// cost 5 ms a frame on an M4 and showed whichever texels it happened on.
+    private var compositeLevels: [MTLTexture] = []
+    private var compositeHeightLevels: [MTLTexture] = []
+    /// How many mip levels the composite keeps: down to a 32nd of the canvas, which is as
+    /// far out as a view goes.
+    static func displayLevels(width: Int, height: Int) -> Int {
+        var levels = 1
+        while levels < 6, min(width, height) >> levels >= 1 { levels += 1 }
+        return levels
+    }
+    /// What the screen showed last, so a frame that would show the same again is skipped.
+    private var displayedState: DisplayState?
+    /// A composite changed that the screen has not shown (no drawable was to be had).
+    private var displayIsStale = false
+    /// Whether the last `draw(in:)` presented a frame; for tests.
+    private(set) var lastFrameDisplayed = false
 
     /// Make the next frame rebuild the composite from the layers.
     func invalidateComposite() {
@@ -64,8 +89,6 @@ final class CanvasRenderer: NSObject, MTKViewDelegate {
     private var heightBeforeStroke: MTLTexture?
     /// What has changed since `compositeTexture` was last brought up to date.
     private var pendingRegions: [MTLScissorRect] = []
-    /// The scene `compositeTexture` currently shows, while a stroke is in progress.
-    private var compositeSignature: CompositeSignature?
 
     init(context: MetalContext, canvasSize: CGSize) throws {
         self.context = context
@@ -82,9 +105,13 @@ final class CanvasRenderer: NSObject, MTKViewDelegate {
 
         activeStrokeTexture = try textureManager.makeCanvasTexture(width: w, height: h, label: "Active Stroke")
         strokeTailTexture = try textureManager.makeCanvasTexture(width: w, height: h, label: "Stroke Tail")
-        compositeTexture = try textureManager.makeCanvasTexture(width: w, height: h, label: "Composite")
+        let levels = Self.displayLevels(width: w, height: h)
+        compositeTexture = try textureManager.makeCanvasTexture(width: w, height: h, label: "Composite", mipLevels: levels)
         blendTempTexture = try textureManager.makeCanvasTexture(width: w, height: h, label: "Blend Temp")
-        compositeHeightTexture = try textureManager.makeHeightTexture(width: w, height: h, label: "Composite Height")
+        compositeHeightTexture = try textureManager.makeHeightTexture(width: w, height: h, label: "Composite Height",
+                                                                      mipLevels: levels)
+        compositeLevels = Self.levelViews(of: compositeTexture)
+        compositeHeightLevels = Self.levelViews(of: compositeHeightTexture)
 
         guard let commandBuffer = context.commandQueue.makeCommandBuffer() else { return }
         textureManager.clearTexture(activeStrokeTexture, commandBuffer: commandBuffer)
@@ -92,6 +119,13 @@ final class CanvasRenderer: NSObject, MTKViewDelegate {
         textureManager.clearTexture(compositeTexture, commandBuffer: commandBuffer)
         commandBuffer.commit()
         commandBuffer.waitUntilCompleted()
+    }
+
+    /// One view per mip level of a texture, level 0 first.
+    private static func levelViews(of texture: MTLTexture) -> [MTLTexture] {
+        (0..<texture.mipmapLevelCount).compactMap {
+            texture.makeTextureView(pixelFormat: texture.pixelFormat, textureType: .type2D, levels: $0..<($0 + 1), slices: 0..<1)
+        }
     }
 
     /// Set up the layer stack on the view model.
@@ -120,10 +154,18 @@ final class CanvasRenderer: NSObject, MTKViewDelegate {
 
     func mtkView(_ view: MTKView, drawableSizeWillChange size: CGSize) {}
 
+    /// Everything the display pass depends on besides the composite itself.
+    private struct DisplayState: Equatable {
+        let transform: CanvasTransform
+        let viewSize: CGSize
+        let drawableSize: CGSize
+        let background: SIMD3<Double>
+        let relief: Float
+    }
+
     func draw(in view: MTKView) {
         guard let viewModel = viewModel,
               viewModel.layerStack != nil,
-              let drawable = view.currentDrawable,
               let commandBuffer = context.commandQueue.makeCommandBuffer() else {
             return
         }
@@ -139,6 +181,22 @@ final class CanvasRenderer: NSObject, MTKViewDelegate {
         let encodeStart = DispatchTime.now().uptimeNanoseconds
         encodeFrame(into: commandBuffer)
         let encodeMilliseconds = Double(DispatchTime.now().uptimeNanoseconds - encodeStart) / 1e6
+
+        // The view asks for a frame 120 times a second whether or not anything has changed.
+        // When nothing has, the last frame stands: no drawable is taken, the empty command
+        // buffer is dropped, and the GPU does nothing. (At 8192² the display pass alone had
+        // been 5 ms a frame on an M4, with the pen on the desk.) A stroke in progress always
+        // draws: its encoder may have written to the stroke textures whether or not a
+        // region of the composite came of it.
+        let background = viewModel.canvasBackgroundColor
+        let state = DisplayState(transform: viewModel.transform, viewSize: view.bounds.size, drawableSize: view.drawableSize,
+                                 background: SIMD3(background.r, background.g, background.b),
+                                 relief: Float(AppPreferences.shared.paintRelief))
+        if !viewModel.isDrawing, !lastFrameRecomposited, !displayIsStale, state == displayedState {
+            lastFrameDisplayed = false
+            if let line = frameTimings.skipped(at: now) { DiagnosticsLog.shared.note(.frame, line) }
+            return
+        }
         if let line = frameTimings.frame(encodeMilliseconds: encodeMilliseconds, recomposited: lastFrameRecomposited,
                                          drawing: viewModel.isDrawing, at: now) {
             DiagnosticsLog.shared.note(.frame, line)
@@ -149,20 +207,30 @@ final class CanvasRenderer: NSObject, MTKViewDelegate {
             timings.gpu(milliseconds: (buffer.gpuEndTime - buffer.gpuStartTime) * 1000)
         }
 
-        // Display
+        // Display. Without a drawable (the view is hidden, or none is free) the composite
+        // work still runs, and the next frame shows it.
+        guard let drawable = view.currentDrawable else {
+            displayIsStale = displayIsStale || lastFrameRecomposited
+            lastFrameDisplayed = false
+            commandBuffer.commit()
+            return
+        }
         compositor.renderToScreen(
             composite: compositeTexture,
             height: compositeHeightTexture,
-            relief: Float(AppPreferences.shared.paintRelief),
+            relief: state.relief,
             drawable: drawable.texture,
-            transform: viewModel.transform,
-            viewSize: view.bounds.size,
-            backgroundColor: viewModel.canvasBackgroundColor,
+            transform: state.transform,
+            viewSize: state.viewSize,
+            backgroundColor: background,
             commandBuffer: commandBuffer
         )
 
         commandBuffer.present(drawable)
         commandBuffer.commit()
+        displayedState = state
+        displayIsStale = false
+        lastFrameDisplayed = true
     }
 
     /// Encode everything up to `compositeTexture`: the in-progress stroke, then every layer.
@@ -172,29 +240,36 @@ final class CanvasRenderer: NSObject, MTKViewDelegate {
 
         encodeActiveStroke(into: commandBuffer)
 
-        // Idle, with the same scene and content as last time, the composite still stands
+        // With the same scene and content as last time, the composite still stands. (It
+        // used to be rebuilt once a second regardless, in case a change went unnoted; at
+        // 8192² that was 60–110 ms of GPU every second with nothing happening, and no
+        // change has gone unnoted. A tool's preview is the exception: it is painted into
+        // the composite each frame, so the frame after it ends has to paint it out.)
         let signature = CompositeSignature(viewModel: viewModel, layerStack: layerStack)
-        let now = ProcessInfo.processInfo.systemUptime
-        let idle = !viewModel.isDrawing && viewModel.transformSession == nil && viewModel.floatingTexture == nil
-        if idle, signature == compositedSignature, viewModel.contentVersion == compositedContentVersion,
-           now - compositedAt < Self.idleRecompositeInterval {
+        let preview = viewModel.transformSession != nil || viewModel.floatingTexture != nil
+        let idle = !viewModel.isDrawing && !preview
+        let sceneChanged = signature != compositedSignature || compositedWithPreview
+        let contentChanged = viewModel.contentVersion != compositedContentVersion
+        if idle, !sceneChanged, !contentChanged {
             lastFrameRecomposited = false
+            lastFrameRegions = nil
             return
         }
-        lastFrameRecomposited = true
-        let contentChanged = viewModel.contentVersion != compositedContentVersion
-        compositedSignature = signature
-        compositedContentVersion = viewModel.contentVersion
-        compositedAt = now
 
         // While the pen is down, only the pixels the stroke touched since the last frame can
-        // have changed — provided nothing else about the scene did, and no tool wrote pixels
-        // meanwhile (a fill finishing in the background). Otherwise redo all of it.
-        let strokeOnly = viewModel.isDrawing && viewModel.transformSession == nil && viewModel.floatingTexture == nil
-        let regions: [MTLScissorRect]? =
-            strokeOnly && signature == compositeSignature && !contentChanged ? Self.disjoint(pendingRegions) : nil
-        compositeSignature = strokeOnly ? signature : nil
+        // have changed, and just after pen-up only where the stroke was — provided nothing
+        // else about the scene did, and no tool wrote pixels meanwhile (a fill finishing in
+        // the background). Otherwise redo all of it.
+        let known = contentRegions.flatMap { $0.version == viewModel.contentVersion ? $0.regions : nil }
+        let regions: [MTLScissorRect]? = !preview && !sceneChanged && (!contentChanged || known != nil)
+            ? Self.disjoint(pendingRegions + (known ?? [])) : nil
+        compositedSignature = signature
+        compositedContentVersion = viewModel.contentVersion
+        compositedWithPreview = preview
+        contentRegions = nil
         pendingRegions.removeAll()
+        lastFrameRegions = regions
+        lastFrameRecomposited = regions?.isEmpty != true
 
         if let regions {
             guard !regions.isEmpty else { return }
@@ -203,6 +278,11 @@ final class CanvasRenderer: NSObject, MTKViewDelegate {
         } else {
             textureManager.clearTexture(compositeTexture, commandBuffer: commandBuffer)
             textureManager.clearTexture(compositeHeightTexture, commandBuffer: commandBuffer)
+        }
+        // The smaller levels the display reads when zoomed out follow, once the layers are on
+        defer {
+            compositor.refreshLevels(compositeLevels, regions: regions, commandBuffer: commandBuffer)
+            compositor.refreshLevels(compositeHeightLevels, regions: regions, commandBuffer: commandBuffer)
         }
 
         let stroke = viewModel.isDrawing ? strokeOverlay(for: viewModel) : nil
@@ -1126,7 +1206,6 @@ final class CanvasRenderer: NSObject, MTKViewDelegate {
         tailRegions = []
         strokeRegion = nil
         pendingRegions = []
-        compositeSignature = nil
     }
 
     /// Merge the finished stroke into the active layer. Call before `viewModel.endStroke()`.
@@ -1188,6 +1267,13 @@ final class CanvasRenderer: NSObject, MTKViewDelegate {
         }
 
         commandBuffer.commit()
+        // The next frame need only recomposite where the stroke was: its pixels, on the
+        // layer now, and the last of its tail, gone from the stroke textures
+        let changed = Self.disjoint(pendingRegions + (strokeRegion.map { [$0] } ?? []))
+        if !changed.isEmpty {
+            if strokeRegion == nil { viewModel.noteContentChanged() }
+            contentRegions = (viewModel.contentVersion, changed)
+        }
         resetStrokeState()
         DiagnosticsLog.shared.note(.stroke, String(format: "committed in %.1f ms on the CPU",
                                                    Double(DispatchTime.now().uptimeNanoseconds - commitStart) / 1e6))

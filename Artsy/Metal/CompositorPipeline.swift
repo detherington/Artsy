@@ -309,6 +309,40 @@ final class CompositorPipeline {
         encoder.endEncoding()
     }
 
+    /// Bring a texture's smaller mip levels up to date from its level 0 where `regions`
+    /// (level-0 pixels; nil for all of it) changed. `levels` are views of its levels in
+    /// order, level 0 first. Each level is a 2×2 box of the one above, so a region costs a
+    /// third of its area over all the levels; the display pass reads the levels when the
+    /// canvas is shown smaller than 1:1.
+    func refreshLevels(_ levels: [MTLTexture], regions: [MTLScissorRect]?, commandBuffer: MTLCommandBuffer) {
+        guard levels.count > 1, regions?.isEmpty != true,
+              let encoder = commandBuffer.makeComputeCommandEncoder() else { return }
+        encoder.setComputePipelineState(context.mipPipelineState)
+        let threadgroup = MTLSize(width: 16, height: 16, depth: 1)
+        for level in 1..<levels.count {
+            let target = levels[level]
+            encoder.setTexture(levels[level - 1], index: 0)
+            encoder.setTexture(target, index: 1)
+            let whole = MTLScissorRect(x: 0, y: 0, width: target.width, height: target.height)
+            for region in regions?.map({ Self.scaled($0, toLevel: level, of: target) }) ?? [whole]
+            where region.width > 0 && region.height > 0 {
+                var origin = SIMD2<UInt32>(UInt32(region.x), UInt32(region.y))
+                encoder.setBytes(&origin, length: MemoryLayout<SIMD2<UInt32>>.size, index: 0)
+                encoder.dispatchThreads(MTLSize(width: region.width, height: region.height, depth: 1),
+                                        threadsPerThreadgroup: threadgroup)
+            }
+        }
+        encoder.endEncoding()
+    }
+
+    /// A level-0 rectangle at `level`, grown to whole texels there.
+    static func scaled(_ region: MTLScissorRect, toLevel level: Int, of texture: MTLTexture) -> MTLScissorRect {
+        let minX = min(texture.width, region.x >> level), minY = min(texture.height, region.y >> level)
+        let maxX = min(texture.width, (region.x + region.width + (1 << level) - 1) >> level)
+        let maxY = min(texture.height, (region.y + region.height + (1 << level) - 1) >> level)
+        return MTLScissorRect(x: minX, y: minY, width: max(0, maxX - minX), height: max(0, maxY - minY))
+    }
+
     /// Clear rectangles of a texture to transparent.
     func clear(_ texture: MTLTexture, regions: [MTLScissorRect], commandBuffer: MTLCommandBuffer) {
         guard !regions.isEmpty else { return }
@@ -450,18 +484,12 @@ final class CompositorPipeline {
             0, canvasH,     0, 0,
         ]
 
-        let canvasBuffer = context.device.makeBuffer(
-            bytes: canvasQuad,
-            length: canvasQuad.count * MemoryLayout<Float>.size,
-            options: .storageModeShared
-        )
-
-        encoder.setVertexBuffer(canvasBuffer, offset: 0, index: 0)
+        encoder.setVertexBytes(canvasQuad, length: canvasQuad.count * MemoryLayout<Float>.size, index: 0)
         encoder.setVertexBytes(&transformMatrix, length: MemoryLayout<float4x4>.size, index: 1)
         encoder.setFragmentTexture(composite, index: 0)
         // The slot needs a texture even when the shader will not light anything
         encoder.setFragmentTexture(height ?? composite, index: 1)
-        encoder.setFragmentSamplerState(context.linearSampler, index: 0)
+        encoder.setFragmentSamplerState(context.displaySampler, index: 0)
         encoder.setFragmentBytes(&reliefStrength, length: MemoryLayout<Float>.size, index: 0)
 
         encoder.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: 6)

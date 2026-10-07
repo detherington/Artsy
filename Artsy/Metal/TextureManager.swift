@@ -12,13 +12,16 @@ final class TextureManager {
     /// scratch textures have to share.
     var memoryBudget: Int { Int(device.recommendedMaxWorkingSetSize) }
 
-    func makeCanvasTexture(width: Int, height: Int, label: String? = nil) throws -> MTLTexture {
+    /// - Parameter mipLevels: more than one for a texture that is also kept at smaller
+    ///   sizes (the composite, for showing the canvas zoomed out).
+    func makeCanvasTexture(width: Int, height: Int, label: String? = nil, mipLevels: Int = 1) throws -> MTLTexture {
         let desc = MTLTextureDescriptor.texture2DDescriptor(
             pixelFormat: .rgba16Float,
             width: width,
             height: height,
-            mipmapped: false
+            mipmapped: mipLevels > 1
         )
+        desc.mipmapLevelCount = mipLevels
         desc.usage = [.shaderRead, .shaderWrite, .renderTarget]
         desc.storageMode = .private
 
@@ -30,13 +33,15 @@ final class TextureManager {
     }
 
     /// A layer's height map (impasto): one half-float per pixel, paint thickness in 0...1.
-    func makeHeightTexture(width: Int, height: Int, label: String? = nil, shared: Bool = false) throws -> MTLTexture {
+    func makeHeightTexture(width: Int, height: Int, label: String? = nil, shared: Bool = false,
+                           mipLevels: Int = 1) throws -> MTLTexture {
         let desc = MTLTextureDescriptor.texture2DDescriptor(
             pixelFormat: .r16Float,
             width: width,
             height: height,
-            mipmapped: false
+            mipmapped: mipLevels > 1
         )
+        desc.mipmapLevelCount = mipLevels
         desc.usage = [.shaderRead, .shaderWrite, .renderTarget]
         #if arch(arm64)
         desc.storageMode = shared ? .shared : .private
