@@ -120,6 +120,8 @@ final class DiagnosticsLog {
         private var gpuMilliseconds: [Double] = []
         private let lock = NSLock()
         private var recomposited = 0
+        /// Frames the view asked for that would have shown the same picture again: not drawn.
+        private var skippedFrames = 0
         /// When the frames being summarised began: the first frame's time.
         private var since: TimeInterval?
         /// The slowest frame so far: how far into the window, and whether a stroke was on.
@@ -140,15 +142,39 @@ final class DiagnosticsLog {
             let since = self.since ?? now
             self.since = since
             if slowest.map({ ms > $0.ms }) ?? true { slowest = (ms, now - since, drawing) }
-            guard now - since >= interval else { return nil }
-            defer { self.since = now }
+            return now - since >= interval ? summary(at: now, since: since) : nil
+        }
+
+        /// A frame not drawn because nothing had changed. Counted alongside the others, and
+        /// it closes an interval by itself, so a view left alone still reports.
+        func skipped(at now: TimeInterval) -> String? {
+            skippedFrames += 1
+            let since = self.since ?? now
+            self.since = since
+            return now - since >= interval ? summary(at: now, since: since) : nil
+        }
+
+        private func summary(at now: TimeInterval, since: TimeInterval) -> String {
+            defer {
+                self.since = now
+                encodeMilliseconds.removeAll(keepingCapacity: true)
+                recomposited = 0
+                skippedFrames = 0
+                slowest = nil
+            }
             let sorted = encodeMilliseconds.sorted()
-            var line = String(format: "%d frames in %.1f s, %d recomposited, encode p50 %.2f ms p95 %.2f ms max %.2f ms",
+            var line: String
+            if sorted.isEmpty {
+                line = String(format: "0 frames in %.1f s", now - since)
+            } else {
+                line = String(format: "%d frames in %.1f s, %d recomposited, encode p50 %.2f ms p95 %.2f ms max %.2f ms",
                               sorted.count, now - since, recomposited,
                               sorted[sorted.count / 2], sorted[min(sorted.count - 1, sorted.count * 95 / 100)], sorted[sorted.count - 1])
-            if let slowest, slowest.ms >= 8 {
-                line += String(format: " (at +%.1f s, %@)", slowest.at, slowest.drawing ? "while drawing" : "idle")
+                if let slowest, slowest.ms >= 8 {
+                    line += String(format: " (at +%.1f s, %@)", slowest.at, slowest.drawing ? "while drawing" : "idle")
+                }
             }
+            if skippedFrames > 0 { line += ", \(skippedFrames) skipped" }
             lock.lock()
             let gpu = gpuMilliseconds.sorted()
             gpuMilliseconds.removeAll(keepingCapacity: true)
@@ -157,9 +183,6 @@ final class DiagnosticsLog {
                 line += String(format: ", gpu p50 %.2f ms p95 %.2f ms max %.2f ms",
                                gpu[gpu.count / 2], gpu[min(gpu.count - 1, gpu.count * 95 / 100)], gpu[gpu.count - 1])
             }
-            encodeMilliseconds.removeAll(keepingCapacity: true)
-            recomposited = 0
-            slowest = nil
             return line
         }
     }

@@ -323,4 +323,30 @@ final class ImpastoTests: XCTestCase {
         XCTAssertGreaterThan(fullHeight, 0.3)
         XCTAssertEqual(thinHeight, fullHeight / 2, accuracy: fullHeight * 0.1)
     }
+
+    /// Zoomed out, the display reads a smaller copy of the canvas, and takes the slope across
+    /// one screen pixel; the paint is lit as it is at 1:1, with finer detail averaged away.
+    func testReliefKeepsItsLightZoomedOut() throws {
+        let harness = try EngineHarness(width: 400, height: 240)
+        harness.select(.oil)
+        harness.viewModel.brushSize = 80
+        harness.viewModel.currentColor = ochre
+        harness.draw(StrokeFixtures.line(from: CGPoint(x: 200, y: 20), to: CGPoint(x: 200, y: 220), pressure: 1...1))
+        func brightness(_ p: SIMD4<Float>) -> Float { (p.x + p.y + p.z) / 3 }
+
+        /// Lit against flat, column by column across the stroke: the most lit column less the most shaded
+        func contrast(zoom: CGFloat) -> Float {
+            let lit = harness.shown(relief: 1, zoom: zoom), flat = harness.shown(relief: 0, zoom: zoom)
+            let columns = Array(Int(120 * zoom)...Int(280 * zoom)), rows = Array(Int(60 * zoom)...Int(180 * zoom))
+            let ratios = columns.map { x in
+                rows.map { brightness(lit.at(x: x, y: $0)) }.reduce(0, +) / rows.map { brightness(flat.at(x: x, y: $0)) }.reduce(0, +)
+            }
+            return ratios.max()! - ratios.min()!
+        }
+        let full = contrast(zoom: 1), half = contrast(zoom: 0.5), quarter = contrast(zoom: 0.25)
+        XCTAssertGreaterThan(full, 0.1, "lit and shaded edges at 1:1")
+        XCTAssertGreaterThan(half, full * 0.5, "and at half size: \(half) against \(full)")
+        XCTAssertGreaterThan(quarter, full * 0.4, "and at a quarter: \(quarter) against \(full)")
+        XCTAssertLessThan(quarter, full * 1.5, "no stronger than at 1:1")
+    }
 }

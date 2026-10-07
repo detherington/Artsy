@@ -62,7 +62,9 @@ final class BrushPreview {
         guard let commandBuffer = renderer.context.commandQueue.makeCommandBuffer() else { return nil }
         renderer.encodeFrame(into: commandBuffer)
         guard let blit = commandBuffer.makeBlitCommandEncoder() else { return nil }
-        blit.copy(from: renderer.compositeTexture, to: readback)
+        blit.copy(from: renderer.compositeTexture, sourceSlice: 0, sourceLevel: 0, sourceOrigin: MTLOrigin(x: 0, y: 0, z: 0),
+                  sourceSize: MTLSize(width: readback.width, height: readback.height, depth: 1),
+                  to: readback, destinationSlice: 0, destinationLevel: 0, destinationOrigin: MTLOrigin(x: 0, y: 0, z: 0))
         blit.endEncoding()
         commandBuffer.commit()
         commandBuffer.waitUntilCompleted()

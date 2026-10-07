@@ -45,6 +45,14 @@ final class DiagnosticsTests: XCTestCase {
                        "3 frames in 1.1 s, 2 recomposited, encode p50 5.00 ms p95 40.00 ms max 40.00 ms (at +0.7 s, while drawing), "
                        + "gpu p50 12.00 ms p95 12.00 ms max 12.00 ms",
                        "a slow frame says when it was and what was going on; the GPU's own times follow")
+
+        // Frames the view asked for but nothing new to show: counted, and they close an
+        // interval on their own
+        XCTAssertNil(timings.skipped(at: 102.5))
+        XCTAssertNil(timings.frame(encodeMilliseconds: 1, recomposited: false, drawing: false, at: 102.9))
+        XCTAssertEqual(timings.skipped(at: 103.4),
+                       "1 frames in 1.1 s, 0 recomposited, encode p50 1.00 ms p95 1.00 ms max 1.00 ms, 2 skipped")
+        XCTAssertEqual(timings.skipped(at: 104.5), "0 frames in 1.1 s, 1 skipped", "a view left alone still reports")
     }
 
     func testTheBundleGathersTheFoldersAndASummary() throws {

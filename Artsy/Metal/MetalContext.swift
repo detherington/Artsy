@@ -51,6 +51,8 @@ final class MetalContext {
     let maskedCutPipelineState: MTLComputePipelineState
     let maskedClearPipelineState: MTLComputePipelineState
     let maskedFillPipelineState: MTLComputePipelineState
+    /// Fills a mip level of a texture from the level above, a 2×2 box per texel
+    let mipPipelineState: MTLComputePipelineState
 
     // Vertex descriptors
     let strokeVertexDescriptor: MTLVertexDescriptor
@@ -58,6 +60,9 @@ final class MetalContext {
 
     // Samplers
     let linearSampler: MTLSamplerState
+    /// Linear within and between mip levels, transparent beyond the edges: the display
+    /// pass, which shows the composite at any zoom.
+    let displaySampler: MTLSamplerState
     let nearestSampler: MTLSamplerState
     /// Trilinear, clamped to the edge: brush tips at any size.
     let tipSampler: MTLSamplerState
@@ -260,6 +265,7 @@ final class MetalContext {
         }
         self.maskedClearPipelineState = try device.makeComputePipelineState(function: maskedClearFunc)
         self.maskedFillPipelineState = try device.makeComputePipelineState(function: Self.function("maskedFillKernel", in: library))
+        self.mipPipelineState = try device.makeComputePipelineState(function: Self.function("mipKernel", in: library))
 
         guard let texturesDifferFunc = library.makeFunction(name: "texturesDifferKernel") else {
             throw MetalError.pipelineCreationFailed("texturesDifferKernel not found")
@@ -283,6 +289,17 @@ final class MetalContext {
             throw MetalError.samplerCreationFailed
         }
         self.linearSampler = linear
+
+        let displaySamplerDesc = MTLSamplerDescriptor()
+        displaySamplerDesc.minFilter = .linear
+        displaySamplerDesc.magFilter = .linear
+        displaySamplerDesc.mipFilter = .linear
+        displaySamplerDesc.sAddressMode = .clampToZero
+        displaySamplerDesc.tAddressMode = .clampToZero
+        guard let display = device.makeSamplerState(descriptor: displaySamplerDesc) else {
+            throw MetalError.samplerCreationFailed
+        }
+        self.displaySampler = display
 
         let nearestDesc = MTLSamplerDescriptor()
         nearestDesc.minFilter = .nearest

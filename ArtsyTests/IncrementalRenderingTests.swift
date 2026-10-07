@@ -189,4 +189,68 @@ final class IncrementalRenderingTests: XCTestCase {
         renderer.finalizeStroke()
         viewModel.endStroke()
     }
+
+    /// The frame after pen-up recomposites where the stroke was, not the whole canvas, and
+    /// the result is what a whole recomposite gives. A change to the scene still redoes it all.
+    func testPenUpRecompositesOnlyWhereTheStrokeWas() throws {
+        let harness = try EngineHarness(width: 256, height: 256)
+        let renderer = harness.renderer
+        configure(harness, brush: .inkBrush)
+        harness.renderFrameAsTheAppWould()
+        harness.draw(StrokeFixtures.line(from: CGPoint(x: 20, y: 60), to: CGPoint(x: 100, y: 60)))
+
+        harness.renderFrameAsTheAppWould()
+        XCTAssertTrue(renderer.lastFrameRecomposited)
+        let regions = try XCTUnwrap(renderer.lastFrameRegions, "not all of it")
+        let right = regions.map { $0.x + $0.width }.max() ?? 0, bottom = regions.map { $0.y + $0.height }.max() ?? 0
+        XCTAssertLessThan(right, 130, "only around the stroke: \(regions)")
+        XCTAssertLessThan(bottom, 256 - 40)
+        let patched = harness.pixels(of: renderer.compositeTexture)
+        harness.renderFrameAsTheAppWould()
+        XCTAssertFalse(renderer.lastFrameRecomposited, "and then nothing more")
+
+        harness.renderFrame()
+        XCTAssertNil(renderer.lastFrameRegions, "a frame told to start over does all of it")
+        XCTAssertEqual(worstDifference(patched, harness.pixels(of: renderer.compositeTexture)), 0, "to the same picture")
+
+        harness.drawingLayer.opacity = 0.5
+        harness.renderFrameAsTheAppWould()
+        XCTAssertNil(renderer.lastFrameRegions, "a layer setting changes the whole picture")
+    }
+
+    /// The composite keeps smaller copies of itself for showing the canvas zoomed out, each
+    /// level a 2×2 box of the one above, kept up to date where the composite changes.
+    func testTheCompositesSmallerLevelsFollowIt() throws {
+        let harness = try EngineHarness(width: 256, height: 128)
+        let renderer = harness.renderer
+        XCTAssertEqual(renderer.compositeTexture.mipmapLevelCount, 6, "down to 8×4")
+        configure(harness, brush: .softRound)
+        harness.renderFrameAsTheAppWould()
+
+        func check(_ what: String) {
+            for level in 1..<renderer.compositeTexture.mipmapLevelCount {
+                let above = harness.pixels(of: renderer.compositeTexture, level: level - 1)
+                let below = harness.pixels(of: renderer.compositeTexture, level: level)
+                var worst: Float = 0
+                for y in 0..<below.height {
+                    for x in 0..<below.width {
+                        let expected = (above.at(x: 2 * x, y: 2 * y) + above.at(x: 2 * x + 1, y: 2 * y)
+                                        + above.at(x: 2 * x, y: 2 * y + 1) + above.at(x: 2 * x + 1, y: 2 * y + 1)) / 4
+                        let got = below.at(x: x, y: y)
+                        worst = max(worst, abs(expected.x - got.x), abs(expected.y - got.y), abs(expected.z - got.z), abs(expected.w - got.w))
+                    }
+                }
+                XCTAssertLessThan(worst, 0.002, "level \(level) \(what)")
+            }
+        }
+        check("after the first frame")
+        XCTAssertGreaterThan(harness.pixels(of: renderer.compositeTexture, level: 3).at(x: 10, y: 5).w, 0.99, "paper everywhere")
+
+        // A stroke brings the levels along where it lands, and only there is redone
+        harness.draw(StrokeFixtures.line(from: CGPoint(x: 30, y: 60), to: CGPoint(x: 120, y: 70)))
+        harness.renderFrameAsTheAppWould()
+        XCTAssertNotNil(renderer.lastFrameRegions)
+        check("after a stroke")
+        XCTAssertLessThan(harness.pixels(of: renderer.compositeTexture, level: 2).at(x: 18, y: 16).x, 0.9, "the stroke, a quarter size")
+    }
 }

@@ -681,6 +681,27 @@ kernel void maskedFillKernel(
     if (mask.read(gid).r > 0.5) target.write(half4(colour), origin + gid);
 }
 
+// Fills a mip level from the level above: each texel the mean of the 2x2 block over it.
+// Reads half4, so it serves the composite (rgba16Float) and its height map (r16Float)
+// alike. The display pass samples these levels when the canvas is shown smaller than
+// 1:1, instead of skipping across level 0 and missing most of it.
+kernel void mipKernel(
+    texture2d<half, access::read> above [[texture(0)]],
+    texture2d<half, access::write> level [[texture(1)]],
+    constant uint2 &origin [[buffer(0)]],
+    uint2 gid [[thread_position_in_grid]]
+) {
+    uint2 at = origin + gid;
+    if (at.x >= level.get_width() || at.y >= level.get_height()) return;
+    uint2 from = at * 2;
+    uint2 last = uint2(above.get_width() - 1, above.get_height() - 1);
+    half4 sum = above.read(from)
+              + above.read(min(from + uint2(1, 0), last))
+              + above.read(min(from + uint2(0, 1), last))
+              + above.read(min(from + uint2(1, 1), last));
+    level.write(sum * half(0.25), at);
+}
+
 kernel void maskedClearKernel(
     texture2d<half, access::read_write> source [[texture(0)]],
     texture2d<float, access::read> mask [[texture(1)]],
@@ -715,19 +736,29 @@ fragment float4 displayWhiteFragment(
     float4 color = composite.sample(s, in.texCoord);
     // The composite is premultiplied
     float3 result = color.rgb + float3(1.0) * (1.0 - color.a);
+    // How many texels a screen pixel spans (found before the branch: derivatives need
+    // every pixel of the quad to take them)
+    float2 size = float2(height.get_width(), height.get_height());
+    float2 footprint = max(abs(dfdx(in.texCoord)), abs(dfdy(in.texCoord))) * size;
 
     if (relief > 0.0) {
         // Thick paint catches the light from the top left: a slope facing it is lit, one
         // facing away is shaded, and a ridge gets a glint. Flat paint is left as it is.
         // Thickness adds up without limit as paint is piled on; what is lit saturates
         // softly, so a pile of paint reads as thick rather than as a cliff.
-        float2 texel = 1.0 / float2(height.get_width(), height.get_height());
+        // The slope is taken across one screen pixel: a texel at 1:1, and with the canvas
+        // shown smaller, as many texels as the pixel spans (the sampler is reading a mip
+        // level of about that size) — and brought back to a slope per texel, so paint is
+        // lit the same however far out the view is, with detail finer than a pixel averaged
+        // away rather than picked at random.
+        float step = max(1.0, max(footprint.x, footprint.y));
+        float2 texel = step / size;
         float hl = 1.0 - exp(-height.sample(s, in.texCoord - float2(texel.x, 0.0)).r);
         float hr = 1.0 - exp(-height.sample(s, in.texCoord + float2(texel.x, 0.0)).r);
         float hu = 1.0 - exp(-height.sample(s, in.texCoord - float2(0.0, texel.y)).r);   // the row above: canvas up
         float hd = 1.0 - exp(-height.sample(s, in.texCoord + float2(0.0, texel.y)).r);
         float h = 1.0 - exp(-height.sample(s, in.texCoord).r);
-        float3 n = normalize(float3((hl - hr) * 3.0 * relief, (hd - hu) * 3.0 * relief, 1.0));
+        float3 n = normalize(float3((hl - hr) * 3.0 * relief / step, (hd - hu) * 3.0 * relief / step, 1.0));
         float3 l = normalize(float3(-0.55, 0.6, 0.6));
         float3 halfway = normalize(l + float3(0.0, 0.0, 1.0));
         float diffuse = max(0.0, dot(n, l)) / l.z;    // 1 where the paint is flat

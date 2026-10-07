@@ -193,14 +193,16 @@ final class StrokeBenchmarkTests: XCTestCase {
         var drawing: [Double] = []
         for _ in 0..<20 {
             harness.viewModel.continueStroke(point: nextPoint())
-            drawing.append(milliseconds { harness.renderFrame() })
+            drawing.append(milliseconds { harness.renderFrameAsTheAppWould() })
         }
         let commit = gpuMilliseconds {
             harness.renderer.finalizeStroke()
             harness.viewModel.endStroke()
         }
-        print(String(format: "BENCHMARK large-canvas drawing frame (%@) | %6.2f ms | stroke commit call %6.2f ms gpu %6.2f ms",
-                     build, median(drawing), commit.call, commit.gpu))
+        // The frame after pen-up recomposites where the stroke was, not all of the canvas
+        let afterPenUp = milliseconds { harness.renderFrameAsTheAppWould() }
+        print(String(format: "BENCHMARK large-canvas drawing frame (%@) | %6.2f ms | stroke commit call %6.2f ms gpu %6.2f ms | frame after pen-up %6.2f ms",
+                     build, median(drawing), commit.call, commit.gpu, afterPenUp))
 
         // Undo steps: a selection changes no pixels, a fill changes one layer
         let selection = gpuMilliseconds { harness.viewModel.saveUndoSnapshot(renderer: harness.renderer, description: "Select", changing: .nothing) }

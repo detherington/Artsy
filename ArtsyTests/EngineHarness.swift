@@ -119,24 +119,25 @@ final class EngineHarness {
     // MARK: - Readback
 
     /// Raw premultiplied contents of a canvas texture.
-    func pixels(of texture: MTLTexture) -> PixelGrid {
-        let readable = try! renderer.textureManager.makeSharedTexture(
-            width: texture.width, height: texture.height, label: "HarnessReadback"
-        )
+    /// - Parameter level: a smaller mip level of the texture instead, if it keeps any.
+    func pixels(of texture: MTLTexture, level: Int = 0) -> PixelGrid {
+        let width = max(1, texture.width >> level), height = max(1, texture.height >> level)
+        let readable = try! renderer.textureManager.makeSharedTexture(width: width, height: height, label: "HarnessReadback")
         let commandBuffer = context.commandQueue.makeCommandBuffer()!
         let blit = commandBuffer.makeBlitCommandEncoder()!
-        blit.copy(from: texture, to: readable)
+        blit.copy(from: texture, sourceSlice: 0, sourceLevel: level, sourceOrigin: MTLOrigin(x: 0, y: 0, z: 0),
+                  sourceSize: MTLSize(width: width, height: height, depth: 1),
+                  to: readable, destinationSlice: 0, destinationLevel: 0, destinationOrigin: MTLOrigin(x: 0, y: 0, z: 0))
         blit.endEncoding()
         commandBuffer.commit()
         commandBuffer.waitUntilCompleted()
 
-        var half = [UInt16](repeating: 0, count: texture.width * texture.height * 4)
+        var half = [UInt16](repeating: 0, count: width * height * 4)
         half.withUnsafeMutableBytes {
-            readable.getBytes($0.baseAddress!, bytesPerRow: texture.width * 8,
-                              from: MTLRegionMake2D(0, 0, texture.width, texture.height), mipmapLevel: 0)
+            readable.getBytes($0.baseAddress!, bytesPerRow: width * 8,
+                              from: MTLRegionMake2D(0, 0, width, height), mipmapLevel: 0)
         }
-        return PixelGrid(width: texture.width, height: texture.height,
-                         values: half.map { Float(Float16(bitPattern: $0)) })
+        return PixelGrid(width: width, height: height, values: half.map { Float(Float16(bitPattern: $0)) })
     }
 
     /// Render a frame and return the composite (premultiplied).
@@ -152,14 +153,15 @@ final class EngineHarness {
 
     /// Render a frame through the display shader itself, one canvas pixel per output pixel:
     /// the composite over white with thick paint lit. 8-bit, so values are multiples of 1/255.
-    func shown(relief: Float = 1) -> PixelGrid {
-        Self.shown(by: renderer, relief: relief)
+    func shown(relief: Float = 1, zoom: CGFloat = 1) -> PixelGrid {
+        Self.shown(by: renderer, relief: relief, zoom: zoom)
     }
 
     /// `shown(relief:)` for any renderer — a loaded document's, say.
-    static func shown(by renderer: CanvasRenderer, relief: Float = 1) -> PixelGrid {
+    /// - Parameter zoom: the view's zoom; below 1 the picture comes back that much smaller.
+    static func shown(by renderer: CanvasRenderer, relief: Float = 1, zoom: CGFloat = 1) -> PixelGrid {
         let context = renderer.context
-        let width = Int(renderer.canvasSize.width), height = Int(renderer.canvasSize.height)
+        let width = Int((renderer.canvasSize.width * zoom).rounded()), height = Int((renderer.canvasSize.height * zoom).rounded())
         let desc = MTLTextureDescriptor.texture2DDescriptor(
             pixelFormat: .bgra8Unorm, width: width, height: height, mipmapped: false
         )
@@ -170,7 +172,7 @@ final class EngineHarness {
         renderer.invalidateComposite()
         renderer.encodeFrame(into: commandBuffer)
         var transform = CanvasTransform()
-        transform.scale = 1
+        transform.scale = zoom
         transform.offset = CGPoint(x: -Double(width) / 2, y: -Double(height) / 2)
         renderer.compositor.renderToScreen(
             composite: renderer.compositeTexture, height: renderer.compositeHeightTexture, relief: relief,
