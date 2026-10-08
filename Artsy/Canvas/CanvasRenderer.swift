@@ -201,10 +201,10 @@ final class CanvasRenderer: NSObject, MTKViewDelegate {
                                          drawing: viewModel.isDrawing, at: now) {
             DiagnosticsLog.shared.note(.frame, line)
         }
-        // What the GPU spent on this frame, once it has run it
-        let timings = frameTimings
+        // What the GPU spent on this frame, once it has run it, and what the frame was
+        let timings = frameTimings, what = frameDescription(drawing: viewModel.isDrawing)
         commandBuffer.addCompletedHandler { buffer in
-            timings.gpu(milliseconds: (buffer.gpuEndTime - buffer.gpuStartTime) * 1000)
+            timings.gpu(milliseconds: (buffer.gpuEndTime - buffer.gpuStartTime) * 1000, what: what)
         }
 
         // Display. Without a drawable (the view is hidden, or none is free) the composite
@@ -231,6 +231,21 @@ final class CanvasRenderer: NSObject, MTKViewDelegate {
         displayedState = state
         displayIsStale = false
         lastFrameDisplayed = true
+    }
+
+    /// What the frame just encoded did, for the log: how much of the composite it redid,
+    /// and whether a stroke was on.
+    func frameDescription(drawing: Bool) -> String {
+        var what: String
+        if !lastFrameRecomposited {
+            what = "display only"
+        } else if let regions = lastFrameRegions {
+            let pixels = regions.reduce(0) { $0 + $1.width * $1.height }
+            what = String(format: "%d region%@, %.2f Mpx", regions.count, regions.count == 1 ? "" : "s", Double(pixels) / 1e6)
+        } else {
+            what = "whole composite"
+        }
+        return what + (drawing ? ", while drawing" : ", idle")
     }
 
     /// Encode everything up to `compositeTexture`: the in-progress stroke, then every layer.
