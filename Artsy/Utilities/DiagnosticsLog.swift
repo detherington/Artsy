@@ -118,6 +118,8 @@ final class DiagnosticsLog {
         /// What the GPU spent on each frame, reported by the command buffers as they finish
         /// (on Metal's thread, hence the lock).
         private var gpuMilliseconds: [Double] = []
+        /// The slowest GPU frame so far and what it was doing.
+        private var slowestGPU: (ms: Double, what: String)?
         private let lock = NSLock()
         private var recomposited = 0
         /// Frames the view asked for that would have shown the same picture again: not drawn.
@@ -130,9 +132,13 @@ final class DiagnosticsLog {
 
         init(interval: TimeInterval = 5) { self.interval = interval }
 
-        func gpu(milliseconds: Double) {
+        /// - Parameter what: what the frame did, for the log when it turns out the slowest.
+        func gpu(milliseconds: Double, what: String = "") {
             guard milliseconds.isFinite, milliseconds >= 0 else { return }
-            lock.lock(); gpuMilliseconds.append(milliseconds); lock.unlock()
+            lock.lock()
+            gpuMilliseconds.append(milliseconds)
+            if slowestGPU.map({ milliseconds > $0.ms }) ?? true { slowestGPU = (milliseconds, what) }
+            lock.unlock()
         }
 
         /// Returns the line to log, once `interval` has passed.
@@ -177,11 +183,14 @@ final class DiagnosticsLog {
             if skippedFrames > 0 { line += ", \(skippedFrames) skipped" }
             lock.lock()
             let gpu = gpuMilliseconds.sorted()
+            let slowestGPU = self.slowestGPU
             gpuMilliseconds.removeAll(keepingCapacity: true)
+            self.slowestGPU = nil
             lock.unlock()
             if !gpu.isEmpty {
                 line += String(format: ", gpu p50 %.2f ms p95 %.2f ms max %.2f ms",
                                gpu[gpu.count / 2], gpu[min(gpu.count - 1, gpu.count * 95 / 100)], gpu[gpu.count - 1])
+                if let slowestGPU, slowestGPU.ms >= 8, !slowestGPU.what.isEmpty { line += " (\(slowestGPU.what))" }
             }
             return line
         }

@@ -81,6 +81,33 @@ final class StrokeSmoothingTests: XCTestCase {
         }
     }
 
+    /// A rest sample is stamped a frame on from the sample before it, and the tablet's next
+    /// real sample, delivered late, can be stamped earlier than that: the filter takes it as
+    /// a sample's time on, not as a thousandth of a second (the pen a thousand times
+    /// faster, and the smoothing letting go of it).
+    func testASampleStampedBeforeTheLastOneDoesNotMakeTheFilterLetGo() {
+        func path(withRest: Bool) -> [CGPoint] {
+            let filter = smoother(.oneEuro, strength: 0.6)
+            var out: [CGPoint] = []
+            for step in 0..<40 {
+                let jitter: CGFloat = step % 2 == 0 ? 2 : -2
+                let time = Double(step) * 0.005
+                if withRest, step == 20 {
+                    // A rest, stamped a frame ahead; the next real samples are stamped before it
+                    let last = sample(CGFloat(step - 1) * 2, 50 + (step % 2 == 0 ? -2 : 2), time: time - 0.005 + 0.016)
+                    _ = filter.filter(last)
+                }
+                out.append(filter.filter(sample(CGFloat(step) * 2, 50 + jitter, time: time)).position)
+            }
+            return out
+        }
+        let plain = path(withRest: false), withRest = path(withRest: true)
+        for step in 21..<40 {
+            XCTAssertEqual(withRest[step].y, plain[step].y, accuracy: 0.6,
+                           "steadied the same after the rest as without it, at step \(step)")
+        }
+    }
+
     /// More strength means more steadying of a slow, shaky line.
     func testStrengthControlsHowMuchAShakyLineIsSteadied() {
         func wobble(strength: Float) -> CGFloat {

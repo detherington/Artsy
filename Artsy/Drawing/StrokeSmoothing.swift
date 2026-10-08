@@ -19,6 +19,9 @@ final class OneEuroFilter {
     private var dxFilter: LowPassFilter
     private var dyFilter: LowPassFilter
     private var lastTimestamp: TimeInterval?
+    /// The time between the last two samples, taken again for a sample stamped before the
+    /// last one.
+    private var lastInterval: TimeInterval = 1.0 / 200
 
     let minCutoff: Double  // Minimum cutoff frequency (lower = more smoothing at low speed)
     let beta: Double       // Speed coefficient (higher = less smoothing at high speed)
@@ -44,6 +47,7 @@ final class OneEuroFilter {
         dxFilter = LowPassFilter()
         dyFilter = LowPassFilter()
         lastTimestamp = nil
+        lastInterval = 1.0 / 200
     }
 
     func filter(point: CGPoint, timestamp: TimeInterval) -> CGPoint {
@@ -56,7 +60,14 @@ final class OneEuroFilter {
             return point
         }
 
-        let dt = max(timestamp - lastTime, 0.001)
+        // A sample stamped before the last one happens: a rest sample is stamped a frame on
+        // from the sample before it, and the tablet's next real sample, delivered late, can
+        // be stamped earlier than that. It is a sample's time on from the one before it, not
+        // a thousandth of a second — which would read as the pen moving a thousand times
+        // faster, and the filter letting go of it.
+        let elapsed = timestamp - lastTime
+        let dt = elapsed >= 0.0005 ? elapsed : lastInterval
+        lastInterval = dt
         lastTimestamp = timestamp
         let rate = 1.0 / dt
 

@@ -680,6 +680,36 @@ with the levels kept up; the display pass fitted to a 2304×1296 view 1.5 ms wit
 and 1.3 ms flat, from 3.0 and 2.5 (0.46 ms at 1:1). The M4, with less cache, will say
 how much of its 5.4 ms that took away.
 
+The fifth session ran 0.7.3 on three documents: 2048² with Hard Round, Ink Brush and
+Sumi-e; 8192² with six strokes across the whole canvas; 4096² with seventy-four
+Watercolor, Acrylic and Oil strokes, thick paint and all. Drawing "felt a lot smoother
+and more natural". The replays match to 18 pixels in 4 million, 45 in 67 million, and
+none in 17 million.
+
+- **Rest samples: none to three a stroke**, from a fifth of all samples; a dab held
+  still got four. The tablet's rate reads 200–215 a second now; the 250 the earlier
+  sessions logged counted the rests, which the smoother had moved a little from the
+  sample before them so the path took them for samples (and never for rests: every
+  stroke "held 0.00 s"). The first session's guess of 200 was right.
+- **A few samples a document are still stamped before the one before them** (ten in
+  2,400, by 2–28 ms). The tablet delivers in bursts: a frame passes with nothing, a
+  rest is stamped a frame on, then the burst arrives stamped from before the rest. The
+  smoother took such a sample as a thousandth of a second (the pen a thousand times
+  faster, and the smoothing letting go of it); it takes it as a sample's time on now.
+  The rests themselves are a frame of hold on the path, which rounds to nothing.
+- **GPU, from the frame lines.** 2048²: 1.3–1.6 ms a frame while drawing, and idle
+  "1 frames in 5.0 s, 288 skipped". 8192²: 2.5–3.0 ms a frame while drawing, from
+  5.4–9; idle "0 frames in 5.0 s, 300 skipped"; the first stroke on a fresh document
+  122 ms (allocations and the first whole composite), and pen-up on a stroke 11,000–
+  15,000 px long across the whole canvas 50–120 ms still, the stroke's bounds being
+  the canvas. 4096² with wet and thick paint: 1.3–2.0 ms a frame, and a 20–90 ms
+  frame about every other five seconds that the log could not pin — a whole composite
+  is 25 ms there. The frame line now says what its slowest GPU frame did ("whole
+  composite, idle", "3 regions, 0.42 Mpx, while drawing", "display only"), to tell the
+  renderer's own work from a GPU shared with four displays.
+- If those turn out to be pen-up frames on big strokes: recomposite the stroke's
+  footprint — the tiles it touched — rather than its bounds.
+
 ## Risks to check early
 
 - **macOS input rate.** Developers report macOS 26.2 downsampling mouse events to the
