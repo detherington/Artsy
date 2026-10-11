@@ -1284,11 +1284,7 @@ class CanvasView: MTKView {
         if event.modifierFlags.contains(.command) {
             switch event.charactersIgnoringModifiers {
             case "f":
-                if viewModel.isDistractionFree {
-                    NotificationCenter.default.post(name: .exitDistractionFree, object: nil)
-                } else {
-                    NotificationCenter.default.post(name: .enterDistractionFree, object: nil)
-                }
+                window?.toggleFullScreen(nil)
                 return
             case "z":
                 // The Edit menu binds Cmd+Z too and normally intercepts this before
@@ -1322,9 +1318,9 @@ class CanvasView: MTKView {
             return
         }
 
-        // Tab key — toggle right panel
+        // Tab: the interface out of the way, and back
         if event.keyCode == 48 {
-            viewModel.toggleRightPanel()
+            viewModel.toggleChrome()
             return
         }
 
@@ -1412,8 +1408,9 @@ class CanvasView: MTKView {
     }
 
     override func performKeyEquivalent(with event: NSEvent) -> Bool {
-        if event.keyCode == 53, let viewModel = viewModel, viewModel.isDistractionFree {
-            NotificationCenter.default.post(name: .exitDistractionFree, object: nil)
+        // Escape leaves full screen, unless a transform is waiting to be cancelled
+        if event.keyCode == 53, let window, window.styleMask.contains(.fullScreen), viewModel?.transformSession == nil {
+            window.toggleFullScreen(nil)
             return true
         }
         return super.performKeyEquivalent(with: event)

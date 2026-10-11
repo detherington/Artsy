@@ -3,16 +3,8 @@ import Combine
 import Metal
 import CoreGraphics
 
-enum RightPanelMode {
-    case full
-    case condensed
-}
-
 extension Notification.Name {
-    static let rightPanelToggled = Notification.Name("rightPanelToggled")
     static let tabletProximityChanged = Notification.Name("tabletProximityChanged")
-    static let enterDistractionFree = Notification.Name("enterDistractionFree")
-    static let exitDistractionFree = Notification.Name("exitDistractionFree")
 }
 
 final class CanvasViewModel: ObservableObject {
@@ -40,8 +32,13 @@ final class CanvasViewModel: ObservableObject {
     @Published var brushSize: Float = 12
     @Published var brushOpacity: Float = 1.0
     @Published var isErasing = false
-    @Published var isRightPanelVisible = true
-    @Published var rightPanelMode: RightPanelMode = .full
+    /// The bar, the rail and the dock out of the way, for the canvas alone (Tab).
+    @Published var isChromeHidden = false
+    /// Layers in a panel beside the canvas on a wide window, rather than a pop-up from
+    /// the bar. Remembered across launches.
+    @Published var isLayersDocked: Bool = AppPreferences.shared.layersDocked {
+        didSet { AppPreferences.shared.layersDocked = isLayersDocked }
+    }
     @Published var currentTool: ToolType = .brush
     @Published var selectionMode: SelectionMode = .rectangle
     @Published var selectionPath: CGPath? = nil
@@ -58,7 +55,6 @@ final class CanvasViewModel: ObservableObject {
     var floatingHeight: MTLTexture? = nil
     var floatingOffset: CGPoint = .zero
     @Published var canvasBackgroundColor: (r: Double, g: Double, b: Double) = (0.10, 0.10, 0.10)
-    @Published var isDistractionFree = false
 
     // Active stroke being drawn
     private(set) var activePath: StrokePath?
@@ -397,18 +393,53 @@ final class CanvasViewModel: ObservableObject {
 
     // MARK: - Color
 
-    func toggleRightPanel() {
-        isRightPanelVisible.toggle()
-        NotificationCenter.default.post(name: .rightPanelToggled, object: self)
+    func toggleChrome() {
+        isChromeHidden.toggle()
     }
 
-    func toggleRightPanelMode() {
-        rightPanelMode = rightPanelMode == .full ? .condensed : .full
-        // Ensure visible when toggling between modes
-        if !isRightPanelVisible {
-            isRightPanelVisible = true
+    // MARK: - The view: zoom, rotation, flip, guides (the menus and the Adjust panel)
+
+    func zoomToFit(viewSize: CGSize) {
+        transform.zoomToFit(canvasSize: canvasSize, viewSize: viewSize)
+    }
+
+    func actualSize() {
+        transform.scale = 1
+        transform.offset = .zero
+    }
+
+    /// Turn to the next 15° mark in `direction` (+1 counter-clockwise) about the middle of
+    /// the view, so repeated presses land on clean angles even after a freehand twist.
+    func rotateView(direction: CGFloat, viewSize: CGSize) {
+        let step = CGFloat.pi / 12
+        let marks = transform.rotation / step
+        let next = direction > 0 ? (marks + 0.001).rounded(.down) + 1 : (marks - 0.001).rounded(.up) - 1
+        transform.setRotation(next * step, at: Self.centre(of: viewSize), viewSize: viewSize)
+    }
+
+    func resetRotation(viewSize: CGSize) {
+        transform.setRotation(0, at: Self.centre(of: viewSize), viewSize: viewSize)
+    }
+
+    func flipView(viewSize: CGSize) {
+        transform.flip(at: Self.centre(of: viewSize), viewSize: viewSize)
+    }
+
+    func changeGuides(_ change: (inout CanvasGuides) -> Void) {
+        change(&guides)
+        markDirty()
+    }
+
+    /// A new guide through the middle of the view, where the eye is.
+    func addGuide(horizontal: Bool, viewSize: CGSize) {
+        let point = transform.viewToCanvas(Self.centre(of: viewSize), viewSize: viewSize)
+        changeGuides {
+            if horizontal { $0.horizontals.append(point.y.rounded()) } else { $0.verticals.append(point.x.rounded()) }
         }
-        NotificationCenter.default.post(name: .rightPanelToggled, object: self)
+    }
+
+    private static func centre(of size: CGSize) -> CGPoint {
+        CGPoint(x: size.width / 2, y: size.height / 2)
     }
 
     // MARK: - Selection

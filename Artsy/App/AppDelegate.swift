@@ -8,8 +8,6 @@ import UniformTypeIdentifiers
 class AppDelegate: NSObject, NSApplicationDelegate {
     var metalContext: MetalContext!
     private var tabCounter = 0
-    private var distractionFreeWindow: NSWindow?
-    private var distractionFreeCanvasView: CanvasView?
     private var savedWindowFrame: NSRect?
     private var newCanvasPanel: NSPanel?
     /// Keeps `viewModel.isDirty` → `window.isDocumentEdited` bindings alive per window.
@@ -55,18 +53,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         NSWindow.allowsAutomaticWindowTabbing = true
-
-        NotificationCenter.default.addObserver(self, selector: #selector(handleEnterDistractionFree), name: .enterDistractionFree, object: nil)
-        NotificationCenter.default.addObserver(self, selector: #selector(handleExitDistractionFree), name: .exitDistractionFree, object: nil)
-
-        // Global Escape key monitor for distraction-free exit
-        NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
-            if event.keyCode == 53, self?.distractionFreeWindow != nil {
-                self?.exitDistractionFree()
-                return nil
-            }
-            return event
-        }
 
         // Global tablet proximity monitor — catches pen/eraser flips
         NSEvent.addLocalMonitorForEvents(matching: .tabletProximity) { event in
@@ -140,14 +126,14 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         window.minSize = NSSize(width: 800, height: 500)
         window.tabbingMode = .preferred
         window.isReleasedWhenClosed = false
+        window.collectionBehavior.insert(.fullScreenPrimary)
 
         do {
             let viewModel = CanvasViewModel(canvasSize: size)
             let canvasView = CanvasView(frame: NSRect(x: 0, y: 0, width: 800, height: 600), device: metalContext.device)
             try canvasView.configure(context: metalContext, viewModel: viewModel)
 
-            let contentView = buildLayout(canvasView: canvasView, viewModel: viewModel)
-            window.contentView = contentView
+            window.contentView = layout(canvasView: canvasView, viewModel: viewModel)
 
             // Store references on the window for menu actions
             window.representedURL = nil
@@ -176,93 +162,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    private func buildLayout(canvasView: CanvasView, viewModel: CanvasViewModel) -> NSView {
-        let container = NSView()
-        container.wantsLayer = true
-
-        let toolPalette = NSHostingView(rootView: ToolPaletteView(viewModel: viewModel))
-        toolPalette.translatesAutoresizingMaskIntoConstraints = false
-
-        let rightPanel = NSHostingView(rootView: RightPanelView(viewModel: viewModel))
-        rightPanel.translatesAutoresizingMaskIntoConstraints = false
-        rightPanel.clipsToBounds = true
-
-        let statusBar = NSHostingView(rootView: StatusBarView(viewModel: viewModel))
-        statusBar.translatesAutoresizingMaskIntoConstraints = false
-
-        canvasView.translatesAutoresizingMaskIntoConstraints = false
-
-        // Selection overlay (marching ants) — on top of canvas, click-through
-        let selectionOverlay = SelectionOverlayView()
-        selectionOverlay.viewModel = viewModel
-        selectionOverlay.wantsLayer = true
-        selectionOverlay.translatesAutoresizingMaskIntoConstraints = false
-
-        container.addSubview(toolPalette)
-        container.addSubview(canvasView)
-        container.addSubview(selectionOverlay, positioned: .above, relativeTo: canvasView)
-        container.addSubview(rightPanel)
-        container.addSubview(statusBar)
-
-        let rightPanelWidth = rightPanel.widthAnchor.constraint(equalToConstant: 260)
-
-        NSLayoutConstraint.activate([
-            toolPalette.leadingAnchor.constraint(equalTo: container.leadingAnchor),
-            toolPalette.topAnchor.constraint(equalTo: container.topAnchor),
-            toolPalette.bottomAnchor.constraint(equalTo: statusBar.topAnchor),
-            toolPalette.widthAnchor.constraint(equalToConstant: 48),
-
-            rightPanel.trailingAnchor.constraint(equalTo: container.trailingAnchor),
-            rightPanel.topAnchor.constraint(equalTo: container.topAnchor),
-            rightPanel.bottomAnchor.constraint(equalTo: statusBar.topAnchor),
-            rightPanelWidth,
-
-            canvasView.leadingAnchor.constraint(equalTo: toolPalette.trailingAnchor),
-            canvasView.trailingAnchor.constraint(equalTo: rightPanel.leadingAnchor),
-            canvasView.topAnchor.constraint(equalTo: container.topAnchor),
-            canvasView.bottomAnchor.constraint(equalTo: statusBar.topAnchor),
-
-            // Selection overlay: same frame as canvas
-            selectionOverlay.leadingAnchor.constraint(equalTo: canvasView.leadingAnchor),
-            selectionOverlay.trailingAnchor.constraint(equalTo: canvasView.trailingAnchor),
-            selectionOverlay.topAnchor.constraint(equalTo: canvasView.topAnchor),
-            selectionOverlay.bottomAnchor.constraint(equalTo: canvasView.bottomAnchor),
-
-            statusBar.leadingAnchor.constraint(equalTo: container.leadingAnchor),
-            statusBar.trailingAnchor.constraint(equalTo: container.trailingAnchor),
-            statusBar.bottomAnchor.constraint(equalTo: container.bottomAnchor),
-            statusBar.heightAnchor.constraint(equalToConstant: 24),
-        ])
-
-        selectionOverlay.startAnimation()
-
-        // Observe view model's panel visibility toggle
-        var observation: NSObjectProtocol?
-        observation = NotificationCenter.default.addObserver(
-            forName: .rightPanelToggled, object: viewModel, queue: .main
-        ) { [weak rightPanel] _ in
-            guard let rightPanel = rightPanel else { return }
-            let show = viewModel.isRightPanelVisible
-            let width: CGFloat
-            if !show {
-                width = 0
-            } else if viewModel.rightPanelMode == .condensed {
-                width = 48
-            } else {
-                width = 260
-            }
-            NSAnimationContext.runAnimationGroup { ctx in
-                ctx.duration = 0.2
-                ctx.allowsImplicitAnimation = true
-                rightPanelWidth.constant = width
-                rightPanel.isHidden = !show
-                container.layoutSubtreeIfNeeded()
-            }
-        }
-        // Keep observation alive by storing on the container
-        objc_setAssociatedObject(container, "panelObserver", observation, .OBJC_ASSOCIATION_RETAIN)
-
-        return container
+    /// The canvas with the chrome around it; see `MainLayout`.
+    private func layout(canvasView: CanvasView, viewModel: CanvasViewModel) -> NSView {
+        MainLayout(canvasView: canvasView, viewModel: viewModel,
+                   previewRenderer: try? BrushPreview(context: metalContext, size: BrushPreviewCache.size))
     }
 
     private var isOpeningFile = false
@@ -431,9 +334,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 canvasView.renderer.updateAllThumbnails(in: layerStack)
             }
 
-            // Create window
-            let contentView = self.buildLayout(canvasView: canvasView, viewModel: viewModel)
-
             let window = NSWindow(
                 contentRect: NSRect(x: 0, y: 0, width: 1400, height: 850),
                 styleMask: [.titled, .closable, .resizable, .miniaturizable],
@@ -445,7 +345,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             window.tabbingMode = .preferred
             window.tabbingIdentifier = "ArtsyCanvas"
             window.isReleasedWhenClosed = false
-            window.contentView = contentView
+            window.collectionBehavior.insert(.fullScreenPrimary)
+            window.contentView = layout(canvasView: canvasView, viewModel: viewModel)
 
             // Track saved file URL so dirty tracking / quit prompt know this canvas is on disk
             viewModel.fileURL = url
@@ -558,7 +459,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         mainMenu.addItem(brushMenuItem)
 
         let viewMenu = NSMenu(title: "View")
-        viewMenu.addItem(withTitle: "Distraction Free", action: #selector(toggleDistractionFree), keyEquivalent: "f")
+        viewMenu.addItem(withTitle: "Enter Full Screen", action: #selector(NSWindow.toggleFullScreen(_:)), keyEquivalent: "f")
         viewMenu.addItem(NSMenuItem.separator())
         viewMenu.addItem(withTitle: "Zoom to Fit", action: #selector(handleZoomToFit), keyEquivalent: "0")
         viewMenu.addItem(withTitle: "Actual Size", action: #selector(handleActualSize), keyEquivalent: "1")
@@ -572,7 +473,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         let flip = viewMenu.addItem(withTitle: "Flip Canvas View", action: #selector(handleFlipView), keyEquivalent: "f")
         flip.keyEquivalentModifierMask = [.command, .option]
         viewMenu.addItem(NSMenuItem.separator())
-        viewMenu.addItem(withTitle: "Toggle Right Panel", action: #selector(handleToggleRightPanel), keyEquivalent: "\t")
+        viewMenu.addItem(withTitle: "Hide Interface", action: #selector(handleToggleChrome), keyEquivalent: "\t")
         viewMenu.addItem(NSMenuItem.separator())
 
         // Guides submenu; its check marks follow the front canvas (see menuNeedsUpdate)
@@ -706,41 +607,30 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         activeStore?.canvasView.performPasteInPlaceAction()
     }
 
+    // The view actions live on the view model, shared with the bar's Adjust panel
+
     @objc private func handleZoomToFit() {
         guard let store = activeStore else { return }
-        store.viewModel.transform.zoomToFit(canvasSize: store.viewModel.canvasSize, viewSize: store.canvasView.bounds.size)
+        store.viewModel.zoomToFit(viewSize: store.canvasView.bounds.size)
     }
 
     @objc private func handleActualSize() {
+        activeStore?.viewModel.actualSize()
+    }
+
+    @objc private func handleRotateLeft() {
         guard let store = activeStore else { return }
-        store.viewModel.transform.scale = 1.0
-        store.viewModel.transform.offset = .zero
+        store.viewModel.rotateView(direction: 1, viewSize: store.canvasView.bounds.size)
     }
 
-    /// Rotation and flipping happen about the middle of the canvas view.
-    private func viewCentre(of store: (viewModel: CanvasViewModel, canvasView: CanvasView)) -> (CGPoint, CGSize) {
-        let size = store.canvasView.bounds.size
-        return (CGPoint(x: size.width / 2, y: size.height / 2), size)
-    }
-
-    /// Turn to the next 15° mark in `direction` (+1 counter-clockwise), so repeated
-    /// presses land on clean angles even after a freehand twist.
-    private func rotateCanvas(direction: CGFloat) {
+    @objc private func handleRotateRight() {
         guard let store = activeStore else { return }
-        let (centre, size) = viewCentre(of: store)
-        let step = CGFloat.pi / 12
-        let marks = store.viewModel.transform.rotation / step
-        let next = direction > 0 ? (marks + 0.001).rounded(.down) + 1 : (marks - 0.001).rounded(.up) - 1
-        store.viewModel.transform.setRotation(next * step, at: centre, viewSize: size)
+        store.viewModel.rotateView(direction: -1, viewSize: store.canvasView.bounds.size)
     }
-
-    @objc private func handleRotateLeft() { rotateCanvas(direction: 1) }
-    @objc private func handleRotateRight() { rotateCanvas(direction: -1) }
 
     @objc private func handleResetRotation() {
         guard let store = activeStore else { return }
-        let (centre, size) = viewCentre(of: store)
-        store.viewModel.transform.setRotation(0, at: centre, viewSize: size)
+        store.viewModel.resetRotation(viewSize: store.canvasView.bounds.size)
     }
 
     // MARK: - Guides
@@ -761,19 +651,16 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         changeGuides { $0.snapsToGuides.toggle() }
     }
 
-    /// New guides go through the middle of the view, where the eye is.
     @objc private func addHorizontalGuide() {
         guard let store = activeStore else { return }
-        let (centre, size) = viewCentre(of: store)
-        let canvasPoint = store.viewModel.transform.viewToCanvas(centre, viewSize: size)
-        changeGuides { $0.horizontals.append(canvasPoint.y.rounded()) }
+        store.viewModel.addGuide(horizontal: true, viewSize: store.canvasView.bounds.size)
+        store.canvasView.redrawOverlays()
     }
 
     @objc private func addVerticalGuide() {
         guard let store = activeStore else { return }
-        let (centre, size) = viewCentre(of: store)
-        let canvasPoint = store.viewModel.transform.viewToCanvas(centre, viewSize: size)
-        changeGuides { $0.verticals.append(canvasPoint.x.rounded()) }
+        store.viewModel.addGuide(horizontal: false, viewSize: store.canvasView.bounds.size)
+        store.canvasView.redrawOverlays()
     }
 
     @objc private func clearGuides() {
@@ -782,97 +669,17 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func changeGuides(_ change: (inout CanvasGuides) -> Void) {
         guard let store = activeStore else { return }
-        change(&store.viewModel.guides)
-        store.viewModel.markDirty()
+        store.viewModel.changeGuides(change)
         store.canvasView.redrawOverlays()
     }
 
     @objc private func handleFlipView() {
         guard let store = activeStore else { return }
-        let (centre, size) = viewCentre(of: store)
-        store.viewModel.transform.flip(at: centre, viewSize: size)
+        store.viewModel.flipView(viewSize: store.canvasView.bounds.size)
     }
 
-    @objc private func handleToggleRightPanel() {
-        activeStore?.viewModel.toggleRightPanel()
-    }
-
-    @objc private func toggleDistractionFree() {
-        if distractionFreeWindow != nil {
-            exitDistractionFree()
-        } else {
-            enterDistractionFree()
-        }
-    }
-
-    @objc private func handleEnterDistractionFree() { enterDistractionFree() }
-    @objc private func handleExitDistractionFree() { exitDistractionFree() }
-
-    private var activeWindowBeforeFullscreen: NSWindow?
-    private var savedTransform: CanvasTransform?
-
-    private func enterDistractionFree() {
-        guard let store = activeStore, let keyWindow = NSApp.keyWindow else { return }
-
-        store.viewModel.isDistractionFree = true
-        activeWindowBeforeFullscreen = keyWindow
-        savedTransform = store.viewModel.transform
-
-        guard let screen = keyWindow.screen ?? NSScreen.main else { return }
-        let fsWindow = NSWindow(
-            contentRect: screen.frame,
-            styleMask: [.borderless],
-            backing: .buffered,
-            defer: false
-        )
-        fsWindow.level = .floating  // Float above all other windows
-        fsWindow.backgroundColor = NSColor.black
-        fsWindow.isReleasedWhenClosed = false
-
-        let fsCanvasView = CanvasView(frame: screen.frame, device: metalContext.device)
-        do {
-            try fsCanvasView.configure(context: metalContext, viewModel: store.viewModel)
-        } catch {
-            return
-        }
-        fsCanvasView.autoresizingMask = [.width, .height]
-
-        fsWindow.contentView = fsCanvasView
-        fsWindow.setFrame(screen.frame, display: true)
-        fsWindow.makeKeyAndOrderFront(nil)
-
-        distractionFreeWindow = fsWindow
-        distractionFreeCanvasView = fsCanvasView
-        fsWindow.makeFirstResponder(fsCanvasView)
-
-        // Don't hide other windows — just cover them with the floating fullscreen window.
-        // This preserves their tab grouping exactly.
-    }
-
-    private func exitDistractionFree() {
-        guard let fsWindow = distractionFreeWindow else { return }
-
-        // Restore the original transform (zoom/pan) before tearing down
-        if let transform = savedTransform, let vm = distractionFreeCanvasView?.viewModel {
-            vm.transform = transform
-        }
-        savedTransform = nil
-
-        if let fsCanvas = distractionFreeCanvasView {
-            fsCanvas.viewModel?.isDistractionFree = false
-            fsCanvas.delegate = nil
-            fsCanvas.isPaused = true
-        }
-
-        fsWindow.orderOut(nil)
-        distractionFreeWindow = nil
-        distractionFreeCanvasView = nil
-
-        // Just bring the original window back to front — tab groups are intact
-        if let activeWindow = activeWindowBeforeFullscreen {
-            activeWindow.makeKeyAndOrderFront(nil)
-        }
-        activeWindowBeforeFullscreen = nil
+    @objc private func handleToggleChrome() {
+        activeStore?.viewModel.toggleChrome()
     }
 
     @objc private func setBgDarkGray() { activeStore?.viewModel.canvasBackgroundColor = (0.10, 0.10, 0.10) }

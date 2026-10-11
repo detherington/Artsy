@@ -69,24 +69,25 @@ What the pen runs into:
 ## The layout
 
 ```
-┌──────────────────────────────────────────────────────────────────────────────┐
-│ ≡  Untitled ▾        [ ⌇ Sumi-e ▾ ] [ size ───●─── 24 ] [ opacity ──●─ 80% ] ● │ Layers ⧉ Adjust ⊕ Add  ⤢ │
-├────┬─────────────────────────────────────────────────────────────────────────┤
-│ ✎  │                                                                           │
-│ ◫  │                                                                           │
-│ ◉  │                                                                           │
-│ ⌖  │                                                                           │
-│ ▭  │                                canvas                                     │
-│ ◇  │                                                                           │
-│ ⤡  │                                                                           │
-│    │                                                                           │
-│ ↶  │                                                                           │
-│ ↷  │                                                                           │
-└────┴─────────────────────────────────────────────────────────────────────────┘
+┌────┬──────────────────────────────────────────────────────────────┬─────────────┐
+│ ✎  │                                                              │ Layers    ⇥ │
+│ ◫  │                                                              │ ▣ Layer 2   │
+│ ◉  │                                                              │ ▣ Layer 1   │
+│ ⌖  │                                                              │ ▣ Paper     │
+│ ▭  │                          canvas                              │             │
+│ ◇  │                                                              │ Normal  80% │
+│ ⤡  │                                                              │             │
+│    │                                                              │ (wide only) │
+│ ↶  │                                                              │             │
+│ ↷  │                                                              │             │
+├────┴──────────────────────────────────────────────────────────────┴─────────────┤
+│ ≡ Untitled   [ ⌇ Sumi-e ▴ ] [ Size ──●── 24 ] [ Opacity ───●─ 80% ] ●  Layers Adjust Add ⤢ │
+└─────────────────────────────────────────────────────────────────────────────────┘
 ```
 
-- **Top bar, 44 pt.** Left: a menu button and the document's name (New, Open, Save,
-  Export under it, duplicated in the menu bar). Centre, the quick controls: the brush
+- **The bar, 52 pt, along the bottom.** Left: a menu button and the document's name
+  (New, Open, Save, Export under it, duplicated in the menu bar). Centre, the quick
+  controls: the brush
   (its stroke preview and name; tap for the brush panel), size and opacity as drag
   pills that show the value and the brush circle on the canvas while dragging, and the
   colour (tap for the colour panel; the swatch itself shows foreground over
@@ -142,14 +143,15 @@ docked Layers panel. One layout, two breakpoints, rather than a separate tablet 
 Order chosen so each step leaves the app usable, and so the parts the pen most needs
 come first.
 
-0. **Drag-to-scroll everywhere, now.** An `NSScrollView` that turns a mouse drag into
+0. **Drag-to-scroll everywhere.** An `NSScrollView` that turns a mouse drag into
    scrolling (with a tap threshold, momentum, and taps still landing on rows), wrapped
-   for SwiftUI, in place of every `ScrollView` in the app. This alone fixes the brush
-   list and the Inspector in the current chrome, and every panel in the new one uses
-   it. Small; could ship before anything else.
-1. **The shell.** Top bar, left rail, canvas, hide-chrome, the end of the status bar
-   and of the condensed and distraction-free variants. The old Inspector's sections
-   keep working behind the new buttons until each panel replaces them. Medium.
+   for SwiftUI (`PenScrollView`, `DragScroll`), in every panel. Done with step 1.
+1. **The shell.** The bar along the bottom, the rail, the canvas, the Layers dock on
+   wide windows, hide-chrome with the pill, full screen in place of distraction-free
+   mode, the end of the status bar. The old Inspector's sections keep working behind
+   the new buttons (the brush list and settings in the brush pop-up, symmetry under
+   Adjust, AI and stock images under Add) until each panel replaces them. Done:
+   `MainLayout`, `BottomBarView`, `ToolRailView`, `LayersDockView`, `Chrome`.
 2. **The brush panel**, with previews and per-brush settings; the tool strip's brush
    list retires. Medium to large: the grid, the previews cached per brush and size,
    categories, the long-press menu.
@@ -164,21 +166,29 @@ Each step is its own branch and PR, with the view tests extended: the existing
 can drive the new chrome — tap a rail button, open a panel, scroll it with a drag,
 pick a brush — so the pen path is tested, not just the mouse path.
 
-## Decisions to make first
+## Decisions taken (2026-10-11)
 
-1. **Which display is the painting display**: the 1024×600 pen display or the
-   2304×1296 screens? It decides the breakpoint that gets built first.
-2. **Pop-ups or panels.** Pop-ups from the bar (Procreate's way) are this plan's
-   default; a permanently docked right panel (Fresco, Photoshop) is the alternative,
-   or a dock that only Layers uses on wide displays. Pop-ups cost one tap to see
-   layers; a dock costs 300 pt of canvas.
-3. **Bar on top or at the bottom.** On a landscape pen display the bar is better at the
-   bottom, nearer the hand; on a desktop it reads better on top. The plan says top, and
-   makes it a setting if the small display wants otherwise.
-4. **AI and stock images under Add**, one tap further than today. Yes unless they are
-   used every session.
-5. **Keep the tool keys and number keys as they are**, and add nothing the pen cannot
-   do without them. Yes.
+1. **The 2304×1296 display is the painting display.** Its layout is built first; the
+   1024×600 breakpoint waits for the pen display to be in hand.
+2. **Pop-ups from the bar, and a dock for Layers** on windows at least 1600 pt wide,
+   remembered across launches; narrower than that Layers is a pop-up like the rest.
+3. **The bar is at the bottom.** The display is landscape and the pen's hand is below
+   the canvas; the bar is nearer it there, and the rail stays on the left.
+4. **AI and stock images live under Add.** They are not used every session.
+5. **The tool keys and number keys stay as they are**, and nothing the chrome does
+   needs them.
+
+## What the first slice taught
+
+- **A click reaches a SwiftUI view only through the window's dispatch, and only while
+  the window is on screen.** Calling a hosting view's `mouseDown` and `mouseUp` does
+  nothing; `NSApp.sendEvent` with the same events does, once the window is ordered
+  front (key or not). `PenScrollView` forwards a tap that way, and `ShellTests` shows
+  its window for the duration. A hosting view also hands an event it has no use for
+  back up the responder chain, which for a view inside the scroll view means the scroll
+  view again: it lets such events past while it is forwarding.
+- **The chrome's animation lands its frames after the run loop turns**, so a test of the
+  layout waits a third of a second after a toggle; the app does not care.
 
 ## Risks
 
