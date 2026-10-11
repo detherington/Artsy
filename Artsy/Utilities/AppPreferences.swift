@@ -21,6 +21,7 @@ final class AppPreferences: ObservableObject {
         static let easeStrokesWithoutPressure = "easeStrokesWithoutPressure"
         static let paintRelief = "paintRelief"
         static let snapShapesOnHold = "snapShapesOnHold"
+        static let layersDocked = "layersDocked"
     }
 
     // MARK: - Published
@@ -75,6 +76,11 @@ final class AppPreferences: ObservableObject {
         didSet { defaults.set(snapShapesOnHold, forKey: Key.snapShapesOnHold) }
     }
 
+    /// Layers in a dock beside the canvas on a wide window, rather than a pop-up.
+    @Published var layersDocked: Bool {
+        didSet { defaults.set(layersDocked, forKey: Key.layersDocked) }
+    }
+
     /// Pressure curves by pen (see `TabletEventHandler.currentPenKey`). A pen that has none
     /// saved uses the linear curve.
     @Published var pressureCurves: [String: PressureCurve] {
@@ -111,6 +117,7 @@ final class AppPreferences: ObservableObject {
         self.easeStrokesWithoutPressure = (defaults.object(forKey: Key.easeStrokesWithoutPressure) as? Bool) ?? true
         self.paintRelief = min(max((defaults.object(forKey: Key.paintRelief) as? Double) ?? 1.0, 0), 2)
         self.snapShapesOnHold = (defaults.object(forKey: Key.snapShapesOnHold) as? Bool) ?? true
+        self.layersDocked = (defaults.object(forKey: Key.layersDocked) as? Bool) ?? true
         self.pressureCurves = defaults.data(forKey: Key.pressureCurves)
             .flatMap { try? JSONDecoder().decode([String: PressureCurve].self, from: $0) } ?? [:]
     }
