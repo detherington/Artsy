@@ -109,6 +109,8 @@ final class ShellTests: XCTestCase {
         let layout = MainLayout(canvasView: canvasView, viewModel: viewModel, previewRenderer: nil)
         show(layout, size: NSSize(width: 1800, height: 900))
         XCTAssertTrue(layout.isDockShown)
+        let pill = try XCTUnwrap(layout.firstDescendant(of: NSHostingView<ChromePillView>.self))
+        XCTAssertTrue(pill.isHidden, "the pill is for the chrome's absence")
         XCTAssertEqual(canvasView.frame.width, 1800 - Chrome.railWidth - Chrome.dockWidth, accuracy: 0.5)
         XCTAssertEqual(canvasView.frame.height, 900 - Chrome.barHeight, accuracy: 0.5)
 
@@ -132,7 +134,6 @@ final class ShellTests: XCTestCase {
         XCTAssertFalse(layout.isDockShown)
         XCTAssertEqual(canvasView.frame.width, 1800, accuracy: 0.5, "the canvas has the window")
         XCTAssertEqual(canvasView.frame.height, 900, accuracy: 0.5)
-        let pill = try XCTUnwrap(layout.firstDescendant(of: NSHostingView<ChromePillView>.self))
         XCTAssertFalse(pill.isHidden, "the way back is in the corner")
 
         viewModel.toggleChrome()

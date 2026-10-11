@@ -26,11 +26,14 @@ final class BrushPreview {
 
     /// A pressure-swelling wave, then a short stroke across it to show how a second pass
     /// takes. `size` is the brush size to draw at.
-    func render(brush: BrushDescriptor, color: StrokeColor, size brushSize: Float) -> CGImage? {
-        guard let layer = viewModel.layerStack?.activeLayer,
+    /// - Parameter onPaper: over the white paper, as an opaque image (the Studio's pad);
+    ///   false for the stroke alone with its transparency, for a dark panel.
+    func render(brush: BrushDescriptor, color: StrokeColor, size brushSize: Float, onPaper: Bool = true) -> CGImage? {
+        guard let layerStack = viewModel.layerStack, let layer = layerStack.activeLayer,
               let clear = renderer.context.commandQueue.makeCommandBuffer() else { return nil }
         renderer.textureManager.clearTexture(layer.texture, commandBuffer: clear)
         clear.commit()
+        layerStack.layers.first?.isVisible = onPaper
 
         let w = size.width, h = size.height
         viewModel.brushOpacity = 1
@@ -68,7 +71,7 @@ final class BrushPreview {
         blit.endEncoding()
         commandBuffer.commit()
         commandBuffer.waitUntilCompleted()
-        return Self.image(from: readback)
+        return Self.image(from: readback, opaque: onPaper)
     }
 
     static let paintBands = [
@@ -94,8 +97,8 @@ final class BrushPreview {
         viewModel.endStroke()
     }
 
-    /// The composite, premultiplied over the white background layer, as an 8-bit image.
-    private static func image(from texture: MTLTexture) -> CGImage? {
+    /// The composite as an 8-bit image: over white, opaque, or premultiplied with its alpha.
+    private static func image(from texture: MTLTexture, opaque: Bool) -> CGImage? {
         let width = texture.width, height = texture.height
         var half = [UInt16](repeating: 0, count: width * height * 4)
         half.withUnsafeMutableBytes {
@@ -105,16 +108,17 @@ final class BrushPreview {
         var rgba = [UInt8](repeating: 255, count: width * height * 4)
         for i in 0..<(width * height) {
             let a = Float(Float16(bitPattern: half[i * 4 + 3]))
-            let through = 1 - a
+            let through = opaque ? 1 - a : 0
             for c in 0..<3 {
                 let value = Float(Float16(bitPattern: half[i * 4 + c])) + through
                 rgba[i * 4 + c] = UInt8(max(0, min(255, (value * 255).rounded())))
             }
+            if !opaque { rgba[i * 4 + 3] = UInt8(max(0, min(255, (a * 255).rounded()))) }
         }
         return rgba.withUnsafeMutableBytes { raw in
             CGContext(data: raw.baseAddress, width: width, height: height, bitsPerComponent: 8, bytesPerRow: width * 4,
                       space: CGColorSpace(name: CGColorSpace.displayP3)!,
-                      bitmapInfo: CGImageAlphaInfo.noneSkipLast.rawValue)?.makeImage()
+                      bitmapInfo: (opaque ? CGImageAlphaInfo.noneSkipLast : .premultipliedLast).rawValue)?.makeImage()
         }
     }
 }

@@ -84,6 +84,32 @@ final class BrushStudioTests: XCTestCase {
         XCTAssertNotNil(faint)
     }
 
+    /// The bar and the brush panel show the stroke alone, white on their dark grey: no
+    /// paper, and the image keeps its transparency. With ARTSY_DUMP_UI=1 it is written out.
+    func testPreviewWithoutPaperKeepsTheStrokesTransparency() throws {
+        let preview = try BrushPreview(context: EngineHarness.sharedContext, size: BrushPreviewCache.size)
+        let white = StrokeColor(red: 1, green: 1, blue: 1, alpha: 1)
+        let image = try XCTUnwrap(preview.render(brush: .inkBrush, color: white, size: 16, onPaper: false))
+        let bitmap = NSBitmapImageRep(cgImage: image)
+        var painted = 0, clear = 0
+        for x in stride(from: 0, to: image.width, by: 2) {
+            for y in stride(from: 0, to: image.height, by: 2) {
+                let alpha = bitmap.colorAt(x: x, y: y)?.alphaComponent ?? 0
+                if alpha > 0.5 { painted += 1 } else if alpha == 0 { clear += 1 }
+            }
+        }
+        XCTAssertGreaterThan(painted, 100, "the stroke is there")
+        XCTAssertGreaterThan(clear, 1000, "and see-through around it")
+        if ProcessInfo.processInfo.environment["ARTSY_DUMP_UI"] == "1" {
+            let url = FileManager.default.temporaryDirectory.appendingPathComponent("artsy-preview-tile.png")
+            try XCTUnwrap(bitmap.representation(using: .png, properties: [:])).write(to: url)
+            print("DUMP preview tile at \(url.path)")
+        }
+        // And back on paper, opaque, as the Studio has it
+        let onPaper = try XCTUnwrap(preview.render(brush: .inkBrush, color: .black, size: 16))
+        XCTAssertEqual(NSBitmapImageRep(cgImage: onPaper).colorAt(x: 2, y: 2)?.alphaComponent ?? 0, 1)
+    }
+
     /// The whole panel lays out and draws; with ARTSY_DUMP_UI=1 the image is written out to
     /// look at, for the brush named by ARTSY_DUMP_BRUSH (Chalk otherwise).
     func testStudioViewRenders() throws {

@@ -50,6 +50,9 @@ final class MainLayout: NSView {
         rail.clipsToBounds = true
         dock.clipsToBounds = true
         bar.clipsToBounds = true
+        // Until the first update says otherwise: the chrome up, the pill and the dock away
+        pill.isHidden = true
+        dock.isHidden = true
 
         railWidth = rail.widthAnchor.constraint(equalToConstant: Chrome.railWidth)
         barHeight = bar.heightAnchor.constraint(equalToConstant: Chrome.barHeight)
