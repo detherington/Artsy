@@ -20,8 +20,9 @@ final class BrushPreviewCache {
 
     func image(for brush: BrushDescriptor) -> NSImage? {
         if let hit = rendered[brush.id], hit.brush == brush { return hit.image }
+        // White strokes with their transparency, for the dark bar and panel
         guard let renderer,
-              let cg = renderer.render(brush: brush, color: StrokeColor(red: 1, green: 1, blue: 1, alpha: 1), size: 16)
+              let cg = renderer.render(brush: brush, color: StrokeColor(red: 1, green: 1, blue: 1, alpha: 1), size: 16, onPaper: false)
         else { return nil }
         let image = NSImage(cgImage: cg, size: Self.size)
         rendered[brush.id] = (brush, image)

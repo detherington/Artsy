@@ -157,9 +157,13 @@ final class CanvasViewModel: ObservableObject {
     private(set) var contentVersion = 0
     func noteContentChanged() { contentVersion += 1 }
 
-    /// Short display name for prompts. Falls back to "Untitled".
+    /// What an unsaved canvas is called: the window's title ("Canvas 2"), so the bar and
+    /// the title bar agree.
+    @Published var untitledName = "Untitled"
+
+    /// Short display name for prompts and the bar: the file's name once saved.
     var displayName: String {
-        fileURL?.deletingPathExtension().lastPathComponent ?? "Untitled"
+        fileURL?.deletingPathExtension().lastPathComponent ?? untitledName
     }
 
     init(canvasSize: CGSize = CGSize(width: 2048, height: 2048)) {
