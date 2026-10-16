@@ -148,6 +148,11 @@ stamp path using it for Oil and Acrylic by default, with Brush Studio controls (
 Depletion, Resaturation, Bleed). The tail stays provisional as now; the carry's state
 is part of the stroke.
 
+**Done** (`drawing-engine-plan.md`, step 7). Two things it taught: the pickup has to
+read the layer alone, not the stroke so far, or the brush picks up its own paint and
+nothing else; and symmetry copies of a stroke whose colour changes along it have to be
+drawn dab by dab, or the result depends on how the dabs fell into frames.
+
 ### 2. Thick paint that is pushed, and lit like a surface (medium)
 
 - **Displacement.** A dab's height is not added; it is conserved. Where the brush
