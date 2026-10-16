@@ -7,6 +7,8 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		CA2C7706E9ED42ED92F18BA7 /* LoadedBrushTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 70F6185F614C4D7996976002 /* LoadedBrushTests.swift */; };
+		463C82EECA1C43938FC83920 /* LoadedBrushRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = F51214791B7C491686E60FC4 /* LoadedBrushRenderer.swift */; };
 		1CBAE54692034631B03847B4 /* ShellTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3220593D4128419B84CA12FD /* ShellTests.swift */; };
 		A5479C02D33743B19C871090 /* MainLayout.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7E3B142B246542848C95DFDB /* MainLayout.swift */; };
 		B7942EA18B3F4F3B9087A5B1 /* LayersDockView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A28B40AD7E6A4EEAB4058E45 /* LayersDockView.swift */; };
@@ -130,6 +132,8 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		70F6185F614C4D7996976002 /* LoadedBrushTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoadedBrushTests.swift; sourceTree = "<group>"; };
+		F51214791B7C491686E60FC4 /* LoadedBrushRenderer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoadedBrushRenderer.swift; sourceTree = "<group>"; };
 		3220593D4128419B84CA12FD /* ShellTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShellTests.swift; sourceTree = "<group>"; };
 		7E3B142B246542848C95DFDB /* MainLayout.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainLayout.swift; sourceTree = "<group>"; };
 		A28B40AD7E6A4EEAB4058E45 /* LayersDockView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LayersDockView.swift; sourceTree = "<group>"; };
@@ -398,6 +402,7 @@
 		B48AF066E85C8962CFFD499C /* ArtsyTests */ = {
 			isa = PBXGroup;
 			children = (
+				70F6185F614C4D7996976002 /* LoadedBrushTests.swift */,
 				3220593D4128419B84CA12FD /* ShellTests.swift */,
 				AC62305DB0AF1166603ADE2E /* DiagnosticsTests.swift */,
 				CA3DF7BB7FA179E9534B1FD7 /* DocumentTests.swift */,
@@ -476,6 +481,7 @@
 		D144A5F7E552DC1AE9ED79EC /* Metal */ = {
 			isa = PBXGroup;
 			children = (
+				F51214791B7C491686E60FC4 /* LoadedBrushRenderer.swift */,
 				7864208A72AA1D379DC90B77 /* Spectral.h */,
 				A49F88C8AEA2D1CC2C459AE0 /* SmudgeRenderer.swift */,
 				503F3A4D683A28C2D0F3CA61 /* CompositorPipeline.swift */,
@@ -654,6 +660,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				463C82EECA1C43938FC83920 /* LoadedBrushRenderer.swift in Sources */,
 				A5479C02D33743B19C871090 /* MainLayout.swift in Sources */,
 				B7942EA18B3F4F3B9087A5B1 /* LayersDockView.swift in Sources */,
 				0AC36548F9674AABA8D991BA /* BottomBarView.swift in Sources */,
@@ -737,6 +744,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				CA2C7706E9ED42ED92F18BA7 /* LoadedBrushTests.swift in Sources */,
 				1CBAE54692034631B03847B4 /* ShellTests.swift in Sources */,
 				0217FB8E432B831DCF235056 /* DiagnosticsTests.swift in Sources */,
 				D4E17C6C4906E90B56BD12F0 /* DocumentTests.swift in Sources */,

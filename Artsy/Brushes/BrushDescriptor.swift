@@ -278,6 +278,26 @@ struct StampSettings: Codable, Equatable {
         }
     }
 
+    /// A loaded brush: it carries paint, laid down as it goes and run out of, and picks up
+    /// what it crosses. The carry is a small texture mapped to the dab, as a smudge's is,
+    /// a texel per bristle, so bristles run dry one by one and streak.
+    struct Load: Codable, Equatable {
+        /// How much paint the brush starts a stroke with, 0...1: the most a dab can lay.
+        var amount: Float = 1
+        /// The share of the carried paint that leaves per diameter travelled, 0 (never
+        /// runs out) to 1.
+        var depletion: Float = 0.2
+        /// The share of the carry refilled from the brush's own colour per diameter, 0...1:
+        /// how fast a dirtied, emptied brush comes back to what it was loaded with.
+        var resaturation: Float = 0.05
+        /// The share of the paint under the brush that comes up into it per diameter, 0...1:
+        /// what it crosses streaks into its tail.
+        var bleed: Float = 0.5
+        /// How unevenly the bristles are loaded, 0 (evenly) to 1: some run dry long before
+        /// the rest.
+        var variation: Float = 0.5
+    }
+
     /// Thick paint: every dab adds height to the layer, which the display lights.
     struct Impasto: Codable, Equatable {
         /// Height one dab at full coverage adds. Dabs overlap many times over, so one pass
@@ -292,6 +312,8 @@ struct StampSettings: Codable, Equatable {
     var smudge: Smudge? = nil
     /// Set for a brush that lays thick paint.
     var impasto: Impasto? = nil
+    /// Set for a brush that carries paint.
+    var load: Load? = nil
     /// Distance between dabs, as a fraction of the dab's diameter.
     var spacing: Float
     /// Opacity of a single dab, before pressure.
@@ -447,7 +469,10 @@ extension BrushDescriptor {
         fixedNibAngle: nil,
         rendering: .stamp(StampSettings(
             tip: .bristle,
-            impasto: .init(thickness: 0.06), spacing: 0.05, flow: 0.6, accumulation: .wash,
+            impasto: .init(thickness: 0.075),
+            // Loaded: dries faster than oil and takes up less of what it crosses
+            load: .init(amount: 1, depletion: 0.25, resaturation: 0.1, bleed: 0.4, variation: 0.5),
+            spacing: 0.05, flow: 0.6, accumulation: .wash,
             grain: .init(mode: .multiply, texture: .bristles, attachment: .stroke, scale: 1.2, depth: 0.55),
             opacityJitter: 0.1, followsDirection: true
         )),
@@ -572,7 +597,11 @@ extension BrushDescriptor {
         // Thicker paint than acrylic: deeper bristle furrows
         rendering: .stamp(StampSettings(
             tip: .bristle,
-            impasto: .init(thickness: 0.08), spacing: 0.05, flow: 0.75, accumulation: .wash,
+            // Thickness follows the paint on the brush, so a little more of it than before
+            impasto: .init(thickness: 0.1),
+            // Loaded: runs out slowly, drags what it crosses, comes back to its colour slowly
+            load: .init(amount: 1, depletion: 0.12, resaturation: 0.06, bleed: 0.5, variation: 0.6),
+            spacing: 0.05, flow: 0.75, accumulation: .wash,
             grain: .init(mode: .multiply, texture: .bristles, attachment: .stroke, scale: 1.0, depth: 0.7),
             sizeJitter: 0.05, opacityJitter: 0.1, followsDirection: true
         )),

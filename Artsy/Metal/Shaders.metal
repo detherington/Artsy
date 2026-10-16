@@ -143,7 +143,17 @@ struct StampParams {
     int    hasSecondTip;
     float  secondTipScale;   // size of the second tip relative to the dab
     float  thickness;        // height one dab at full coverage adds (impasto)
+    int    usesCarry;        // 1: the dab's colour and amount come from the carry texture
+    float2 carryTexels;      // texels of the carry in use
 };
+
+/// The paint a loaded brush's carry holds under this fragment: premultiplied, its alpha
+/// how much paint the bristle has. Sampled from texel centre to texel centre, as a
+/// smudge's carry is.
+static inline float4 carriedPaint(float2 uv, constant StampParams &params, texture2d<float> carry, sampler carrySampler) {
+    float2 texel = 0.5 + uv * (params.carryTexels - 1.0);
+    return carry.sample(carrySampler, texel / float2(carry.get_width(), carry.get_height()));
+}
 
 vertex StampVertexOut stampVertex(
     uint vertexID [[vertex_id]],
@@ -229,11 +239,17 @@ fragment float4 stampFragment(
     texture2d<float> tip [[texture(0)]],
     texture2d<float> grain [[texture(1)]],
     texture2d<float> secondTip [[texture(2)]],
+    texture2d<float> carry [[texture(3)]],
     sampler tipSampler [[sampler(0)]],
     sampler grainSampler [[sampler(1)]],
+    sampler carrySampler [[sampler(2)]],
     constant StampParams &params [[buffer(0)]]
 ) {
     float alpha = stampCoverage(in, params, tip, grain, secondTip, tipSampler, grainSampler);
+    if (params.usesCarry != 0) {
+        // The carry is premultiplied by the bristle's load: a bristle out of paint leaves nothing
+        return carriedPaint(in.uv, params, carry, carrySampler) * saturate(params.color.a * alpha);
+    }
     return premultiplied(params.color.rgb, params.color.a * alpha);
 }
 
@@ -244,12 +260,16 @@ fragment float4 stampHeightFragment(
     texture2d<float> tip [[texture(0)]],
     texture2d<float> grain [[texture(1)]],
     texture2d<float> secondTip [[texture(2)]],
+    texture2d<float> carry [[texture(3)]],
     sampler tipSampler [[sampler(0)]],
     sampler grainSampler [[sampler(1)]],
+    sampler carrySampler [[sampler(2)]],
     constant StampParams &params [[buffer(0)]]
 ) {
     float alpha = stampCoverage(in, params, tip, grain, secondTip, tipSampler, grainSampler);
-    return float4(alpha * params.thickness, 0.0, 0.0, 1.0);
+    // Less paint on the bristle, less thickness left behind
+    float load = params.usesCarry != 0 ? carriedPaint(in.uv, params, carry, carrySampler).a : 1.0;
+    return float4(alpha * params.thickness * load, 0.0, 0.0, 1.0);
 }
 
 // --- Smudge ---
@@ -796,4 +816,98 @@ kernel void mixPigmentsKernel(
 ) {
     float4 a = pairs[2 * id], b = pairs[2 * id + 1];
     results[id] = float4(spectral::mixP3(a.rgb, b.rgb, a.w), 1.0);
+}
+
+// --- Loaded brush ---
+//
+// A loaded brush carries paint: a carry texture mapped to the dab, as a smudge's is, holding
+// premultiplied colour whose alpha is how much paint that bristle has. Dabs are drawn from
+// it (`stampFragment` with `usesCarry`), so a bristle out of paint leaves nothing. Every
+// quarter diameter of path the carry is brought up to date for the dab there: what was laid
+// has left it, what was crossed has come up into it, and the brush's own colour has seeped
+// back. What comes up is read from the layer alone — the paint that was there before this
+// stroke — not from the stroke so far, which is the brush's own paint just laid; the
+// stroke's colour meets the layer's at the merge, as pigments if the brush mixes them.
+
+struct LoadedBrushParams {
+    float2 center;          // the dab, in canvas pixels
+    float  size;
+    float  angle;
+    float  aspect;
+    float2 canvasSize;
+    float2 carryTexels;     // texels of the carry in use
+    float  hardness;
+    int    tipIsTexture;
+    float  press;           // the dab's opacity: how firmly the bristles touched
+    float  depletion;       // shares for this step, 0...1
+    float  bleed;
+    float  resaturation;
+    float4 color;           // the brush's colour, straight, with the load as alpha
+    float  variation;       // fill: how unevenly the bristles start
+    float  seed;
+    int    mixPigments;
+};
+
+// A tip's coverage without the antialiasing a fragment can do (no derivatives in a kernel).
+static inline float tipCoverageFlat(float2 uv, float hardness, int tipIsTexture,
+                                    texture2d<float> tip, sampler tipSampler) {
+    if (tipIsTexture != 0) return tip.sample(tipSampler, uv).r;
+    float dist = distance(uv, float2(0.5)) * 2.0;
+    return 1.0 - smoothstep(min(hardness, 0.97), 1.0, dist);
+}
+
+// Fills the carry at pen-down: the brush's colour at its load, less along some bristles.
+// Bristles run along the dab's x axis, so each row across it is one bristle.
+kernel void loadedBrushFillKernel(
+    texture2d<float, access::write> carry [[texture(0)]],
+    texture2d<float> bristles [[texture(1)]],
+    sampler grainSampler [[sampler(0)]],
+    constant LoadedBrushParams &p [[buffer(0)]],
+    uint2 gid [[thread_position_in_grid]]
+) {
+    if (gid.x >= uint(p.carryTexels.x) || gid.y >= uint(p.carryTexels.y)) return;
+    float2 uv = (float2(gid) + 0.5) / p.carryTexels;
+    float bristle = bristles.sample(grainSampler, float2(p.seed * 7.0, uv.y * 3.0)).r;
+    float load = p.color.a * (1.0 - p.variation * (1.0 - bristle));
+    carry.write(premultiplied(p.color.rgb, load), gid);
+}
+
+kernel void loadedBrushTransferKernel(
+    texture2d<float, access::read_write> carry [[texture(0)]],
+    texture2d<float> layer [[texture(1)]],
+    texture2d<float> tip [[texture(2)]],
+    sampler canvasSampler [[sampler(0)]],
+    sampler tipSampler [[sampler(1)]],
+    constant LoadedBrushParams &p [[buffer(0)]],
+    uint2 gid [[thread_position_in_grid]]
+) {
+    if (gid.x >= uint(p.carryTexels.x) || gid.y >= uint(p.carryTexels.y)) return;
+    float2 uv = (float2(gid) + 0.5) / p.carryTexels;
+    // This bristle's touch: the tip's coverage here, by how firmly the dab was pressed
+    float k = tipCoverageFlat(uv, p.hardness, p.tipIsTexture, tip, tipSampler) * p.press;
+    float4 paint = carry.read(gid);
+
+    // What is under the bristle, on the layer
+    float2 stretched = (uv - 0.5) * float2(p.size * p.aspect, p.size);
+    float c = cos(p.angle), sn = sin(p.angle);
+    float2 canvas = p.center + float2(stretched.x * c - stretched.y * sn, stretched.x * sn + stretched.y * c);
+    float4 under = layer.sample(canvasSampler, float2(canvas.x / p.canvasSize.x, 1.0 - canvas.y / p.canvasSize.y));
+
+    // 1. What was laid down has left the brush
+    paint *= 1.0 - p.depletion * k;
+    // 2. What was crossed comes up: more paint on the bristle, and its colour in the mix
+    float pick = p.bleed * k * under.a;
+    if (pick > 1e-4) {
+        float a = min(1.0, paint.a + pick);
+        float share = pick / (paint.a + pick);
+        float3 colour = paint.a > 1e-5
+            ? (p.mixPigments != 0 ? spectral::mixP3(straight(paint), straight(under), share)
+                                  : mix(straight(paint), straight(under), share))
+            : straight(under);
+        paint = premultiplied(colour, a);
+    }
+    // 3. The brush's own paint seeps back, towards how it was loaded
+    float4 own = premultiplied(p.color.rgb, p.color.a);
+    paint = p.mixPigments != 0 ? pigmentLerp(paint, own, p.resaturation) : mix(paint, own, p.resaturation);
+    carry.write(paint, gid);
 }

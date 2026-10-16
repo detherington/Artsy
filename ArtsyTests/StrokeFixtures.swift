@@ -1,6 +1,18 @@
 import CoreGraphics
 @testable import Artsy
 
+extension BrushDescriptor {
+    /// The brush with its load taken off: the same paint from start to end, nothing
+    /// picked up. For tests of what is not the loaded brush.
+    var withoutLoad: BrushDescriptor {
+        guard case .stamp(var settings) = rendering else { return self }
+        settings.load = nil
+        var brush = self
+        brush.rendering = .stamp(settings)
+        return brush
+    }
+}
+
 /// Synthetic pen input for tests: deterministic strokes sampled at a tablet-like 200 Hz.
 /// Coordinates are canvas-space (origin bottom-left, Y up).
 enum StrokeFixtures {

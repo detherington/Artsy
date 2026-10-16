@@ -15,6 +15,9 @@ struct BrushStudioView: View {
                 if model.stampSettings != nil {
                     smudgeSection
                     impastoSection
+                    if model.stampSettings?.smudge == nil {
+                        loadSection
+                    }
                     secondTipSection
                     grainSection
                     jitterSection
@@ -155,6 +158,27 @@ struct BrushStudioView: View {
             ))
             if let impasto = model.stampSettings?.impasto {
                 slider("Thickness", impastoBinding(\.thickness, impasto), in: 0.01...0.5, percent: true)
+            }
+        }
+    }
+
+    private var loadSection: some View {
+        Section("Loaded brush") {
+            Toggle("Carries paint: runs out along a stroke and picks up what it crosses", isOn: Binding(
+                get: { model.stampSettings?.load != nil },
+                set: { on in
+                    model.stampBinding(\.load, default: nil).wrappedValue = on ? StampSettings.Load() : nil
+                }
+            ))
+            if let load = model.stampSettings?.load {
+                slider("Load", loadBinding(\.amount, load), in: 0.05...1, percent: true)
+                slider("Runs out", loadBinding(\.depletion, load), in: 0...1, percent: true)
+                slider("Refills", loadBinding(\.resaturation, load), in: 0...1, percent: true)
+                slider("Picks up", loadBinding(\.bleed, load), in: 0...1, percent: true)
+                slider("Uneven bristles", loadBinding(\.variation, load), in: 0...1, percent: true)
+                Text("Per diameter of stroke: how much of the paint on the brush comes off, how much of its own colour comes back, and how much of what is under it comes up.")
+                    .font(.system(size: 11))
+                    .foregroundColor(.secondary)
             }
         }
     }
@@ -307,6 +331,18 @@ struct BrushStudioView: View {
                 var smudge = model.stampSettings?.smudge ?? current
                 smudge[keyPath: keyPath] = value
                 model.stampBinding(\.smudge, default: nil).wrappedValue = smudge
+            }
+        )
+    }
+
+    private func loadBinding<Value>(_ keyPath: WritableKeyPath<StampSettings.Load, Value>,
+                                    _ current: StampSettings.Load) -> Binding<Value> {
+        Binding(
+            get: { (model.stampSettings?.load ?? current)[keyPath: keyPath] },
+            set: { value in
+                var load = model.stampSettings?.load ?? current
+                load[keyPath: keyPath] = value
+                model.stampBinding(\.load, default: nil).wrappedValue = load
             }
         )
     }

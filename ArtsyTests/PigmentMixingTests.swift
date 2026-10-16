@@ -71,7 +71,9 @@ final class PigmentMixingTests: XCTestCase {
         func overlap(mixing: Bool) throws -> SIMD4<Float> {
             let harness = try EngineHarness(width: 200, height: 100)
             harness.fill(harness.drawingLayer, red: 0.05, green: 0.1, blue: 0.8)
-            var brush = BrushDescriptor.oil
+            // Oil without its load: picking up the blue would change the overlap for a
+            // reason that is not mixing
+            var brush = BrushDescriptor.oil.withoutLoad
             brush.mixing = mixing ? .pigment : .light
             harness.select(brush)
             harness.viewModel.brushSize = 40
@@ -94,7 +96,9 @@ final class PigmentMixingTests: XCTestCase {
         func layer(mixing: Bool, over fill: StrokeColor?) throws -> PixelGrid {
             let harness = try EngineHarness(width: 160, height: 80)
             if let fill { harness.fill(harness.drawingLayer, red: Double(fill.red), green: Double(fill.green), blue: Double(fill.blue)) }
-            var brush = BrushDescriptor.acrylic
+            // Acrylic without its load: what it picks up is mixed as pigments too, and that
+            // drifts by a step in 255 over its own colour, which is not the merge's doing
+            var brush = BrushDescriptor.acrylic.withoutLoad
             brush.mixing = mixing ? .pigment : .light
             harness.select(brush)
             harness.viewModel.currentColor = yellow

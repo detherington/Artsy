@@ -6,6 +6,7 @@ final class CanvasRenderer: NSObject, MTKViewDelegate {
     let textureManager: TextureManager
     let strokeRenderer: StrokeRenderer
     let smudgeRenderer: SmudgeRenderer
+    let loadedBrushRenderer: LoadedBrushRenderer
     let compositor: CompositorPipeline
 
     // Canvas textures
@@ -96,6 +97,7 @@ final class CanvasRenderer: NSObject, MTKViewDelegate {
         self.textureManager = TextureManager(device: context.device)
         self.strokeRenderer = StrokeRenderer(context: context)
         self.smudgeRenderer = SmudgeRenderer(context: context)
+        self.loadedBrushRenderer = LoadedBrushRenderer(context: context)
         self.compositor = CompositorPipeline(context: context)
 
         super.init()
@@ -403,6 +405,8 @@ final class CanvasRenderer: NSObject, MTKViewDelegate {
         typealias Draw = (MTLRenderCommandEncoder) -> [CGRect]
         var drawSettled: Draw?
         var drawTail: Draw?
+        /// What a loaded brush drew of its settled dabs, in its own passes
+        var loadedRegions: [MTLScissorRect] = []
 
         switch brush.rendering {
         case .ribbon:
@@ -456,11 +460,27 @@ final class CanvasRenderer: NSObject, MTKViewDelegate {
             }
 
             dabPlacer = placer
+            let loaded = settings.load != nil && settings.smudge == nil && brush.category != .utility
+
+            // A loaded brush draws its settled dabs from the paint it carries, bringing the
+            // carry up to date as it goes; the colour then goes through the stroke textures
+            // as usual.
+            if loaded, let load = settings.load, !dabs.isEmpty, let layer = viewModel.layerStack?.activeLayer {
+                // Its thickness goes into the height map group by group, from the same carry
+                let height = settings.impasto != nil ? heightTexture(for: layer, commandBuffer: commandBuffer) : nil
+                loadedRegions = loadedBrushRenderer.encode(
+                    dabs: dabs, brush: brush, settings: settings, load: load, color: color, brushSize: viewModel.brushSize,
+                    opacityScale: dabScale, mirrors: mirrors,
+                    strokeTexture: activeStrokeTexture, layer: layer.texture,
+                    height: height, heightOpacity: brush.opacity * viewModel.brushOpacity,
+                    strokeRenderer: renderer, commandBuffer: commandBuffer, canvasSize: size
+                ).compactMap(region(for:))
+            }
 
             // Thick paint: the dabs' thickness goes straight into the layer's height map as
             // they settle, the way a smudge works, while the colour goes through the stroke
             // textures as usual. The undo step takes its height from the copy made at pen-down.
-            if settings.impasto != nil, settings.smudge == nil, brush.category != .utility, !dabs.isEmpty,
+            if settings.impasto != nil, settings.smudge == nil, brush.category != .utility, !loaded, !dabs.isEmpty,
                let layer = viewModel.layerStack?.activeLayer,
                let height = heightTexture(for: layer, commandBuffer: commandBuffer) {
                 let pass = MTLRenderPassDescriptor()
@@ -499,7 +519,7 @@ final class CanvasRenderer: NSObject, MTKViewDelegate {
                 return
             }
 
-            if !dabs.isEmpty {
+            if !dabs.isEmpty, !loaded {
                 drawSettled = { encoder in
                     renderer.encode(dabs: dabs, brush: brush, settings: settings, color: color, opacityScale: dabScale,
                                     mirrors: mirrors, encoder: encoder, canvasSize: size)
@@ -507,33 +527,35 @@ final class CanvasRenderer: NSObject, MTKViewDelegate {
             }
 
             // The rest are laid with a copy of the placer, so next frame starts over from
-            // the same place.
+            // the same place. A loaded brush's tail is drawn from the carry as it stands.
             if !finishing {
                 var tailPlacer = placer
                 let dabs = tailPlacer.dabs(along: points, upTo: pathEnd, brush: brush, settings: settings)
                 if !dabs.isEmpty {
+                    let carries = loaded ? loadedBrushRenderer.carriesInUse : nil
                     drawTail = { encoder in
                         renderer.encode(dabs: dabs, brush: brush, settings: settings, color: color, opacityScale: dabScale,
-                                        mirrors: mirrors, encoder: encoder, canvasSize: size)
+                                        mirrors: mirrors, carries: carries, encoder: encoder, canvasSize: size)
                     }
                 }
             }
         }
 
-        // 1. Newly settled parts go into the stroke texture, once.
-        var committedRegions: [MTLScissorRect] = []
+        // 1. Newly settled parts go into the stroke texture, once (a loaded brush's went
+        // in above, in passes of its own).
+        var committedRegions: [MTLScissorRect] = loadedRegions
         if let drawSettled {
             let pass = MTLRenderPassDescriptor()
             pass.colorAttachments[0].texture = activeStrokeTexture
             pass.colorAttachments[0].loadAction = .load
             pass.colorAttachments[0].storeAction = .store
             if let encoder = commandBuffer.makeRenderCommandEncoder(descriptor: pass) {
-                committedRegions = drawSettled(encoder).compactMap(region(for:))
+                committedRegions += drawSettled(encoder).compactMap(region(for:))
                 encoder.endEncoding()
             }
-            for region in committedRegions {
-                strokeRegion = strokeRegion.map { Self.union($0, region) } ?? region
-            }
+        }
+        for region in committedRegions {
+            strokeRegion = strokeRegion.map { Self.union($0, region) } ?? region
         }
 
         // 2. The tail: erase last frame's, draw this frame's.
@@ -1171,6 +1193,7 @@ final class CanvasRenderer: NSObject, MTKViewDelegate {
             }
         }
         smudgeRenderer.beginStroke()
+        loadedBrushRenderer.beginStroke()
         commandBuffer.commit()
         resetStrokeState()
     }
@@ -1198,6 +1221,7 @@ final class CanvasRenderer: NSObject, MTKViewDelegate {
         }
         compositor.clear(strokeTailTexture, regions: tailRegions, commandBuffer: commandBuffer)
         pendingRegions += stale
+        loadedBrushRenderer.beginStroke()
         committedThrough = nil
         dabPlacer = nil
         restDabsLaid = [:]

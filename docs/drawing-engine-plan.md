@@ -371,6 +371,55 @@ Done:
 Step 6 is done, which closes the plan as written. Not done: tiled layers (see above,
 on evidence), and the hardware pen session that has been owed since step 1.
 
+### 7. The loaded brush (medium) — done, untested by hand
+
+The first step of `paint-media-research.md`: a paint brush that carries paint, laid down
+as it goes and run out of, picking up what it crosses and coming back to its own colour.
+Oil and Acrylic are loaded; the rest are as they were.
+
+- **The carry.** A stamp brush with `StampSettings.load` has a carry texture per
+  symmetry copy, mapped to the dab as a smudge's is (`LoadedBrushRenderer`): a texel per
+  canvas pixel of the brush at its full size, up to 256², holding premultiplied colour
+  whose alpha is how much paint that bristle has. Filled at pen-down with the brush
+  colour at its *load*, less along some bristles by *uneven bristles* (a profile across
+  the brush from the bristle grain, the same every stroke, like the grain). Dabs are
+  drawn from it: `stampFragment` with `usesCarry` takes the carry's colour and scales the
+  dab's coverage by the bristle's load, so a bristle out of paint leaves nothing; the
+  height stamp scales thickness by it the same way. Oil's and Acrylic's thickness went
+  up a quarter to stay thick with the average bristle.
+- **The transfer.** Every quarter diameter of path, after the dabs since the last one are
+  drawn, a kernel brings the carry up to date for the dab there, per texel: what was laid
+  has left (*runs out*: a share per diameter, by the tip's coverage and the pressure),
+  what was crossed comes up (*picks up*: more paint on the bristle, its colour mixed in,
+  as pigments if the brush mixes them), and the brush's own colour seeps back
+  (*refills*). What comes up is read from the layer alone — the paint there before this
+  stroke — not from the stroke so far, which is the brush's own paint just laid; the
+  first version read both and picked up almost nothing but itself.
+- **The same stroke however the samples fall into frames.** The transfers happen at path
+  distances, so a frame boundary cannot move one; a group of dabs the frame cut short is
+  drawn, and its transfer waits for the dab past the quarter. Symmetry copies of a loaded
+  stroke differ in colour along it, so where they overlap the order they blend in has to
+  be the same whatever the grouping: a loaded brush draws dab by dab, each copy in turn,
+  instead of a copy at a time (`IncrementalRenderingTests` with Oil in quad symmetry).
+- **Brush Studio** has a "Loaded brush" section: load, runs out, refills, picks up,
+  uneven bristles, all per diameter. Oil: 100%, 12%, 6%, 50%, 60%. Acrylic: 100%, 25%,
+  10%, 40%, 50%.
+- **Cost.** A fast Oil stroke on 8192² with twelve layers: 4.2 ms a frame from 3.5
+  (`testLargeCanvasCosts`), the carry's passes being a render pass per group of dabs and
+  a dispatch per copy per transfer. The carries are 256² half-float, made once.
+- **Tests** (`LoadedBrushTests`): the brush runs out along a stroke and not without
+  depletion; red crossed comes along in the tail and not without pickup; refilling
+  brings the colour back; uneven bristles leave streaks; the result does not depend on
+  how samples fall into frames. The goldens for Oil, Acrylic, the relief scene and the
+  everything document were re-recorded after viewing: streaks along the strokes, and the
+  blue zigzag through orange coming out green, which is the point.
+
+Still to do: a loaded brush's pickup mixes as pigments every quarter diameter, and over
+its own colour that drifts by a step in 255 along a stroke (the merge carries its error
+across; the carry does not). Watercolor is not loaded yet; that waits for wetness (step 3
+of the research). The look is tuned from test renders and the preview pad: the amount
+Oil picks up, and how fast it comes back, want a pen.
+
 ## At the limits: 8192² with 12 layers
 
 Measured after step 6 opened these limits up (`testLargeCanvasCosts`, debug build, M4 Pro):

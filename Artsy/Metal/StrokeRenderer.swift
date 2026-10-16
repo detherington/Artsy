@@ -85,6 +85,15 @@ final class StrokeRenderer {
         var hasSecondTip: Int32
         var secondTipScale: Float
         var thickness: Float
+        var usesCarry: Int32
+        var carryTexels: SIMD2<Float>
+    }
+
+    /// A loaded brush's carries, one per mirror, and the texels of them in use: the dabs'
+    /// colour and amount come from there instead of the brush colour.
+    struct Carries {
+        let textures: [MTLTexture]
+        let texels: SIMD2<Float>
     }
 
     /// Draw dabs into an open render pass on a stroke texture, once per entry in `mirrors`
@@ -100,11 +109,12 @@ final class StrokeRenderer {
         color: StrokeColor,
         opacityScale: Float,
         mirrors: [(CGPoint) -> CGPoint],
+        carries: Carries? = nil,
         encoder: MTLRenderCommandEncoder,
         canvasSize: CGSize
     ) -> [CGRect] {
         encodeDabs(dabs, brush: brush, settings: settings, color: color, opacityScale: opacityScale, mirrors: mirrors,
-                   encoder: encoder, canvasSize: canvasSize, pipeline: context.stampPipelineState)
+                   carries: carries, encoder: encoder, canvasSize: canvasSize, pipeline: context.stampPipelineState)
     }
 
     /// The same dabs as paint thickness, into an open render pass on a layer's height map.
@@ -115,11 +125,12 @@ final class StrokeRenderer {
         settings: StampSettings,
         opacityScale: Float,
         mirrors: [(CGPoint) -> CGPoint],
+        carries: Carries? = nil,
         encoder: MTLRenderCommandEncoder,
         canvasSize: CGSize
     ) -> [CGRect] {
         encodeDabs(dabs, brush: brush, settings: settings, color: .white, opacityScale: opacityScale, mirrors: mirrors,
-                   encoder: encoder, canvasSize: canvasSize, pipeline: context.stampHeightPipelineState)
+                   carries: carries, encoder: encoder, canvasSize: canvasSize, pipeline: context.stampHeightPipelineState)
     }
 
     private func encodeDabs(
@@ -129,6 +140,7 @@ final class StrokeRenderer {
         color: StrokeColor,
         opacityScale: Float,
         mirrors: [(CGPoint) -> CGPoint],
+        carries: Carries?,
         encoder: MTLRenderCommandEncoder,
         canvasSize: CGSize,
         pipeline: MTLRenderPipelineState
@@ -153,7 +165,9 @@ final class StrokeRenderer {
             grainOnStroke: settings.grain?.attachment == .stroke ? 1 : 0,
             hasSecondTip: secondTipTexture == nil ? 0 : 1,
             secondTipScale: max(settings.secondTip?.scale ?? 1, 0.05),
-            thickness: settings.impasto?.thickness ?? 0
+            thickness: settings.impasto?.thickness ?? 0,
+            usesCarry: carries == nil ? 0 : 1,
+            carryTexels: carries?.texels ?? SIMD2(1, 1)
         )
 
         encoder.setRenderPipelineState(pipeline)
@@ -163,10 +177,13 @@ final class StrokeRenderer {
         encoder.setFragmentTexture(tipTexture ?? paper, index: 0)
         encoder.setFragmentTexture(grainTexture, index: 1)
         encoder.setFragmentTexture(secondTipTexture ?? paper, index: 2)
+        encoder.setFragmentTexture(paper, index: 3)
         encoder.setFragmentSamplerState(context.tipSampler, index: 0)
         encoder.setFragmentSamplerState(context.grainSampler, index: 1)
+        encoder.setFragmentSamplerState(context.linearSampler, index: 2)
 
         var drawn: [CGRect] = []
+        var buffers: [MTLBuffer] = []
         for mirror in mirrors {
             // Ten floats per dab, matching `StampInstance` in Shaders.metal
             var instances: [Float] = []
@@ -189,9 +206,28 @@ final class StrokeRenderer {
             }
 
             guard let buffer = makeBuffer(instances) else { continue }
-            encoder.setVertexBuffer(buffer, offset: 0, index: 0)
-            encoder.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: 6, instanceCount: dabs.count)
+            buffers.append(buffer)
             drawn.append(bounds)
+        }
+
+        if let carries {
+            // Dab by dab, each copy in turn: the copies' colours differ along a loaded
+            // stroke, so where they overlap the order they blend in has to be the same
+            // however the dabs are split into groups and frames.
+            for dabIndex in dabs.indices {
+                for (mirrorIndex, buffer) in buffers.enumerated() {
+                    if mirrorIndex < carries.textures.count {
+                        encoder.setFragmentTexture(carries.textures[mirrorIndex], index: 3)
+                    }
+                    encoder.setVertexBuffer(buffer, offset: 0, index: 0)
+                    encoder.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: 6, instanceCount: 1, baseInstance: dabIndex)
+                }
+            }
+        } else {
+            for buffer in buffers {
+                encoder.setVertexBuffer(buffer, offset: 0, index: 0)
+                encoder.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: 6, instanceCount: dabs.count)
+            }
         }
         return drawn
     }
