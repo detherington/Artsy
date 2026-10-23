@@ -87,6 +87,7 @@ final class StrokeRenderer {
         var thickness: Float
         var usesCarry: Int32
         var carryTexels: SIMD2<Float>
+        var grooves: Float
     }
 
     /// A loaded brush's carries, one per mirror, and the texels of them in use: the dabs'
@@ -167,7 +168,8 @@ final class StrokeRenderer {
             secondTipScale: max(settings.secondTip?.scale ?? 1, 0.05),
             thickness: settings.impasto?.thickness ?? 0,
             usesCarry: carries == nil ? 0 : 1,
-            carryTexels: carries?.texels ?? SIMD2(1, 1)
+            carryTexels: carries?.texels ?? SIMD2(1, 1),
+            grooves: settings.impasto?.grooves ?? 0
         )
 
         encoder.setRenderPipelineState(pipeline)
@@ -178,6 +180,8 @@ final class StrokeRenderer {
         encoder.setFragmentTexture(grainTexture, index: 1)
         encoder.setFragmentTexture(secondTipTexture ?? paper, index: 2)
         encoder.setFragmentTexture(paper, index: 3)
+        // Grooves in thick paint come from the bristle grain whatever the brush's own grain
+        encoder.setFragmentTexture(context.brushTextures.bristleGrain ?? paper, index: 4)
         encoder.setFragmentSamplerState(context.tipSampler, index: 0)
         encoder.setFragmentSamplerState(context.grainSampler, index: 1)
         encoder.setFragmentSamplerState(context.linearSampler, index: 2)

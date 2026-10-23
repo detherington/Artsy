@@ -185,6 +185,8 @@ struct StampSettings: Codable, Equatable {
         /// A disc with a ragged edge, the footprint of a loaded bristle brush. The bristle
         /// streaks themselves come from stroke-attached `bristles` grain.
         case bristle
+        /// A blade across the stroke: a thin, wide bar with hard edges, for pushing paint.
+        case knife
         /// An image from the brush library's textures folder, by file name. Its alpha
         /// channel is the shape; an image without alpha uses its darkness.
         case image(String)
@@ -298,12 +300,36 @@ struct StampSettings: Codable, Equatable {
         var variation: Float = 0.5
     }
 
-    /// Thick paint: every dab adds height to the layer, which the display lights.
+    /// Thick paint: every dab adds height to the layer, which the display lights, and
+    /// pushes the paint already under it.
     struct Impasto: Codable, Equatable {
         /// Height one dab at full coverage adds. Dabs overlap many times over, so one pass
         /// of a stroke builds roughly `thickness / spacing` times the flow; the display
         /// lights height on a scale where 1 is thick.
         var thickness: Float = 0.08
+        /// How much of the paint already under the brush is pushed out to its rim, and
+        /// more ahead of it than behind, 0...1: a stroke drives a wave of paint before it
+        /// and ends in a ridge, and a second stroke ploughs a furrow through the first. A
+        /// knife is all push and no thickness.
+        var squeeze: Float = 0.5
+        /// Grooves along the stroke from the bristles, 0...1, cut into the height a dab
+        /// leaves.
+        var grooves: Float = 0.5
+
+        init(thickness: Float = 0.08, squeeze: Float = 0.5, grooves: Float = 0.5) {
+            self.thickness = thickness
+            self.squeeze = squeeze
+            self.grooves = grooves
+        }
+
+        private enum CodingKeys: String, CodingKey { case thickness, squeeze, grooves }
+
+        init(from decoder: Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            thickness = try c.decodeIfPresent(Float.self, forKey: .thickness) ?? 0.08
+            squeeze = try c.decodeIfPresent(Float.self, forKey: .squeeze) ?? 0.5
+            grooves = try c.decodeIfPresent(Float.self, forKey: .grooves) ?? 0.5
+        }
     }
 
     var tip: Tip = .round
@@ -469,7 +495,7 @@ extension BrushDescriptor {
         fixedNibAngle: nil,
         rendering: .stamp(StampSettings(
             tip: .bristle,
-            impasto: .init(thickness: 0.075),
+            impasto: .init(thickness: 0.075, squeeze: 0.35, grooves: 0.3),
             // Loaded: dries faster than oil and takes up less of what it crosses
             load: .init(amount: 1, depletion: 0.25, resaturation: 0.1, bleed: 0.4, variation: 0.5),
             spacing: 0.05, flow: 0.6, accumulation: .wash,
@@ -597,8 +623,9 @@ extension BrushDescriptor {
         // Thicker paint than acrylic: deeper bristle furrows
         rendering: .stamp(StampSettings(
             tip: .bristle,
-            // Thickness follows the paint on the brush, so a little more of it than before
-            impasto: .init(thickness: 0.1),
+            // Thickness follows the paint on the brush, so a little more of it than before;
+            // pushes what it presses into, and leaves grooves
+            impasto: .init(thickness: 0.1, squeeze: 0.5, grooves: 0.4),
             // Loaded: runs out slowly, drags what it crosses, comes back to its colour slowly
             load: .init(amount: 1, depletion: 0.12, resaturation: 0.06, bleed: 0.5, variation: 0.6),
             spacing: 0.05, flow: 0.75, accumulation: .wash,
@@ -738,6 +765,31 @@ extension BrushDescriptor {
         mixing: .pigment
     )
 
+    static let paletteKnife = BrushDescriptor(
+        id: UUID(uuidString: "00000000-0016-0000-0000-000000000016")!,
+        name: "Palette Knife",
+        category: .painting,
+        hardness: 1.0,
+        baseSize: 40,
+        pressureDynamics: PressureDynamics(
+            sizeRange: 1.0...1.0,
+            opacityRange: 0.5...1.0    // press harder to push more
+        ),
+        opacity: 1.0,
+        smoothing: 0.3,
+        fixedNibAngle: nil,
+        // Lays nothing: drags the paint under it along, and pushes what it presses into
+        // out to the blade's edges and ahead of it
+        rendering: .stamp(StampSettings(
+            tip: .knife,
+            smudge: .init(mode: .smearing, strength: 0.85, colorRate: 0),
+            impasto: .init(thickness: 0, squeeze: 0.9, grooves: 0),
+            spacing: 0.04, flow: 1.0, accumulation: .buildUp,
+            followsDirection: true
+        )),
+        mixing: .pigment
+    )
+
     static let allDefaults: [BrushDescriptor] = [
         // Sketching
         .pencil, .graphiteStick, .conte, .chalk, .pastel,
@@ -745,7 +797,7 @@ extension BrushDescriptor {
         .hardRound, .inkBrush, .sumiE, .calligraphy,
         .technicalPen, .fineliner, .ballpointPen, .gelPen,
         // Painting
-        .softRound, .airbrush, .marker, .watercolor, .acrylic, .oil, .smudge
+        .softRound, .airbrush, .marker, .watercolor, .acrylic, .oil, .smudge, .paletteKnife
     ]
 
     /// Look up a built-in brush (including the eraser) by its display name.
@@ -765,6 +817,7 @@ extension StampSettings.Tip: Codable {
         case "round": self = .round
         case "chalk": self = .chalk
         case "bristle": self = .bristle
+        case "knife": self = .knife
         case _ where raw.hasPrefix("image:"): self = .image(String(raw.dropFirst("image:".count)))
         default:
             throw DecodingError.dataCorrupted(.init(codingPath: decoder.codingPath, debugDescription: "Unknown tip \"\(raw)\""))
@@ -777,6 +830,7 @@ extension StampSettings.Tip: Codable {
         case .round: try container.encode("round")
         case .chalk: try container.encode("chalk")
         case .bristle: try container.encode("bristle")
+        case .knife: try container.encode("knife")
         case .image(let name): try container.encode("image:" + name)
         }
     }

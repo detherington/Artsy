@@ -56,6 +56,8 @@ final class MetalContext {
     /// A loaded brush's carry: filled at pen-down, and brought up to date as the brush goes
     let loadedBrushFillPipelineState: MTLComputePipelineState
     let loadedBrushTransferPipelineState: MTLComputePipelineState
+    /// Thick paint pushed out from under a dab to its rim
+    let impastoPushPipelineState: MTLComputePipelineState
 
     // Vertex descriptors
     let strokeVertexDescriptor: MTLVertexDescriptor
@@ -271,6 +273,7 @@ final class MetalContext {
         self.mipPipelineState = try device.makeComputePipelineState(function: Self.function("mipKernel", in: library))
         self.loadedBrushFillPipelineState = try device.makeComputePipelineState(function: Self.function("loadedBrushFillKernel", in: library))
         self.loadedBrushTransferPipelineState = try device.makeComputePipelineState(function: Self.function("loadedBrushTransferKernel", in: library))
+        self.impastoPushPipelineState = try device.makeComputePipelineState(function: Self.function("impastoPushKernel", in: library))
 
         guard let texturesDifferFunc = library.makeFunction(name: "texturesDifferKernel") else {
             throw MetalError.pipelineCreationFailed("texturesDifferKernel not found")

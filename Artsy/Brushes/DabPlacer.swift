@@ -19,6 +19,8 @@ struct Dab {
     var pathDistance: Float = 0
     /// Rotation of the second tip, radians.
     var secondAngle: Float = 0
+    /// Which way the stroke was going at this dab, radians: thick paint is pushed ahead.
+    var heading: Float = 0
 }
 
 /// Walks a stroke's path and lays dabs along it at the brush's spacing.
@@ -102,7 +104,7 @@ struct DabPlacer {
                 ? (random(6) - 0.5) * 2 * .pi * settings.secondTip!.angleJitter : 0
             result.append(Dab(center: center, size: max(size, 0.5), angle: angle, aspect: aspect,
                               opacity: opacity, seed: random(0), reach: usesReach ? pressed : 1,
-                              pathDistance: Float(nextDistance), secondAngle: secondAngle))
+                              pathDistance: Float(nextDistance), secondAngle: secondAngle, heading: direction))
             index += 1
 
             // Each copy of a tap's dab gets its own index, and so its own jitter.
@@ -139,7 +141,7 @@ struct DabPlacer {
                 ? (restingRandom(6) - 0.5) * 2 * .pi * settings.secondTip!.angleJitter : 0
             return Dab(center: center, size: max(size, 0.5), angle: angle, aspect: point.aspect,
                        opacity: opacity, seed: restingRandom(0), reach: usesReach ? point.opacity : 1,
-                       pathDistance: Float(point.distance), secondAngle: secondAngle)
+                       pathDistance: Float(point.distance), secondAngle: secondAngle, heading: point.angle)
         }
     }
 

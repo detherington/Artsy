@@ -448,10 +448,20 @@ final class CompositorPipeline {
     /// - Parameters:
     ///   - height: the composite's height map, lit as paint relief; nil for none.
     ///   - relief: how strongly the relief is lit; 0 shows the paint flat.
+    /// Mirrors `ReliefParams` in Shaders.metal.
+    private struct ReliefParams {
+        var relief: Float
+        var gloss: Float
+    }
+
+    /// - Parameters:
+    ///   - relief: how strongly thickness is lit; 0 shows it flat.
+    ///   - gloss: the paint's finish, 0 matte to 1 glossy.
     func renderToScreen(
         composite: MTLTexture,
         height: MTLTexture? = nil,
         relief: Float = 0,
+        gloss: Float = 0.5,
         drawable: MTLTexture,
         transform: CanvasTransform,
         viewSize: CGSize,
@@ -459,7 +469,7 @@ final class CompositorPipeline {
         commandBuffer: MTLCommandBuffer
     ) {
         var transformMatrix = transform.transformMatrix(viewSize: viewSize)
-        var reliefStrength = height == nil ? 0 : relief
+        var paint = ReliefParams(relief: height == nil ? 0 : relief, gloss: gloss)
 
         let passDesc = MTLRenderPassDescriptor()
         passDesc.colorAttachments[0].texture = drawable
@@ -490,7 +500,7 @@ final class CompositorPipeline {
         // The slot needs a texture even when the shader will not light anything
         encoder.setFragmentTexture(height ?? composite, index: 1)
         encoder.setFragmentSamplerState(context.displaySampler, index: 0)
-        encoder.setFragmentBytes(&reliefStrength, length: MemoryLayout<Float>.size, index: 0)
+        encoder.setFragmentBytes(&paint, length: MemoryLayout<ReliefParams>.stride, index: 0)
 
         encoder.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: 6)
         encoder.endEncoding()

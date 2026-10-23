@@ -301,6 +301,19 @@ struct GeneralSettingsView: View {
                         Text("How strongly thick paint (Oil, Acrylic) is lit on the canvas and in exports. 0 shows it flat.")
                             .font(.system(size: 10))
                             .foregroundColor(.secondary)
+                        HStack {
+                            Text("Finish")
+                                .font(.system(size: 11, weight: .medium))
+                                .frame(width: 60, alignment: .leading)
+                            Slider(value: $prefs.paintGloss, in: 0...1)
+                            Text(prefs.paintGloss < 0.33 ? "Matte" : prefs.paintGloss < 0.67 ? "Satin" : "Gloss")
+                                .font(.system(size: 11, design: .monospaced))
+                                .foregroundColor(.secondary)
+                                .frame(width: 50, alignment: .trailing)
+                        }
+                        Text("A broad sheen on matte paint, a tight glint on glossy.")
+                            .font(.system(size: 10))
+                            .foregroundColor(.secondary)
                     }
                     .padding(4)
                 }

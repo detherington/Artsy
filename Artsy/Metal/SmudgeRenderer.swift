@@ -9,6 +9,7 @@ import simd
 /// they last for a stroke.
 final class SmudgeRenderer {
     private let context: MetalContext
+    private lazy var pusher = ImpastoPusher(context: context)
     /// Edge of the square carry textures. A larger dab is carried at lower resolution.
     static let carrySize = 256
 
@@ -98,6 +99,10 @@ final class SmudgeRenderer {
         )
         let fraction = smudge.depositFraction(spacing: settings.spacing)
         let carrySize = Float(Self.carrySize)
+        // A knife: thick paint under the blade is pushed out to its edges as well as dragged
+        let pushShare = height != nil && (settings.impasto?.squeeze ?? 0) > 0
+            ? ImpastoPusher.share(squeeze: settings.impasto!.squeeze, spacing: settings.spacing) : 0
+        let reachMargin: CGFloat = pushShare > 0 ? 1 + 2 * CGFloat(ImpastoPusher.band) : 1
 
         var drawn: [CGRect] = []
         for (index, mirror) in mirrors.enumerated() {
@@ -109,7 +114,8 @@ final class SmudgeRenderer {
                                            y: dab.center.y + CGFloat(sin(dab.angle))))
                 let angle = Float(atan2(ahead.y - center.y, ahead.x - center.x))
                 let reach = CGFloat(dab.size * max(dab.aspect, 1)) * 0.7072
-                bounds = bounds.union(CGRect(x: center.x - reach, y: center.y - reach, width: reach * 2, height: reach * 2))
+                let touched = reach * reachMargin
+                bounds = bounds.union(CGRect(x: center.x - touched, y: center.y - touched, width: touched * 2, height: touched * 2))
 
                 // 1. Lay down what the brush carries. Nothing to lay on the first dab. The
                 // fragment reads the layer from a copy of the patch under the dab, since a
@@ -153,7 +159,15 @@ final class SmudgeRenderer {
                     }
                 }
 
-                // 2. Pick up what is under the dab now. Smearing keeps the paint's layout, a
+                // 2. Push the thick paint under the blade out to its edges, before the pickup
+                // sees what is left.
+                if pushShare > 0, let height {
+                    pusher.push(dab, press: dab.opacity * opacityScale, squeeze: pushShare, brush: brush,
+                                tip: tipTexture, tipIsTexture: tipIsTexture, mirrors: [mirror], height: height,
+                                commandBuffer: commandBuffer, canvasSize: canvasSize)
+                }
+
+                // 3. Pick up what is under the dab now. Smearing keeps the paint's layout, a
                 // texel per canvas pixel; dulling keeps one colour, so two texels will do.
                 let texels: SIMD2<Float> = smudge.mode == .dulling
                     ? SIMD2(2, 2)

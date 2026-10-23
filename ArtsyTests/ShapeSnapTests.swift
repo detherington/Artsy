@@ -215,7 +215,10 @@ final class ShapeSnapTests: XCTestCase {
         let middle = CGPoint(x: (a.x + b.x) / 2, y: (a.y + b.y) / 2)
         XCTAssertGreaterThan(heights.at(x: Int(middle.x), y: Int(middle.y)).x, 0.1, "thick along the line")
         for p in strays {
-            XCTAssertEqual(heights.at(x: Int(p.x), y: Int(p.y)).x, 0, accuracy: 0.001, "none where the hand wandered")
+            // Thick paint pushes a little of itself out beyond the brush's edge, so a trace of
+            // the snapped line's own paint can reach a stray; the rough stroke's would be a
+            // hundred times that
+            XCTAssertEqual(heights.at(x: Int(p.x), y: Int(p.y)).x, 0, accuracy: 0.01, "none where the hand wandered")
         }
         harness.viewModel.performUndo(renderer: harness.renderer)
         XCTAssertEqual(harness.heights(of: harness.drawingLayer).at(x: Int(middle.x), y: Int(middle.y)).x, 0, accuracy: 0.001)

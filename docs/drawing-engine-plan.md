@@ -378,7 +378,8 @@ as it goes and run out of, picking up what it crosses and coming back to its own
 Oil and Acrylic are loaded; the rest are as they were.
 
 - **The carry.** A stamp brush with `StampSettings.load` has a carry texture per
-  symmetry copy, mapped to the dab as a smudge's is (`LoadedBrushRenderer`): a texel per
+  symmetry copy, mapped to the dab as a smudge's is (`PaintRenderer`, named
+  `LoadedBrushRenderer` until step 8 gave it thick paint to do as well): a texel per
   canvas pixel of the brush at its full size, up to 256², holding premultiplied colour
   whose alpha is how much paint that bristle has. Filled at pen-down with the brush
   colour at its *load*, less along some bristles by *uneven bristles* (a profile across
@@ -419,6 +420,79 @@ its own colour that drifts by a step in 255 along a stroke (the merge carries it
 across; the carry does not). Watercolor is not loaded yet; that waits for wetness (step 3
 of the research). The look is tuned from test renders and the preview pad: the amount
 Oil picks up, and how fast it comes back, want a pen.
+
+### 8. Thick paint pushed, and lit like a surface (medium) — done, untested by hand
+
+The second step of `paint-media-research.md`. Until now thick paint only added up: every
+dab put its height on top of whatever was there, and the display lit the result with one
+lamp. Now a dab pushes the paint it presses into, bristles cut grooves, the light has a
+sky and crevices, and there is a knife.
+
+- **The push.** Per dab, on the layer's height map (`impastoPushKernel`, run by
+  `ImpastoPusher` from a copy of the patch under the dab, as a smudge's deposit reads a
+  copy): inside the tip a share of the height is taken away; in a band outside the tip,
+  three tenths of the dab's size wide, it is put back along the ray from the dab's centre,
+  falling off across the band, with the sums arranged so the band gains what the tip
+  lost (`testPushingMovesPaintWithoutMakingOrLosingIt`: the same total within 15%). More
+  goes ahead of the brush than behind (1.6 to 0.4), so a stroke drives a wave before it
+  and ends in a ridge past its last dab, and a second stroke ploughs a furrow through the
+  first with the ploughed paint piled beside it. The share is the brush's *squeeze*, per
+  diameter of path like the loaded brush's shares (`ImpastoPusher.share(squeeze:spacing:)`
+  takes it to a share per dab), so the spacing does not change the result; it also scales
+  with the dab's opacity, so a light touch pushes less. A stroke pushes its own paint too:
+  what the dab before laid, the next one presses into, which is where the raised edges
+  of a thick stroke come from. Oil squeezes half per diameter, Acrylic 35%.
+- **Grooves.** The height stamp cuts the bristle grain into what a dab leaves,
+  attached to the stroke the way stroke grain is (`in.along`), so the grooves run with
+  the stroke and bend with it, and for Oil and Acrylic, whose colour is grained the same
+  way, they line up with the colour streaks. The bristle grain is bound for the height
+  pass whatever the brush's own grain. Oil 40%, Acrylic 30%.
+- **The light.** The display's relief lighting now has a key light from the top left and
+  the sky all round (a slope facing away from the key is shaded, not black), occlusion
+  where the paint is higher all round — looked for a texel out and four out, so a furrow
+  darkens and so does the paper at the foot of a thick stroke — and a finish: the
+  specular exponent runs from 6 (a broad faint sheen over everything, matte) to 64 (a
+  tight bright glint on the slopes that face the light, gloss) with the Finish slider in
+  Settings next to Relief, exports the same (`AppPreferences.paintGloss`). The research
+  asked for roughness per brush; one finish for the painting is enough for now, and a
+  per-brush one can come when the wet step gives paint a state. Cost: the display pass on
+  the 8192² canvas fitted to the window is 1.14 ms with relief, from about 1.
+- **The knife.** A built-in Palette Knife: a `knife` tip (a thin bar across the stroke,
+  nearly the dab's width, hard-edged), a smearing smudge with no colour of its own, and
+  an impasto that lays nothing and squeezes 90% per diameter. The smudge drags the paint
+  and its thickness along as it did; the push, run by the smudge renderer after each
+  deposit and before the pickup, scrapes what is under the blade out to its ends. In the
+  preview pad it smears the bands; on thick paint it leaves a clean path with the paint
+  piled at the edges (`testTheKnifePushesPaintAboutWithoutAddingAny`).
+- **One renderer for paint.** `LoadedBrushRenderer` became `PaintRenderer`: any stamp
+  brush with a load or an impasto (not a smudge, not an eraser) sends its settled dabs
+  through it, in the quarter-diameter groups the carry needs. Per group: the colour from
+  the carry (a loaded brush), then dab by dab the push and the height. Dab by dab matters:
+  the first version pushed a whole group and then laid it, so a group a frame cut in two
+  came out different from one it did not (`EveryBrushTests` caught it on Oil at 0.024);
+  now each dab presses into the one before whatever the grouping.
+- **Dabs know their heading.** `Dab.heading` is the stroke's direction at the dab, set by
+  the placer; the tip's angle is not it (a tip that does not follow the direction, or one
+  turned by tilt, still pushes paint the way the hand is going). Mirrors turn it as they
+  turn the tip.
+- **Cost.** A fast Oil stroke on 8192² with twelve layers: 4.6 ms a frame from 4.2
+  (`testLargeCanvasCosts`), the push being a blit and a dispatch per dab per copy over the
+  dab and its band. Undo and the pen-up are as they were.
+- **Tests** (`ThickPaintTests`): a furrow and a ridge from a crossing stroke, against the
+  same strokes without squeeze; the ridge past a stroke's end; paint moved not made;
+  grooves across the stroke; the paper at the foot of a stroke in its shadow; gloss glints
+  harder than matte and matte has the broader sheen (measured over the paint alone, on a
+  dark colour so nothing clips); the knife scrapes and piles without adding paint. The
+  goldens for the relief scene and the everything document were re-recorded after
+  viewing (the differences lie within the Oil and Acrylic strokes), and the knife's
+  preview tile recorded fresh.
+
+What it taught: four neighbour samples at one texel cannot see the foot of a ridge —
+occlusion needs a wider look than the slope does; and a glint with a high exponent is
+rarely hit exactly by a discrete height field, so "glossy" has to stop at an exponent
+the slopes can reach (96 showed almost nothing; 64 shows). The push is subtle at the
+default relief of 1: the slider goes to 2, and the squeeze, grooves and finish want a
+pen, as the loaded brush's shares do.
 
 ## At the limits: 8192² with 12 layers
 
