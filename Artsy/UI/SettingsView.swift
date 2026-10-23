@@ -318,6 +318,25 @@ struct GeneralSettingsView: View {
                     .padding(4)
                 }
 
+                GroupBox("Wet Paint") {
+                    VStack(alignment: .leading, spacing: 8) {
+                        HStack {
+                            Text("Drying time")
+                                .font(.system(size: 11, weight: .medium))
+                                .frame(width: 80, alignment: .leading)
+                            Slider(value: $prefs.dryingTime, in: 5...600)
+                            Text(prefs.dryingTime < 90 ? "\(Int(prefs.dryingTime.rounded())) s" : "\(Int((prefs.dryingTime / 60).rounded())) min")
+                                .font(.system(size: 11, design: .monospaced))
+                                .foregroundColor(.secondary)
+                                .frame(width: 50, alignment: .trailing)
+                        }
+                        Text("How long Oil and Watercolor stay wet. A brush crossing wet paint picks it up, and a wash into wet paint blends and feathers; dry paint is glazed or covered. Edit → Dry Layer dries a layer at once, and View → Show Wet Paint shows what is still wet.")
+                            .font(.system(size: 10))
+                            .foregroundColor(.secondary)
+                    }
+                    .padding(4)
+                }
+
                 GroupBox("Default Brush") {
                     VStack(alignment: .leading, spacing: 12) {
                         HStack {

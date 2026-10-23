@@ -697,6 +697,7 @@ class CanvasView: MTKView {
             if let height = layer.heightTexture {
                 renderer.textureManager.clearTexture(height, commandBuffer: cmdBuf)
             }
+            layer.dry()
             cmdBuf.commit()
             // Don't wait — the next frame picks up the cleared texture.
         }

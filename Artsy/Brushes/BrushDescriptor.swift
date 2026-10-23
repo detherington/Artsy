@@ -38,6 +38,10 @@ struct BrushDescriptor: Codable, Identifiable, Equatable {
     var mixing: PaintMixing = .light
     /// Set for a brush whose strokes dry as a wash on paper; nil for ordinary paint.
     var wet: Wet? = nil
+    /// How long the paint stays wet once laid, as a share of the drying time in Settings:
+    /// 0 dries at once. While it is wet, a loaded brush crossing it picks it up, and a wash
+    /// laid into it blends and feathers instead of glazing over it.
+    var wetness: Float = 0
 
     /// A stroke that dries as a wash: how a watercolour behaves once it is on the paper.
     struct Wet: Codable, Equatable {
@@ -48,11 +52,32 @@ struct BrushDescriptor: Codable, Identifiable, Equatable {
         var granulation: Float = 0.5
         /// Paper texels per canvas pixel.
         var grainScale: Float = 1
+        /// How much the wash, laid into paint that is still wet, blends with it instead of
+        /// glazing over it, 0...1: its colour mixes in as pigment and its edge stays soft
+        /// where the paper is wet; over dry paint it glazes with a crisp edge as usual.
+        var blendsWhenWet: Float = 1
+
+        init(edges: Float = 0.6, granulation: Float = 0.5, grainScale: Float = 1, blendsWhenWet: Float = 1) {
+            self.edges = edges
+            self.granulation = granulation
+            self.grainScale = grainScale
+            self.blendsWhenWet = blendsWhenWet
+        }
+
+        private enum CodingKeys: String, CodingKey { case edges, granulation, grainScale, blendsWhenWet }
+
+        init(from decoder: Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            edges = try c.decodeIfPresent(Float.self, forKey: .edges) ?? 0.6
+            granulation = try c.decodeIfPresent(Float.self, forKey: .granulation) ?? 0.5
+            grainScale = try c.decodeIfPresent(Float.self, forKey: .grainScale) ?? 1
+            blendsWhenWet = try c.decodeIfPresent(Float.self, forKey: .blendsWhenWet) ?? 1
+        }
     }
 
     enum CodingKeys: String, CodingKey {
         case id, name, category, hardness, baseSize, pressureDynamics, opacity, smoothing, fixedNibAngle
-        case rendering, tiltDynamics, velocityDynamics, mixing, wet
+        case rendering, tiltDynamics, velocityDynamics, mixing, wet, wetness
     }
 }
 
@@ -105,6 +130,7 @@ extension BrushDescriptor {
             mixing = try legacy.decodeIfPresent(Bool.self, forKey: .mixesPigments) == true ? .pigment : .light
         }
         wet = try c.decodeIfPresent(Wet.self, forKey: .wet)
+        wetness = Self.unit(try c.decodeIfPresent(Float.self, forKey: .wetness) ?? 0)
     }
 }
 
@@ -477,7 +503,9 @@ extension BrushDescriptor {
         // Fast strokes are drier
         velocityDynamics: VelocityDynamics(referenceSpeed: 1500, sizeScale: 0.85, opacityScale: 0.6),
         mixing: .glaze,
-        wet: Wet(edges: 0.6, granulation: 0.5, grainScale: 1)
+        wet: Wet(edges: 0.6, granulation: 0.5, grainScale: 1, blendsWhenWet: 1),
+        // Stays wet the whole drying time: a second wash into it blends and feathers
+        wetness: 1
     )
 
     static let acrylic = BrushDescriptor(
@@ -502,7 +530,9 @@ extension BrushDescriptor {
             grain: .init(mode: .multiply, texture: .bristles, attachment: .stroke, scale: 1.2, depth: 0.55),
             opacityJitter: 0.1, followsDirection: true
         )),
-        mixing: .pigment
+        mixing: .pigment,
+        // Dries fast: wet for well under half the drying time
+        wetness: 0.4
     )
 
     static let technicalPen = BrushDescriptor(
@@ -632,7 +662,9 @@ extension BrushDescriptor {
             grain: .init(mode: .multiply, texture: .bristles, attachment: .stroke, scale: 1.0, depth: 0.7),
             sizeJitter: 0.05, opacityJitter: 0.1, followsDirection: true
         )),
-        mixing: .pigment
+        mixing: .pigment,
+        // Stays wet the whole drying time: a brush crossing it picks it up until then
+        wetness: 1
     )
 
     static let airbrush = BrushDescriptor(

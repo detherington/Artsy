@@ -193,6 +193,14 @@ frames the display would otherwise skip, and stops when nothing is wet; a "dry t
 layer" button and a drying-time setting. Saved in the document? No: a document opens
 dry.
 
+**Done** (`drawing-engine-plan.md`, step 9). What changed from the plan: the wet map
+holds the time until which paint stays wet rather than an amount, so there is no drying
+pass at all — wetness is read off the clock wherever it is needed, and idle frames stay
+idle. Re-wet became "blends when wet" on the wash: how much a wash laid into wet paint
+mixes as pigment and keeps its edge soft, instead of glazing. Oil's working time is its
+wetness times the drying time; Acrylic's is shorter. Smudge and the knife still move
+dry paint, on purpose. A water brush and edge darkening on drying wait for step 4.
+
 ### 4. Water that moves (large)
 
 The Curtis model, bounded: shallow water (height, velocity) and pigment concentration

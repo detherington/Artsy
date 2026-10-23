@@ -301,6 +301,7 @@ struct BrushStudioView: View {
 
     private var wetSection: some View {
         Section("Wet") {
+            slider("Stays wet", model.binding(\.wetness), in: 0...1, percent: true)
             Toggle("Dries as a wash: crisp edges where the pigment gathers", isOn: Binding(
                 get: { model.brush.wet != nil },
                 set: { on in model.apply { $0.wet = on ? BrushDescriptor.Wet() : nil } }
@@ -309,6 +310,7 @@ struct BrushStudioView: View {
                 slider("Edges", wetBinding(\.edges, wet), in: 0...1, percent: true)
                 slider("Granulation", wetBinding(\.granulation, wet), in: 0...1, percent: true)
                 slider("Paper scale", wetBinding(\.grainScale, wet), in: 0.2...4, unit: "×")
+                slider("Blends when wet", wetBinding(\.blendsWhenWet, wet), in: 0...1, percent: true)
             }
         }
     }

@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		08CEC73C9C2CFFB22535AC10 /* WetDryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A264135A219CBD8F095C7728 /* WetDryTests.swift */; };
 		11FF17D167E255BBA2CE55C3 /* ThickPaintTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8B475347F7AFA1FA7BFDE240 /* ThickPaintTests.swift */; };
 		21E40D20D4828AC77F525E8C /* PaintRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 85E9B1C7AC5ADBED86BB86FF /* PaintRenderer.swift */; };
 		CA2C7706E9ED42ED92F18BA7 /* LoadedBrushTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 70F6185F614C4D7996976002 /* LoadedBrushTests.swift */; };
@@ -133,6 +134,7 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		A264135A219CBD8F095C7728 /* WetDryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WetDryTests.swift; sourceTree = "<group>"; };
 		8B475347F7AFA1FA7BFDE240 /* ThickPaintTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThickPaintTests.swift; sourceTree = "<group>"; };
 		85E9B1C7AC5ADBED86BB86FF /* PaintRenderer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PaintRenderer.swift; sourceTree = "<group>"; };
 		70F6185F614C4D7996976002 /* LoadedBrushTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoadedBrushTests.swift; sourceTree = "<group>"; };
@@ -404,6 +406,7 @@
 		B48AF066E85C8962CFFD499C /* ArtsyTests */ = {
 			isa = PBXGroup;
 			children = (
+				A264135A219CBD8F095C7728 /* WetDryTests.swift */,
 				8B475347F7AFA1FA7BFDE240 /* ThickPaintTests.swift */,
 				70F6185F614C4D7996976002 /* LoadedBrushTests.swift */,
 				3220593D4128419B84CA12FD /* ShellTests.swift */,
@@ -747,6 +750,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				08CEC73C9C2CFFB22535AC10 /* WetDryTests.swift in Sources */,
 				11FF17D167E255BBA2CE55C3 /* ThickPaintTests.swift in Sources */,
 				CA2C7706E9ED42ED92F18BA7 /* LoadedBrushTests.swift in Sources */,
 				1CBAE54692034631B03847B4 /* ShellTests.swift in Sources */,
