@@ -170,6 +170,17 @@ drawn dab by dab, or the result depends on how the dabs fell into frames.
   same.
 - **The knife.** A brush that lays nothing and pushes a lot: load 0, displacement 1.
 
+**Done** (`drawing-engine-plan.md`, step 8). What changed from the plan: the push is
+per dab from a copy of the patch under it, with the band outside the tip gaining
+exactly what the tip lost, biased ahead; the share is per diameter of path, like the
+loaded brush's, so spacing does not change it. Grooves come from the bristle grain
+attached to the stroke rather than a profile of their own, so they line up with the
+colour streaks. The finish is one slider for the painting (matte to gloss) rather than
+a roughness per brush; that can follow once wetness gives paint a state. Two lessons:
+occlusion needs to look a few texels out, not one, to shade the foot of a ridge; and a
+glossy exponent the height field's slopes never hit exactly shows nothing — 64 is as
+tight as it can usefully go.
+
 ### 3. Wet and dry (medium)
 
 A wetness map per layer (one more half-float texture, like the height map), written by

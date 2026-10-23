@@ -153,13 +153,13 @@ final class EngineHarness {
 
     /// Render a frame through the display shader itself, one canvas pixel per output pixel:
     /// the composite over white with thick paint lit. 8-bit, so values are multiples of 1/255.
-    func shown(relief: Float = 1, zoom: CGFloat = 1) -> PixelGrid {
-        Self.shown(by: renderer, relief: relief, zoom: zoom)
+    func shown(relief: Float = 1, gloss: Float = 0.5, zoom: CGFloat = 1) -> PixelGrid {
+        Self.shown(by: renderer, relief: relief, gloss: gloss, zoom: zoom)
     }
 
     /// `shown(relief:)` for any renderer — a loaded document's, say.
     /// - Parameter zoom: the view's zoom; below 1 the picture comes back that much smaller.
-    static func shown(by renderer: CanvasRenderer, relief: Float = 1, zoom: CGFloat = 1) -> PixelGrid {
+    static func shown(by renderer: CanvasRenderer, relief: Float = 1, gloss: Float = 0.5, zoom: CGFloat = 1) -> PixelGrid {
         let context = renderer.context
         let width = Int((renderer.canvasSize.width * zoom).rounded()), height = Int((renderer.canvasSize.height * zoom).rounded())
         let desc = MTLTextureDescriptor.texture2DDescriptor(
@@ -175,7 +175,7 @@ final class EngineHarness {
         transform.scale = zoom
         transform.offset = CGPoint(x: -Double(width) / 2, y: -Double(height) / 2)
         renderer.compositor.renderToScreen(
-            composite: renderer.compositeTexture, height: renderer.compositeHeightTexture, relief: relief,
+            composite: renderer.compositeTexture, height: renderer.compositeHeightTexture, relief: relief, gloss: gloss,
             drawable: target, transform: transform, viewSize: CGSize(width: width, height: height),
             backgroundColor: (1, 1, 1), commandBuffer: commandBuffer
         )

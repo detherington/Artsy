@@ -102,6 +102,7 @@ struct BrushStudioView: View {
                     Text("Round").tag(StampSettings.Tip.round)
                     Text("Chalk").tag(StampSettings.Tip.chalk)
                     Text("Bristle").tag(StampSettings.Tip.bristle)
+                    Text("Knife").tag(StampSettings.Tip.knife)
                     ForEach(library.textureNames, id: \.self) { name in
                         Text(name).tag(StampSettings.Tip.image(name))
                     }
@@ -157,7 +158,9 @@ struct BrushStudioView: View {
                 }
             ))
             if let impasto = model.stampSettings?.impasto {
-                slider("Thickness", impastoBinding(\.thickness, impasto), in: 0.01...0.5, percent: true)
+                slider("Thickness", impastoBinding(\.thickness, impasto), in: 0...0.5, percent: true)
+                slider("Pushes paint", impastoBinding(\.squeeze, impasto), in: 0...1, percent: true)
+                slider("Grooves", impastoBinding(\.grooves, impasto), in: 0...1, percent: true)
             }
         }
     }
@@ -196,6 +199,7 @@ struct BrushStudioView: View {
                 Picker("Tip", selection: secondTipBinding(\.tip, second)) {
                     Text("Chalk").tag(StampSettings.Tip.chalk)
                     Text("Bristle").tag(StampSettings.Tip.bristle)
+                    Text("Knife").tag(StampSettings.Tip.knife)
                     ForEach(library.textureNames, id: \.self) { name in
                         Text(name).tag(StampSettings.Tip.image(name))
                     }

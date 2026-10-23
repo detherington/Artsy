@@ -145,6 +145,7 @@ struct StampParams {
     float  thickness;        // height one dab at full coverage adds (impasto)
     int    usesCarry;        // 1: the dab's colour and amount come from the carry texture
     float2 carryTexels;      // texels of the carry in use
+    float  grooves;          // grooves along the stroke cut into the height a dab leaves, 0...1
 };
 
 /// The paint a loaded brush's carry holds under this fragment: premultiplied, its alpha
@@ -261,6 +262,7 @@ fragment float4 stampHeightFragment(
     texture2d<float> grain [[texture(1)]],
     texture2d<float> secondTip [[texture(2)]],
     texture2d<float> carry [[texture(3)]],
+    texture2d<float> bristles [[texture(4)]],
     sampler tipSampler [[sampler(0)]],
     sampler grainSampler [[sampler(1)]],
     sampler carrySampler [[sampler(2)]],
@@ -269,7 +271,12 @@ fragment float4 stampHeightFragment(
     float alpha = stampCoverage(in, params, tip, grain, secondTip, tipSampler, grainSampler);
     // Less paint on the bristle, less thickness left behind
     float load = params.usesCarry != 0 ? carriedPaint(in.uv, params, carry, carrySampler).a : 1.0;
-    return float4(alpha * params.thickness * load, 0.0, 0.0, 1.0);
+    // The bristles leave grooves along the stroke, cut into the height: the bristle grain,
+    // attached to the stroke, so they run with it and bend with it, and line up with the
+    // bristle streaks a brush grained the same way has in its colour
+    float groove = params.grooves > 0.0
+        ? 1.0 - params.grooves * (1.0 - bristles.sample(grainSampler, in.along / float(bristles.get_width())).r) : 1.0;
+    return float4(alpha * params.thickness * load * groove, 0.0, 0.0, 1.0);
 }
 
 // --- Smudge ---
@@ -746,13 +753,19 @@ fragment float4 heightAccumulateFragment(
     return float4(height.sample(s, in.texCoord).r * layerOpacity, 0.0, 0.0, 1.0);
 }
 
+struct ReliefParams {
+    float relief;   // how strongly thickness is lit; 0 shows it flat
+    float gloss;    // the paint's finish, 0 matte to 1 glossy
+};
+
 fragment float4 displayWhiteFragment(
     CompositeVertexOut in [[stage_in]],
     texture2d<float> composite [[texture(0)]],
     texture2d<float> height [[texture(1)]],
     sampler s [[sampler(0)]],
-    constant float &relief [[buffer(0)]]
+    constant ReliefParams &paint [[buffer(0)]]
 ) {
+    float relief = paint.relief;
     float4 color = composite.sample(s, in.texCoord);
     // The composite is premultiplied
     float3 result = color.rgb + float3(1.0) * (1.0 - color.a);
@@ -781,9 +794,24 @@ fragment float4 displayWhiteFragment(
         float3 n = normalize(float3((hl - hr) * 3.0 * relief / step, (hd - hu) * 3.0 * relief / step, 1.0));
         float3 l = normalize(float3(-0.55, 0.6, 0.6));
         float3 halfway = normalize(l + float3(0.0, 0.0, 1.0));
+        // A key light from the top left, and the sky all round, so a slope facing away from
+        // the key is shaded, not black
         float diffuse = max(0.0, dot(n, l)) / l.z;    // 1 where the paint is flat
-        float glint = pow(max(0.0, dot(n, halfway)), 32.0) * 0.35 * saturate(h * 4.0) * relief;
-        result = result * (0.3 + 0.7 * diffuse) + glint;
+        float sky = 0.5 + 0.5 * n.z;
+        // Crevices: paint higher all round leaves less of the sky, so a furrow and the foot
+        // of a ridge darken. Looked for close by and a few pixels out, so the paper at the
+        // foot of a thick stroke is in its shadow too.
+        float2 far = 4.0 * texel;
+        float farAround = height.sample(s, in.texCoord + float2(-far.x, 0.0)).r + height.sample(s, in.texCoord + float2(far.x, 0.0)).r
+                        + height.sample(s, in.texCoord + float2(0.0, -far.y)).r + height.sample(s, in.texCoord + float2(0.0, far.y)).r;
+        float dip = max(0.0, (hl + hr + hu + hd) * 0.25 - h);
+        float dipFar = max(0.0, (1.0 - exp(-farAround * 0.25)) - h);
+        float occlusion = 1.0 - 0.5 * saturate((dip * 6.0 + dipFar * 1.5) * relief);
+        float shade = (0.3 + 0.7 * diffuse) * (0.7 + 0.3 * sky) * occlusion;
+        // The finish: a tight bright glint on glossy paint, a broad faint sheen on matte
+        float exponent = mix(6.0, 64.0, paint.gloss);
+        float glint = pow(max(0.0, dot(n, halfway)), exponent) * mix(0.1, 0.45, paint.gloss) * saturate(h * 4.0) * relief;
+        result = result * shade + glint;
     }
     return float4(saturate(result), 1.0);
 }
@@ -910,4 +938,82 @@ kernel void loadedBrushTransferKernel(
     float4 own = premultiplied(p.color.rgb, p.color.a);
     paint = p.mixPigments != 0 ? pigmentLerp(paint, own, p.resaturation) : mix(paint, own, p.resaturation);
     carry.write(paint, gid);
+}
+
+// --- Thick paint pushed ---
+//
+// A dab pressed into paint already there pushes some of it out: to the rim of the dab, and
+// more ahead of it than behind, so a stroke drives a wave of paint before it that it leaves
+// as a ridge where it stops, and a second stroke ploughs a furrow through the first. Per
+// dab, on the layer's height map, from a copy of the patch under the dab: inside the tip a
+// share of the height is taken away; in a band just outside it, what was taken along the
+// ray from the dab's centre is put down, falling off with distance from the tip. The sums
+// are arranged so that what the band gains is what the tip lost.
+
+struct ImpastoPushParams {
+    float2 center;         // the dab, in canvas pixels
+    float  size;
+    float  angle;
+    float  aspect;
+    float2 canvasSize;
+    uint2  patchOrigin;    // where the copy of the height map starts, in layer pixels (top-left origin)
+    uint2  patchSize;
+    float  hardness;
+    int    tipIsTexture;
+    float  press;          // how firmly the dab is pressed: its opacity
+    float  squeeze;        // share of the paint under the tip pushed out
+    float2 heading;        // unit vector of the stroke's motion, canvas axes
+    float  forward;        // how much more goes ahead than behind, 0...1
+    float  band;           // the band's width outside the tip, as a fraction of the dab's size
+};
+
+kernel void impastoPushKernel(
+    texture2d<float, access::write> height [[texture(0)]],
+    texture2d<float> before [[texture(1)]],
+    texture2d<float> tip [[texture(2)]],
+    sampler tipSampler [[sampler(0)]],
+    constant ImpastoPushParams &p [[buffer(0)]],
+    uint2 gid [[thread_position_in_grid]]
+) {
+    if (gid.x >= p.patchSize.x || gid.y >= p.patchSize.y) return;
+    uint2 pixel = p.patchOrigin + gid;
+    float2 canvas = float2(float(pixel.x) + 0.5, p.canvasSize.y - (float(pixel.y) + 0.5));
+    // Into the dab's own space: a unit square, the tip the disc of radius a half within it
+    float2 d = canvas - p.center;
+    float c = cos(p.angle), sn = sin(p.angle);
+    float2 local = float2(d.x * c + d.y * sn, -d.x * sn + d.y * c) / float2(p.size * p.aspect, p.size);
+    float2 uv = local + 0.5;
+    float h = before.read(gid).r;
+    float inside = (all(uv >= 0.0) && all(uv <= 1.0))
+        ? tipCoverageFlat(uv, p.hardness, p.tipIsTexture, tip, tipSampler) : 0.0;
+    float share = p.squeeze * p.press;
+    float lost = h * share * inside;
+
+    // Gained: along the ray from the centre through here, what the texels under the tip lost
+    float gained = 0.0;
+    const float edge = 0.5;
+    float rho = length(local);
+    if (rho >= edge && rho < edge + p.band) {
+        float2 dir = local / max(rho, 1e-4);
+        float falloff = 1.0 - saturate((rho - edge) / p.band);
+        float2 dirCanvas = normalize(float2(dir.x * c - dir.y * sn, dir.x * sn + dir.y * c));
+        float bias = 1.0 + p.forward * dot(dirCanvas, p.heading);
+        int steps = int(clamp(p.size * 0.5, 4.0, 64.0));
+        float sum = 0.0;
+        for (int i = 0; i < steps; i++) {
+            float s = (float(i) + 0.5) / float(steps) * edge;
+            float2 q = dir * s;
+            float cover = tipCoverageFlat(q + 0.5, p.hardness, p.tipIsTexture, tip, tipSampler);
+            if (cover <= 0.0) continue;
+            float2 stretched = q * float2(p.size * p.aspect, p.size);
+            float2 qCanvas = p.center + float2(stretched.x * c - stretched.y * sn, stretched.x * sn + stretched.y * c);
+            float2 texel = float2(qCanvas.x, p.canvasSize.y - qCanvas.y) - float2(p.patchOrigin);
+            float hs = before.read(uint2(clamp(texel, float2(0.0), float2(p.patchSize) - 1.0))).r;
+            // A step stands for a ring of texels at radius s; its paint, for the band's ring here
+            sum += hs * share * cover * s * (edge / float(steps));
+        }
+        // Spread over the band's width, a triangle in profile
+        gained = falloff * bias * sum / ((edge + p.band / 3.0) * p.band * 0.5);
+    }
+    height.write(float4(max(0.0, h - lost + gained), 0.0, 0.0, 1.0), pixel);
 }

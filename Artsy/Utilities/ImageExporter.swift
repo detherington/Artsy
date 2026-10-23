@@ -29,7 +29,8 @@ final class ImageExporter {
         transform.offset = CGPoint(x: -Double(width) / 2, y: -Double(height) / 2)
         renderer.compositor.renderToScreen(
             composite: renderer.compositeTexture, height: renderer.compositeHeightTexture,
-            relief: Float(AppPreferences.shared.paintRelief), drawable: target, transform: transform,
+            relief: Float(AppPreferences.shared.paintRelief), gloss: Float(AppPreferences.shared.paintGloss),
+            drawable: target, transform: transform,
             viewSize: CGSize(width: width, height: height), backgroundColor: (1, 1, 1), commandBuffer: commandBuffer
         )
         #if !arch(arm64)

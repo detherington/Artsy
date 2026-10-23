@@ -65,6 +65,7 @@ final class BrushTextureLibrary {
         _ = bristleGrain
         _ = tipTexture(for: .chalk)
         _ = tipTexture(for: .bristle)
+        _ = tipTexture(for: .knife)
     }
 
     /// The image for a tip, or nil for tips the shader draws itself.
@@ -72,9 +73,9 @@ final class BrushTextureLibrary {
         switch tip {
         case .round:
             return nil
-        case .chalk, .bristle:
+        case .chalk, .bristle, .knife:
             if let cached = tips[tip] { return cached }
-            let pixels = tip == .chalk ? Self.chalkTipPixels() : Self.bristleTipPixels()
+            let pixels = tip == .chalk ? Self.chalkTipPixels() : tip == .bristle ? Self.bristleTipPixels() : Self.knifeTipPixels()
             let texture = makeTexture(size: Self.tipSize, pixels: pixels)
             tips[tip] = texture
             return texture
@@ -275,6 +276,25 @@ final class BrushTextureLibrary {
                 let edge = 0.72 + (rim - 0.5) * 0.5
                 let disc = 1 - min(1, max(0, (dist - (edge - 0.08)) / 0.08))
                 pixels[y * size + x] = UInt8((disc * 255).rounded())
+            }
+        }
+        return pixels
+    }
+
+    /// A palette knife's blade where it presses the paint: a thin bar across the stroke, nearly
+    /// the width of the dab, with hard edges.
+    static func knifeTipPixels() -> [UInt8] {
+        let size = tipSize
+        let pixel = 1 / Float(size)
+        func ramp(_ x: Float, from a: Float, to b: Float) -> Float { min(1, max(0, (x - a) / (b - a))) }
+        var pixels = [UInt8](repeating: 0, count: size * size)
+        for y in 0..<size {
+            for x in 0..<size {
+                let u = (Float(x) + 0.5) / Float(size), v = (Float(y) + 0.5) / Float(size)
+                // Thin along the stroke (u), long across it (v), a pixel of antialiasing on each edge
+                let along = 1 - ramp(abs(u - 0.5), from: 0.08 - pixel, to: 0.08 + pixel)
+                let across = 1 - ramp(abs(v - 0.5), from: 0.47 - pixel, to: 0.47 + pixel)
+                pixels[y * size + x] = UInt8((along * across * 255).rounded())
             }
         }
         return pixels
