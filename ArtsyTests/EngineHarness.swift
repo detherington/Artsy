@@ -33,6 +33,10 @@ final class EngineHarness {
         viewModel.recorder = nil
         renderer = try CanvasRenderer(context: context, canvasSize: viewModel.canvasSize)
         renderer.viewModel = viewModel
+        // Time stands still unless a test moves it, so wet paint stays as wet as it was laid
+        let clock = clock
+        renderer.clock = { clock.now }
+        renderer.dryingTimeOverride = 60
         try renderer.setupLayerStack(for: viewModel)
         // Known settings, whatever the host app's saved preferences say.
         select(.hardRound)
@@ -42,6 +46,21 @@ final class EngineHarness {
         viewModel.smoothingMode = .none
         viewModel.symmetryMode = .off
         viewModel.easesStrokesWithoutPressure = true
+    }
+
+    // MARK: - Time
+
+    final class Clock { var now: TimeInterval = 1000 }
+    /// The renderer's clock. `advance(by:)` moves it; nothing else does.
+    let clock = Clock()
+
+    /// Let `seconds` pass, for paint to dry.
+    func advance(by seconds: TimeInterval) { clock.now += seconds }
+
+    /// How long paint stays wet at most, seconds (60 unless a test says otherwise).
+    var dryingTime: TimeInterval {
+        get { renderer.dryingTimeOverride ?? 60 }
+        set { renderer.dryingTimeOverride = newValue }
     }
 
     // MARK: - Setup
@@ -153,13 +172,14 @@ final class EngineHarness {
 
     /// Render a frame through the display shader itself, one canvas pixel per output pixel:
     /// the composite over white with thick paint lit. 8-bit, so values are multiples of 1/255.
-    func shown(relief: Float = 1, gloss: Float = 0.5, zoom: CGFloat = 1) -> PixelGrid {
-        Self.shown(by: renderer, relief: relief, gloss: gloss, zoom: zoom)
+    func shown(relief: Float = 1, gloss: Float = 0.5, zoom: CGFloat = 1, showWet: Bool = false) -> PixelGrid {
+        Self.shown(by: renderer, relief: relief, gloss: gloss, zoom: zoom, showWet: showWet)
     }
 
     /// `shown(relief:)` for any renderer — a loaded document's, say.
     /// - Parameter zoom: the view's zoom; below 1 the picture comes back that much smaller.
-    static func shown(by renderer: CanvasRenderer, relief: Float = 1, gloss: Float = 0.5, zoom: CGFloat = 1) -> PixelGrid {
+    static func shown(by renderer: CanvasRenderer, relief: Float = 1, gloss: Float = 0.5, zoom: CGFloat = 1,
+                      showWet: Bool = false) -> PixelGrid {
         let context = renderer.context
         let width = Int((renderer.canvasSize.width * zoom).rounded()), height = Int((renderer.canvasSize.height * zoom).rounded())
         let desc = MTLTextureDescriptor.texture2DDescriptor(
@@ -174,8 +194,13 @@ final class EngineHarness {
         var transform = CanvasTransform()
         transform.scale = zoom
         transform.offset = CGPoint(x: -Double(width) / 2, y: -Double(height) / 2)
+        let wet: CompositorPipeline.WetDisplay? = showWet
+            ? renderer.viewModel?.layerStack?.activeLayer.flatMap { layer in
+                layer.wetTexture.map { CompositorPipeline.WetDisplay(map: $0, now: Float(renderer.clock() - layer.wetEpoch),
+                                                                      dryingTime: Float(renderer.dryingTime)) }
+            } : nil
         renderer.compositor.renderToScreen(
-            composite: renderer.compositeTexture, height: renderer.compositeHeightTexture, relief: relief, gloss: gloss,
+            composite: renderer.compositeTexture, height: renderer.compositeHeightTexture, relief: relief, gloss: gloss, wet: wet,
             drawable: target, transform: transform, viewSize: CGSize(width: width, height: height),
             backgroundColor: (1, 1, 1), commandBuffer: commandBuffer
         )
@@ -195,14 +220,26 @@ final class EngineHarness {
 
     /// A layer's paint thickness, in each pixel's `.x`; zero everywhere for a layer without any.
     func heights(of layer: Layer) -> PixelGrid {
+        halfFloats(of: layer.heightTexture) { $0 }
+    }
+
+    /// How wet a layer's paint is now, 0...1 in each pixel's `.x`, as the engine reads it;
+    /// zero everywhere for a layer that has never been wet.
+    func wetness(of layer: Layer) -> PixelGrid {
+        let now = Float(clock.now - layer.wetEpoch), halfTime = Float(dryingTime) * 0.5
+        return halfFloats(of: layer.wetTexture) { until in min(1, max(0, (until - now) / halfTime)) }
+    }
+
+    /// A single-channel half-float texture's values, through `map`, in each pixel's `.x`.
+    private func halfFloats(of texture: MTLTexture?, map: (Float) -> Float) -> PixelGrid {
         var values = [Float](repeating: 0, count: width * height * 4)
-        if let heightMap = layer.heightTexture {
+        if let texture {
             let readable = try! renderer.textureManager.makeHeightTexture(
-                width: heightMap.width, height: heightMap.height, label: "HarnessHeights", shared: true
+                width: texture.width, height: texture.height, label: "HarnessHalfFloats", shared: true
             )
             let commandBuffer = context.commandQueue.makeCommandBuffer()!
             let blit = commandBuffer.makeBlitCommandEncoder()!
-            blit.copy(from: heightMap, to: readable)
+            blit.copy(from: texture, to: readable)
             blit.endEncoding()
             commandBuffer.commit()
             commandBuffer.waitUntilCompleted()
@@ -211,7 +248,7 @@ final class EngineHarness {
                 readable.getBytes($0.baseAddress!, bytesPerRow: width * 2,
                                   from: MTLRegionMake2D(0, 0, width, height), mipmapLevel: 0)
             }
-            for i in 0..<(width * height) { values[i * 4] = Float(Float16(bitPattern: half[i])) }
+            for i in 0..<(width * height) { values[i * 4] = map(Float(Float16(bitPattern: half[i]))) }
         }
         return PixelGrid(width: width, height: height, values: values)
     }

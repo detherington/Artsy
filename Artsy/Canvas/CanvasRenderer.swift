@@ -7,6 +7,12 @@ final class CanvasRenderer: NSObject, MTKViewDelegate {
     let strokeRenderer: StrokeRenderer
     let smudgeRenderer: SmudgeRenderer
     let paintRenderer: PaintRenderer
+    /// The time wet paint is laid and read at: system uptime, as the pen's events are
+    /// stamped. Tests set their own.
+    var clock: () -> TimeInterval = { ProcessInfo.processInfo.systemUptime }
+    /// How long paint stays wet at most, seconds: the setting, unless a test says otherwise.
+    var dryingTimeOverride: TimeInterval?
+    var dryingTime: TimeInterval { dryingTimeOverride ?? AppPreferences.shared.dryingTime }
     let compositor: CompositorPipeline
 
     // Canvas textures
@@ -164,6 +170,9 @@ final class CanvasRenderer: NSObject, MTKViewDelegate {
         let background: SIMD3<Double>
         let relief: Float
         let gloss: Float
+        /// Wet paint shown: a quarter-second tick while the layer is wet, so the sheen is
+        /// seen to dry; 0 otherwise
+        let wetTick: Int
     }
 
     func draw(in view: MTKView) {
@@ -194,7 +203,8 @@ final class CanvasRenderer: NSObject, MTKViewDelegate {
         let background = viewModel.canvasBackgroundColor
         let state = DisplayState(transform: viewModel.transform, viewSize: view.bounds.size, drawableSize: view.drawableSize,
                                  background: SIMD3(background.r, background.g, background.b),
-                                 relief: Float(AppPreferences.shared.paintRelief), gloss: Float(AppPreferences.shared.paintGloss))
+                                 relief: Float(AppPreferences.shared.paintRelief), gloss: Float(AppPreferences.shared.paintGloss),
+                                 wetTick: wetDisplay(at: now).map { _ in Int(now * 4) + 1 } ?? 0)
         if !viewModel.isDrawing, !lastFrameRecomposited, !displayIsStale, state == displayedState {
             lastFrameDisplayed = false
             if let line = frameTimings.skipped(at: now) { DiagnosticsLog.shared.note(.frame, line) }
@@ -223,6 +233,7 @@ final class CanvasRenderer: NSObject, MTKViewDelegate {
             height: compositeHeightTexture,
             relief: state.relief,
             gloss: state.gloss,
+            wet: wetDisplay(at: now),
             drawable: drawable.texture,
             transform: state.transform,
             viewSize: state.viewSize,
@@ -235,6 +246,13 @@ final class CanvasRenderer: NSObject, MTKViewDelegate {
         displayedState = state
         displayIsStale = false
         lastFrameDisplayed = true
+    }
+
+    /// The active layer's wet map for the display, while wet paint is shown and there is any.
+    private func wetDisplay(at now: TimeInterval) -> CompositorPipeline.WetDisplay? {
+        guard let viewModel, viewModel.showsWetPaint, let layer = viewModel.layerStack?.activeLayer,
+              let map = layer.wetTexture, layer.isWet(at: now) else { return nil }
+        return CompositorPipeline.WetDisplay(map: map, now: Float(now - layer.wetEpoch), dryingTime: Float(dryingTime))
     }
 
     /// What the frame just encoded did, for the log: how much of the composite it redid,
@@ -476,6 +494,7 @@ final class CanvasRenderer: NSObject, MTKViewDelegate {
                     dabs: dabs, brush: brush, settings: settings, load: settings.load, color: color, brushSize: viewModel.brushSize,
                     opacityScale: dabScale, mirrors: mirrors,
                     strokeTexture: activeStrokeTexture, layer: layer.texture,
+                    wet: layer.wetTexture, wetNow: Float(clock() - layer.wetEpoch), dryingTime: Float(dryingTime),
                     height: height, heightOpacity: brush.opacity * viewModel.brushOpacity,
                     strokeRenderer: renderer, commandBuffer: commandBuffer, canvasSize: size
                 ).compactMap(region(for:))
@@ -576,11 +595,18 @@ final class CanvasRenderer: NSObject, MTKViewDelegate {
             accumulates = true
             opacity = settings.accumulation == .wash ? brush.opacity * viewModel.brushOpacity : 1
         }
-        return CompositorPipeline.StrokeOverlay(
+        var overlay = CompositorPipeline.StrokeOverlay(
             committed: activeStrokeTexture, tail: strokeTailTexture,
             opacity: opacity, erase: brush.category == .utility, accumulates: accumulates,
             mixing: brush.mixing, wet: brush.category == .utility ? nil : brush.wet
         )
+        // A wash meets the paint under it wet or dry
+        if let layer = viewModel.layerStack?.activeLayer, let wetMap = layer.wetTexture {
+            overlay.wetMap = wetMap
+            overlay.wetNow = Float(clock() - layer.wetEpoch)
+            overlay.dryingTime = Float(dryingTime)
+        }
+        return overlay
     }
 
     /// `texture` moved by (dx, dy) for display: itself when there is no move, otherwise
@@ -620,6 +646,29 @@ final class CanvasRenderer: NSObject, MTKViewDelegate {
         layer.heightTexture = height
         DiagnosticsLog.shared.note(.tool, "height map made for \(layer.name) (\(height.width)×\(height.height))")
         return height
+    }
+
+    /// The layer's wet map, made and cleared (in `commandBuffer`) if it has none. Its times
+    /// count from the clock when it was made; once the layer has dried all over and the
+    /// count has run long, it starts again from now, so the half-float times stay precise.
+    func wetTexture(for layer: Layer, commandBuffer: MTLCommandBuffer) -> MTLTexture? {
+        let now = clock()
+        if let wet = layer.wetTexture {
+            if now - layer.wetEpoch > 1024, !layer.isWet(at: now) {
+                textureManager.clearTexture(wet, commandBuffer: commandBuffer)
+                layer.wetEpoch = now
+                layer.wetUntil = 0
+            }
+            return wet
+        }
+        guard let wet = try? textureManager.makeHeightTexture(
+            width: layer.texture.width, height: layer.texture.height, label: "Wet \(layer.name)"
+        ) else { return nil }
+        textureManager.clearTexture(wet, commandBuffer: commandBuffer)
+        layer.wetTexture = wet
+        layer.wetEpoch = now
+        layer.wetUntil = 0
+        return wet
     }
 
     // MARK: - Regions
@@ -1280,6 +1329,15 @@ final class CanvasRenderer: NSObject, MTKViewDelegate {
                     source: activeStrokeTexture, onto: activeLayer.texture,
                     opacity: overlay?.opacity ?? 1, regions: [strokeRegion], commandBuffer: commandBuffer
                 )
+            }
+            // Wet paint stays wet for the brush's share of the drying time, from now
+            let wetness = viewModel.currentBrush.wetness
+            if wetness > 0, !isErasing, !isSmudging,
+               let wetMap = wetTexture(for: activeLayer, commandBuffer: commandBuffer) {
+                let until = clock() - activeLayer.wetEpoch + Double(wetness) * dryingTime
+                compositor.wetStroke(source: activeStrokeTexture, onto: wetMap, until: Float(until),
+                                     regions: [strokeRegion], commandBuffer: commandBuffer)
+                activeLayer.wetUntil = max(activeLayer.wetUntil, until)
             }
             compositor.clear(activeStrokeTexture, regions: [strokeRegion], commandBuffer: commandBuffer)
         }

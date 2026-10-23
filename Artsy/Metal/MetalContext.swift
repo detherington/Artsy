@@ -26,6 +26,8 @@ final class MetalContext {
     let smudgePickupHeightPipelineState: MTLRenderPipelineState
     /// Merges a finished stroke into its layer when fixed-function blending will not do
     let compositeStrokeMergePipelineState: MTLRenderPipelineState
+    /// A finished wet stroke onto its layer's wet map, keeping whatever is wetter
+    let wetStrokePipelineState: MTLRenderPipelineState
     /// Mixes colours as pigments, for tests and tools
     let mixPigmentsPipelineState: MTLComputePipelineState
     /// Tips and paper grain for stamp brushes.
@@ -217,6 +219,10 @@ final class MetalContext {
             device: device, library: library, vertexDescriptor: compVD,
             fragmentFunction: "compositeStrokeMerge", blending: .replace
         )
+        self.wetStrokePipelineState = try MetalContext.makeCompositePipeline(
+            device: device, library: library, vertexDescriptor: compVD,
+            fragmentFunction: "wetStrokeFragment", blending: .max, pixelFormat: .r16Float
+        )
 
         self.heightAccumulatePipelineState = try MetalContext.makeCompositePipeline(
             device: device, library: library, vertexDescriptor: compVD,
@@ -391,6 +397,8 @@ final class MetalContext {
         case destinationOut
         /// Source plus destination: height maps add up
         case add
+        /// The greater of source and destination: a wet map keeps whatever is wetter
+        case max
     }
 
     private static func makeCompositePipeline(
@@ -434,6 +442,14 @@ final class MetalContext {
             attachment.isBlendingEnabled = true
             attachment.rgbBlendOperation = .add
             attachment.alphaBlendOperation = .add
+            attachment.sourceRGBBlendFactor = .one
+            attachment.destinationRGBBlendFactor = .one
+            attachment.sourceAlphaBlendFactor = .one
+            attachment.destinationAlphaBlendFactor = .one
+        case .max:
+            attachment.isBlendingEnabled = true
+            attachment.rgbBlendOperation = .max
+            attachment.alphaBlendOperation = .max
             attachment.sourceRGBBlendFactor = .one
             attachment.destinationRGBBlendFactor = .one
             attachment.sourceAlphaBlendFactor = .one

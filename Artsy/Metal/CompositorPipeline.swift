@@ -45,6 +45,11 @@ final class CompositorPipeline {
         let mixing: PaintMixing
         /// Set for a stroke that dries as a wash.
         let wet: BrushDescriptor.Wet?
+        /// The layer's wet map, if it has one, read at `wetNow` (seconds since its epoch):
+        /// a wash blends into paint still wet instead of glazing it.
+        var wetMap: MTLTexture? = nil
+        var wetNow: Float = 0
+        var dryingTime: Float = 1
     }
 
     /// Mirrors `StrokeMergeParams` in Shaders.metal.
@@ -56,6 +61,9 @@ final class CompositorPipeline {
         var wetEdges: Float
         var granulation: Float
         var grainScale: Float
+        var blendsWhenWet: Float
+        var wetNow: Float
+        var dryingTime: Float
 
         init(_ stroke: StrokeOverlay?) {
             opacity = stroke?.opacity ?? 0
@@ -65,6 +73,9 @@ final class CompositorPipeline {
             wetEdges = stroke?.wet?.edges ?? 0
             granulation = stroke?.wet?.granulation ?? 0
             grainScale = stroke?.wet?.grainScale ?? 1
+            blendsWhenWet = stroke?.wetMap == nil ? 0 : (stroke?.wet?.blendsWhenWet ?? 0)
+            wetNow = stroke?.wetNow ?? 0
+            dryingTime = stroke?.dryingTime ?? 1
         }
     }
 
@@ -124,7 +135,7 @@ final class CompositorPipeline {
             if let stroke {
                 encoder.setFragmentTexture(stroke.committed, index: 2)
                 encoder.setFragmentTexture(stroke.tail, index: 3)
-                bindPaper(encoder)
+                bindPaper(encoder, wetMap: stroke.wetMap)
                 encoder.setFragmentBytes(&strokeParams, length: MemoryLayout<StrokeMergeParams>.size, index: 2)
             }
         }
@@ -174,12 +185,44 @@ final class CompositorPipeline {
         copyBack(from: tempTexture, to: destination, regions: regions, commandBuffer: commandBuffer)
     }
 
-    /// Paper, for strokes that dry as a wash.
-    private func bindPaper(_ encoder: MTLRenderCommandEncoder) {
+    /// Paper, for strokes that dry as a wash, and the layer's wet map (the slot needs a
+    /// texture even when the shader will not read it).
+    private func bindPaper(_ encoder: MTLRenderCommandEncoder, wetMap: MTLTexture?) {
         if let paper = context.brushTextures.paperGrain {
             encoder.setFragmentTexture(paper, index: 4)
+            encoder.setFragmentTexture(wetMap ?? paper, index: 5)
         }
         encoder.setFragmentSamplerState(context.grainSampler, index: 1)
+    }
+
+    /// Mark where a finished stroke (its `source` texture's coverage) lies on a layer's
+    /// wet map as wet until `until`, seconds since the map's epoch. Paint already wetter
+    /// keeps its time.
+    func wetStroke(
+        source: MTLTexture,
+        onto wetMap: MTLTexture,
+        until: Float,
+        regions: [MTLScissorRect]? = nil,
+        commandBuffer: MTLCommandBuffer
+    ) {
+        if let regions, regions.isEmpty { return }
+        var until = until
+        var identity = float4x4(diagonal: SIMD4<Float>(1, 1, 1, 1))
+
+        let passDesc = MTLRenderPassDescriptor()
+        passDesc.colorAttachments[0].texture = wetMap
+        passDesc.colorAttachments[0].loadAction = .load
+        passDesc.colorAttachments[0].storeAction = .store
+
+        guard let encoder = commandBuffer.makeRenderCommandEncoder(descriptor: passDesc) else { return }
+        encoder.setRenderPipelineState(context.wetStrokePipelineState)
+        encoder.setVertexBuffer(quadVertexBuffer, offset: 0, index: 0)
+        encoder.setVertexBytes(&identity, length: MemoryLayout<float4x4>.size, index: 1)
+        encoder.setFragmentTexture(source, index: 0)
+        encoder.setFragmentSamplerState(context.linearSampler, index: 0)
+        encoder.setFragmentBytes(&until, length: MemoryLayout<Float>.size, index: 0)
+        drawQuad(encoder, regions: regions)
+        encoder.endEncoding()
     }
 
     /// Merge a finished stroke (its `committed` texture; the tail is empty by then) into
@@ -208,7 +251,7 @@ final class CompositorPipeline {
         encoder.setFragmentTexture(stroke.committed, index: 0)
         encoder.setFragmentTexture(destination, index: 1)
         encoder.setFragmentSamplerState(context.linearSampler, index: 0)
-        bindPaper(encoder)
+        bindPaper(encoder, wetMap: stroke.wetMap)
         encoder.setFragmentBytes(&params, length: MemoryLayout<StrokeMergeParams>.size, index: 2)
         drawQuad(encoder, regions: regions)
         encoder.endEncoding()
@@ -452,16 +495,28 @@ final class CompositorPipeline {
     private struct ReliefParams {
         var relief: Float
         var gloss: Float
+        var showWet: Float
+        var wetNow: Float
+        var dryingTime: Float
+    }
+
+    /// A layer's wet map to show on the canvas, read at `now` seconds since its epoch.
+    struct WetDisplay {
+        let map: MTLTexture
+        let now: Float
+        let dryingTime: Float
     }
 
     /// - Parameters:
     ///   - relief: how strongly thickness is lit; 0 shows it flat.
     ///   - gloss: the paint's finish, 0 matte to 1 glossy.
+    ///   - wet: a wet map to tint where the paint is still wet.
     func renderToScreen(
         composite: MTLTexture,
         height: MTLTexture? = nil,
         relief: Float = 0,
         gloss: Float = 0.5,
+        wet: WetDisplay? = nil,
         drawable: MTLTexture,
         transform: CanvasTransform,
         viewSize: CGSize,
@@ -469,7 +524,8 @@ final class CompositorPipeline {
         commandBuffer: MTLCommandBuffer
     ) {
         var transformMatrix = transform.transformMatrix(viewSize: viewSize)
-        var paint = ReliefParams(relief: height == nil ? 0 : relief, gloss: gloss)
+        var paint = ReliefParams(relief: height == nil ? 0 : relief, gloss: gloss,
+                                 showWet: wet == nil ? 0 : 1, wetNow: wet?.now ?? 0, dryingTime: wet?.dryingTime ?? 1)
 
         let passDesc = MTLRenderPassDescriptor()
         passDesc.colorAttachments[0].texture = drawable
@@ -499,6 +555,7 @@ final class CompositorPipeline {
         encoder.setFragmentTexture(composite, index: 0)
         // The slot needs a texture even when the shader will not light anything
         encoder.setFragmentTexture(height ?? composite, index: 1)
+        encoder.setFragmentTexture(wet?.map ?? composite, index: 2)
         encoder.setFragmentSamplerState(context.displaySampler, index: 0)
         encoder.setFragmentBytes(&paint, length: MemoryLayout<ReliefParams>.stride, index: 0)
 

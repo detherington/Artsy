@@ -109,6 +109,11 @@ final class CanvasUndoManager {
         let texture: MTLTexture
         /// The same rectangle of the layer's height map, if it had one
         let height: MTLTexture?
+        /// The same rectangle of the layer's wet map, if it had one, with the epoch its
+        /// times count from and how long the layer was wet for at the time
+        let wet: MTLTexture?
+        let wetEpoch: TimeInterval
+        let wetUntil: TimeInterval
         let description: String
     }
 
@@ -256,6 +261,24 @@ final class CanvasUndoManager {
                           destinationOrigin: MTLOrigin(x: snapshot.region.x, y: snapshot.region.y, z: 0))
                 blit.endEncoding()
             }
+            // The wet map goes back too, where the layer still has the one the snapshot was
+            // cut from (its times count from the same epoch); with none in the snapshot, the
+            // stroke being undone is what wetted it, so the region dries
+            if let layerWet = layer.wetTexture {
+                let source = snapshot.wet != nil && snapshot.wetEpoch == layer.wetEpoch
+                    ? snapshot.wet : makeZeroTexture(width: snapshot.region.width, height: snapshot.region.height, context: context)
+                if let source, let blit = commandBuffer.makeBlitCommandEncoder() {
+                    blit.copy(from: source,
+                              sourceSlice: 0, sourceLevel: 0,
+                              sourceOrigin: MTLOrigin(x: 0, y: 0, z: 0),
+                              sourceSize: MTLSize(width: snapshot.region.width, height: snapshot.region.height, depth: 1),
+                              to: layerWet,
+                              destinationSlice: 0, destinationLevel: 0,
+                              destinationOrigin: MTLOrigin(x: snapshot.region.x, y: snapshot.region.y, z: 0))
+                    blit.endEncoding()
+                    if snapshot.wet != nil { layer.wetUntil = max(layer.wetUntil, snapshot.wetUntil) }
+                }
+            }
             commandBuffer.commit()
             return current.map(Entry.region)
         }
@@ -268,6 +291,18 @@ final class CanvasUndoManager {
         clear(height, commandBuffer: commandBuffer)
         layer.heightTexture = height
         return height
+    }
+
+    /// A half-float texture of zeros, for drying a region of a wet map.
+    private func makeZeroTexture(width: Int, height: Int, context: MetalContext) -> MTLTexture? {
+        let desc = MTLTextureDescriptor.texture2DDescriptor(pixelFormat: .r16Float, width: width, height: height, mipmapped: false)
+        desc.usage = [.shaderRead]
+        desc.storageMode = .shared
+        guard let texture = context.device.makeTexture(descriptor: desc) else { return nil }
+        let zeros = [UInt16](repeating: 0, count: width * height)
+        zeros.withUnsafeBytes { texture.replace(region: MTLRegionMake2D(0, 0, width, height), mipmapLevel: 0,
+                                                withBytes: $0.baseAddress!, bytesPerRow: width * 2) }
+        return texture
     }
 
     private func makeTexture(like source: MTLTexture, pixelFormat: MTLPixelFormat, context: MetalContext) -> MTLTexture? {
@@ -357,7 +392,9 @@ final class CanvasUndoManager {
 
         guard let pixels = copy(of: source ?? layer.texture) else { return nil }
         let height = (heightSource ?? layer.heightTexture).flatMap(copy(of:))
-        return RegionSnapshot(layerID: layer.id, region: region, texture: pixels, height: height, description: description)
+        let wet = layer.wetTexture.flatMap(copy(of:))
+        return RegionSnapshot(layerID: layer.id, region: region, texture: pixels, height: height,
+                              wet: wet, wetEpoch: layer.wetEpoch, wetUntil: layer.wetUntil, description: description)
     }
 
     /// Every layer's settings, and copies of the pixels of the layers in `scope`; the rest

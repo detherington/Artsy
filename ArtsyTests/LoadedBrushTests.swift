@@ -26,10 +26,12 @@ final class LoadedBrushTests: XCTestCase {
         p.w > 0.001 ? SIMD3(p.x, p.y, p.z) / p.w : .zero
     }
 
-    /// A canvas with a solid red block on the left, ending at x ≈ 110.
+    /// A canvas with a solid red block of wet paint on the left, ending at x ≈ 110.
     private func canvasWithRedBlock() throws -> EngineHarness {
         let harness = try EngineHarness(width: 320, height: 120)
-        harness.select(.hardRound)
+        var fresh = BrushDescriptor.hardRound
+        fresh.wetness = 1
+        harness.select(fresh)
         harness.viewModel.brushSize = 100
         harness.viewModel.currentColor = red
         harness.draw(StrokeFixtures.line(from: CGPoint(x: 10, y: 60), to: CGPoint(x: 60, y: 60), pressure: 1...1))

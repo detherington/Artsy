@@ -532,15 +532,37 @@ struct StrokeMergeParams {
     float wetEdges;     // above 0 the stroke dries as a wash, pigment gathering at its edge
     float granulation;  // above 0 pigment settles into the paper's valleys
     float grainScale;   // paper texels per canvas pixel
+    float blendsWhenWet; // above 0 the wash blends into paint still wet instead of glazing it (see wetness())
+    float wetNow;       // the layer's wet map is read at this time, seconds since its epoch
+    float dryingTime;   // how long paint stays wet at most, seconds
 };
 
-// A wash drying on paper. `coverage` is the stroke's coverage, 0...1, before its opacity.
-static inline float4 wetWash(float4 coverage, float2 canvasPixel, constant StrokeMergeParams &p,
+// --- Wet and dry ---
+//
+// A layer's wet map holds, per pixel, the time until which the paint there stays wet, in
+// seconds since the layer's wet epoch (CanvasRenderer.clock). Nothing runs to dry it: the
+// paint's wetness is read off the clock whenever something asks. Paint is fully wet until
+// half of what it was given has gone, then dries off over the rest.
+static inline float wetness(texture2d<float> wetMap, sampler s, float2 uv, float now, float dryingTime) {
+    float until = wetMap.sample(s, uv).r;
+    return saturate((until - now) / max(dryingTime * 0.5, 1e-3));
+}
+
+// The wet map's texel under a canvas pixel (origin bottom-left; the map's is top-left).
+static inline float2 wetMapCoordinate(float2 canvasPixel, texture2d<float> wetMap) {
+    return float2(canvasPixel.x / float(wetMap.get_width()), 1.0 - canvasPixel.y / float(wetMap.get_height()));
+}
+
+// A wash drying on paper. `coverage` is the stroke's coverage, 0...1, before its opacity;
+// `wet` how wet the paint under it is, which keeps its edge soft and the pigment from
+// gathering there.
+static inline float4 wetWash(float4 coverage, float2 canvasPixel, float wet, constant StrokeMergeParams &p,
                              texture2d<float> paper, sampler paperSampler) {
     float s = coverage.a;
     if (s <= 0.0) return coverage;
     float height = paper.sample(paperSampler, canvasPixel * p.grainScale / float(paper.get_width())).r;
-    if (p.wetEdges > 0.0) {
+    float edges = p.wetEdges * (1.0 - wet);
+    if (edges > 0.0) {
         // The soft outer falloff becomes a crisp boundary, roughened by the paper, with the
         // pigment that left the middle gathered in a rim just inside it. A pixel's rim is
         // never more than a few times its own coverage, so a faint edge stays faint.
@@ -548,8 +570,8 @@ static inline float4 wetWash(float4 coverage, float2 canvasPixel, constant Strok
         float edge = smoothstep(boundary, boundary + 0.08, s);
         float inside = smoothstep(boundary, 1.0, s);
         float rim = smoothstep(boundary, boundary + 0.12, s) * (1.0 - smoothstep(boundary + 0.2, boundary + 0.8, s));
-        float middle = inside * (1.0 - 0.4 * p.wetEdges);
-        s = edge * mix(middle, min(1.0, s * 3.0), saturate(1.5 * p.wetEdges * rim));
+        float middle = inside * (1.0 - 0.4 * edges);
+        s = edge * mix(middle, min(1.0, s * 3.0), saturate(1.5 * edges * rim));
     }
     if (p.granulation > 0.0) {
         // More pigment settles in the valleys than stays on the peaks
@@ -559,27 +581,48 @@ static inline float4 wetWash(float4 coverage, float2 canvasPixel, constant Strok
     return float4(straight(coverage) * s, s);
 }
 
-// The stroke, at its opacity, onto the layer.
-static inline float4 strokeOnto(float4 stroke, float4 layer, constant StrokeMergeParams &p) {
+// The stroke, at its opacity, onto the layer. A glaze laid into wet paint (`wet` above 0)
+// blends with it as pigment instead, by that much.
+static inline float4 strokeOnto(float4 stroke, float4 layer, float wet, constant StrokeMergeParams &p) {
     if (p.erase != 0) return layer * (1.0 - stroke.a);
     if (p.mixing == 1) return pigmentOver(stroke, layer);
-    if (p.mixing == 2) return blendOver(stroke, layer, 1);   // multiply: a transparent glaze
+    if (p.mixing == 2) {
+        float4 glazed = blendOver(stroke, layer, 1);   // multiply: a transparent glaze
+        return wet > 0.0 ? mix(glazed, pigmentOver(stroke, layer), wet) : glazed;
+    }
     return stroke + layer * (1.0 - stroke.a);
 }
 
 static inline float4 mergeStroke(float4 coverage, float4 layer, float2 canvasPixel, constant StrokeMergeParams &p,
-                                 texture2d<float> paper, sampler paperSampler) {
-    if (p.wetEdges > 0.0 || p.granulation > 0.0) coverage = wetWash(coverage, canvasPixel, p, paper, paperSampler);
-    return strokeOnto(coverage * p.opacity, layer, p);
+                                 texture2d<float> paper, sampler paperSampler,
+                                 texture2d<float> wetMap, sampler wetSampler) {
+    // How wet the paint under the stroke is, for a wash that blends into wet paint
+    float wet = p.blendsWhenWet > 0.0
+        ? p.blendsWhenWet * wetness(wetMap, wetSampler, wetMapCoordinate(canvasPixel, wetMap), p.wetNow, p.dryingTime) : 0.0;
+    if (p.wetEdges > 0.0 || p.granulation > 0.0) coverage = wetWash(coverage, canvasPixel, wet, p, paper, paperSampler);
+    return strokeOnto(coverage * p.opacity, layer, wet, p);
 }
 
 static inline float4 layerWithStroke(float4 layer, float4 committed, float4 tail, float2 canvasPixel,
                                      constant StrokeMergeParams &params,
-                                     texture2d<float> paper, sampler paperSampler) {
+                                     texture2d<float> paper, sampler paperSampler,
+                                     texture2d<float> wetMap, sampler wetSampler) {
     // A ribbon's two halves are the same coverage drawn twice where they meet, so take the
     // maximum. Dabs in the tail were laid after the committed ones and sit on top of them.
     float4 combined = params.accumulates != 0 ? tail + committed * (1.0 - tail.a) : max(committed, tail);
-    return mergeStroke(combined, layer, canvasPixel, params, paper, paperSampler);
+    return mergeStroke(combined, layer, canvasPixel, params, paper, paperSampler, wetMap, wetSampler);
+}
+
+// A finished wet stroke onto its layer's wet map: where the stroke has coverage, the paint
+// stays wet until `until`. Drawn with a max blend, so paint already wetter keeps its time.
+fragment float4 wetStrokeFragment(
+    CompositeVertexOut in [[stage_in]],
+    texture2d<float> stroke [[texture(0)]],
+    sampler s [[sampler(0)]],
+    constant float &until [[buffer(0)]]
+) {
+    float a = stroke.sample(s, in.texCoord).a;
+    return float4(until * saturate(a * 10.0), 0.0, 0.0, 1.0);
 }
 
 // The canvas pixel (origin bottom-left, as the stamp shaders see it) under a composite
@@ -596,12 +639,13 @@ fragment float4 compositeStrokeMerge(
     texture2d<float> strokeTex [[texture(0)]],
     texture2d<float> layerTex [[texture(1)]],
     texture2d<float> paper [[texture(4)]],
+    texture2d<float> wetMap [[texture(5)]],
     sampler s [[sampler(0)]],
     sampler paperSampler [[sampler(1)]],
     constant StrokeMergeParams &params [[buffer(2)]]
 ) {
     return mergeStroke(strokeTex.sample(s, in.texCoord), layerTex.sample(s, in.texCoord),
-                       canvasPixel(in.texCoord, layerTex), params, paper, paperSampler);
+                       canvasPixel(in.texCoord, layerTex), params, paper, paperSampler, wetMap, s);
 }
 
 fragment float4 compositeNormalWithStroke(
@@ -610,6 +654,7 @@ fragment float4 compositeNormalWithStroke(
     texture2d<float> committed [[texture(2)]],
     texture2d<float> tail [[texture(3)]],
     texture2d<float> paper [[texture(4)]],
+    texture2d<float> wetMap [[texture(5)]],
     sampler s [[sampler(0)]],
     sampler paperSampler [[sampler(1)]],
     constant float &layerOpacity [[buffer(0)]],
@@ -617,7 +662,7 @@ fragment float4 compositeNormalWithStroke(
 ) {
     float4 merged = layerWithStroke(layer.sample(s, in.texCoord), committed.sample(s, in.texCoord),
                                     tail.sample(s, in.texCoord), canvasPixel(in.texCoord, layer),
-                                    stroke, paper, paperSampler);
+                                    stroke, paper, paperSampler, wetMap, s);
     return merged * layerOpacity;
 }
 
@@ -640,6 +685,7 @@ fragment float4 compositeBlendWithStroke(
     texture2d<float> committed [[texture(2)]],
     texture2d<float> tail [[texture(3)]],
     texture2d<float> paper [[texture(4)]],
+    texture2d<float> wetMap [[texture(5)]],
     sampler s [[sampler(0)]],
     sampler paperSampler [[sampler(1)]],
     constant float &layerOpacity [[buffer(0)]],
@@ -648,7 +694,7 @@ fragment float4 compositeBlendWithStroke(
 ) {
     float4 merged = layerWithStroke(srcTex.sample(s, in.texCoord), committed.sample(s, in.texCoord),
                                     tail.sample(s, in.texCoord), canvasPixel(in.texCoord, srcTex),
-                                    stroke, paper, paperSampler);
+                                    stroke, paper, paperSampler, wetMap, s);
     return blendOver(merged * layerOpacity, dstTex.sample(s, in.texCoord), mode);
 }
 
@@ -756,12 +802,16 @@ fragment float4 heightAccumulateFragment(
 struct ReliefParams {
     float relief;   // how strongly thickness is lit; 0 shows it flat
     float gloss;    // the paint's finish, 0 matte to 1 glossy
+    float showWet;  // above 0, the wet map's paint still wet is tinted
+    float wetNow;   // seconds since the wet map's epoch
+    float dryingTime;
 };
 
 fragment float4 displayWhiteFragment(
     CompositeVertexOut in [[stage_in]],
     texture2d<float> composite [[texture(0)]],
     texture2d<float> height [[texture(1)]],
+    texture2d<float> wetMap [[texture(2)]],
     sampler s [[sampler(0)]],
     constant ReliefParams &paint [[buffer(0)]]
 ) {
@@ -812,6 +862,11 @@ fragment float4 displayWhiteFragment(
         float exponent = mix(6.0, 64.0, paint.gloss);
         float glint = pow(max(0.0, dot(n, halfway)), exponent) * mix(0.1, 0.45, paint.gloss) * saturate(h * 4.0) * relief;
         result = result * shade + glint;
+    }
+    if (paint.showWet > 0.0) {
+        // Wet paint shown as a blue sheen that fades as it dries
+        float wet = wetness(wetMap, s, in.texCoord, paint.wetNow, paint.dryingTime);
+        result = mix(result, float3(0.3, 0.55, 1.0), wet * 0.4);
     }
     return float4(saturate(result), 1.0);
 }
@@ -874,6 +929,9 @@ struct LoadedBrushParams {
     float  variation;       // fill: how unevenly the bristles start
     float  seed;
     int    mixPigments;
+    int    usesWet;         // 1: the layer has a wet map, read for how much comes up
+    float  wetNow;          // seconds since the layer's wet epoch
+    float  dryingTime;
 };
 
 // A tip's coverage without the antialiasing a fragment can do (no derivatives in a kernel).
@@ -904,6 +962,7 @@ kernel void loadedBrushTransferKernel(
     texture2d<float, access::read_write> carry [[texture(0)]],
     texture2d<float> layer [[texture(1)]],
     texture2d<float> tip [[texture(2)]],
+    texture2d<float> wetMap [[texture(3)]],
     sampler canvasSampler [[sampler(0)]],
     sampler tipSampler [[sampler(1)]],
     constant LoadedBrushParams &p [[buffer(0)]],
@@ -919,12 +978,15 @@ kernel void loadedBrushTransferKernel(
     float2 stretched = (uv - 0.5) * float2(p.size * p.aspect, p.size);
     float c = cos(p.angle), sn = sin(p.angle);
     float2 canvas = p.center + float2(stretched.x * c - stretched.y * sn, stretched.x * sn + stretched.y * c);
-    float4 under = layer.sample(canvasSampler, float2(canvas.x / p.canvasSize.x, 1.0 - canvas.y / p.canvasSize.y));
+    float2 layerUV = float2(canvas.x / p.canvasSize.x, 1.0 - canvas.y / p.canvasSize.y);
+    float4 under = layer.sample(canvasSampler, layerUV);
 
     // 1. What was laid down has left the brush
     paint *= 1.0 - p.depletion * k;
-    // 2. What was crossed comes up: more paint on the bristle, and its colour in the mix
-    float pick = p.bleed * k * under.a;
+    // 2. What was crossed comes up, if it is still wet: more paint on the bristle, and its
+    // colour in the mix. Dry paint stays where it is.
+    float wet = p.usesWet != 0 ? wetness(wetMap, canvasSampler, layerUV, p.wetNow, p.dryingTime) : 0.0;
+    float pick = p.bleed * k * under.a * wet;
     if (pick > 1e-4) {
         float a = min(1.0, paint.a + pick);
         float share = pick / (paint.a + pick);

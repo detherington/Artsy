@@ -63,6 +63,9 @@ final class PaintRenderer {
         var variation: Float
         var seed: Float
         var mixPigments: Int32
+        var usesWet: Int32
+        var wetNow: Float
+        var dryingTime: Float
     }
 
     /// Draw settled `dabs`, in order, one copy per entry in `mirrors`: the colour into
@@ -73,6 +76,8 @@ final class PaintRenderer {
     ///   - brushSize: the brush's full size, which sets the carry's resolution for the stroke.
     ///   - opacityScale: multiplies every dab's opacity.
     ///   - layer: what a loaded brush picks up from: the paint there before this stroke.
+    ///   - wet: the layer's wet map, read at `wetNow` seconds since its epoch; only wet
+    ///     paint comes up. Nil for a layer that has none: all of it is dry.
     ///   - heightOpacity: scales the thickness laid (a wash's opacity applies at the merge,
     ///     so thinned paint piles less).
     /// - Returns: the canvas-space bounds of each copy, over colour and height alike.
@@ -87,6 +92,9 @@ final class PaintRenderer {
         mirrors: [(CGPoint) -> CGPoint],
         strokeTexture: MTLTexture,
         layer: MTLTexture,
+        wet: MTLTexture? = nil,
+        wetNow: Float = 0,
+        dryingTime: Float = 1,
         height: MTLTexture? = nil,
         heightOpacity: Float = 1,
         strokeRenderer: StrokeRenderer,
@@ -110,7 +118,8 @@ final class PaintRenderer {
             press: 0, depletion: 0, bleed: 0, resaturation: 0,
             color: SIMD4(color.red, color.green, color.blue, (load?.amount ?? 1) * color.alpha),
             // The loading pattern belongs to the brush, like its grain: the same every stroke
-            variation: load?.variation ?? 0, seed: 0.37, mixPigments: brush.mixing == .pigment ? 1 : 0
+            variation: load?.variation ?? 0, seed: 0.37, mixPigments: brush.mixing == .pigment ? 1 : 0,
+            usesWet: wet == nil ? 0 : 1, wetNow: wetNow, dryingTime: dryingTime
         )
 
         if let load, !filled {
@@ -208,6 +217,7 @@ final class PaintRenderer {
             encoder.setComputePipelineState(context.loadedBrushTransferPipelineState)
             encoder.setTexture(layer, index: 1)
             encoder.setTexture(tipTexture, index: 2)
+            encoder.setTexture(wet ?? layer, index: 3)
             encoder.setSamplerState(context.linearSampler, index: 0)
             encoder.setSamplerState(context.tipSampler, index: 1)
             for (index, mirror) in mirrors.enumerated() where index < carries.count {

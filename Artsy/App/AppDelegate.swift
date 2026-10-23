@@ -438,6 +438,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         editMenu.addItem(withTitle: "Select All", action: #selector(handleSelectAll), keyEquivalent: "a")
         let deselectItem = NSMenuItem(title: "Deselect", action: #selector(handleDeselect), keyEquivalent: "d")
         editMenu.addItem(deselectItem)
+        editMenu.addItem(NSMenuItem.separator())
+        editMenu.addItem(withTitle: "Dry Layer", action: #selector(handleDryLayer), keyEquivalent: "")
         editMenuItem.submenu = editMenu
 
         // View menu
@@ -475,6 +477,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         flip.keyEquivalentModifierMask = [.command, .option]
         viewMenu.addItem(NSMenuItem.separator())
         viewMenu.addItem(withTitle: "Hide Interface", action: #selector(handleToggleChrome), keyEquivalent: "\t")
+        let showWet = viewMenu.addItem(withTitle: "Show Wet Paint", action: #selector(handleToggleShowWetPaint), keyEquivalent: "w")
+        showWet.keyEquivalentModifierMask = [.command, .option]
         viewMenu.addItem(NSMenuItem.separator())
 
         // Guides submenu; its check marks follow the front canvas (see menuNeedsUpdate)
@@ -681,6 +685,16 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc private func handleToggleChrome() {
         activeStore?.viewModel.toggleChrome()
+    }
+
+    @objc private func handleToggleShowWetPaint(_ sender: NSMenuItem) {
+        guard let viewModel = activeStore?.viewModel else { return }
+        viewModel.showsWetPaint.toggle()
+        sender.state = viewModel.showsWetPaint ? .on : .off
+    }
+
+    @objc private func handleDryLayer() {
+        activeStore?.viewModel.dryActiveLayer()
     }
 
     @objc private func setBgDarkGray() { activeStore?.viewModel.canvasBackgroundColor = (0.10, 0.10, 0.10) }

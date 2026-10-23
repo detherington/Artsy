@@ -34,6 +34,13 @@ final class CanvasViewModel: ObservableObject {
     @Published var isErasing = false
     /// The bar, the rail and the dock out of the way, for the canvas alone (Tab).
     @Published var isChromeHidden = false
+    /// Tint the active layer's paint that is still wet, on the canvas.
+    @Published var showsWetPaint = false
+
+    /// Dry the active layer's paint all over, at once.
+    func dryActiveLayer() {
+        layerStack?.activeLayer?.dry()
+    }
     /// Layers in a panel beside the canvas on a wide window, rather than a pop-up from
     /// the bar. Remembered across launches.
     @Published var isLayersDocked: Bool = AppPreferences.shared.layersDocked {
@@ -137,7 +144,7 @@ final class CanvasViewModel: ObservableObject {
         let pixels = Int(canvasSize.width) * Int(canvasSize.height)
         var bytes = 0
         for layer in layerStack?.layers ?? [] {
-            bytes += pixels * (layer.heightTexture == nil ? 8 : 10)
+            bytes += pixels * (8 + (layer.heightTexture == nil ? 0 : 2) + (layer.wetTexture == nil ? 0 : 2))
         }
         // Composite and its height map, each with mip levels (a third again), blend
         // scratch and two stroke textures

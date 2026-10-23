@@ -494,6 +494,68 @@ the slopes can reach (96 showed almost nothing; 64 shows). The push is subtle at
 default relief of 1: the slider goes to 2, and the squeeze, grooves and finish want a
 pen, as the loaded brush's shares do.
 
+### 9. Wet and dry (medium) — done, untested by hand
+
+The third step of `paint-media-research.md`: paint that is wet for a while after it is
+laid, and does different things wet and dry. Until now a second wash glazed the first
+whether it was wet or dry, and Oil picked up whatever it crossed, ink included.
+
+- **A wet map per layer** (`Layer.wetTexture`, half-float, the size of the layer, made
+  when a wet brush first touches it, as the height map is). It does not hold an amount
+  of wetness but a time: the moment, in seconds since the layer's wet epoch, until which
+  the paint there stays wet. Nothing runs to dry it. Whoever asks how wet a pixel is
+  reads the time off the clock (`wetness()` in Shaders.metal): fully wet until half of
+  what it was given has gone, then drying off over the rest. The research planned a
+  drying pass over wet tiles on idle frames; this costs nothing on idle frames, needs no
+  tile bookkeeping, and a change to the drying time takes effect on the next read. The
+  epoch is the renderer's clock when the map was made; once the layer has dried all over
+  and the count has run past 1024 s, the map is cleared and counts from now again, so the
+  half-float times stay within a second (two seconds after an hour of unbroken wetness,
+  which is as coarse as they get).
+- **Laying wet paint.** A brush has a *wetness*, 0...1 (`BrushDescriptor.wetness`;
+  Brush Studio → Wet → Stays wet): its share of the drying time in Settings (Wet Paint →
+  Drying time, 5 s to 10 min, 60 s to start). At pen-up, after the stroke has merged,
+  its coverage goes onto the wet map with a max blend (`wetStrokeFragment`): paint that
+  was wetter keeps its time. Oil 100%, Watercolor 100%, Acrylic 40%; everything else 0,
+  so ink never wets the paper. The undo step keeps the stroke's rectangle of the wet map
+  along with its pixels and height, and puts it back (or, for a stroke that was the
+  first to wet the layer, dries the rectangle); the epoch travels with it, and a
+  snapshot from an older epoch is not restored.
+- **What wet paint does.** A loaded brush picks up only what is wet: the transfer kernel
+  reads the wet map under each bristle and scales the pickup by it, so Oil drags fresh
+  Oil along and leaves dry paint, and ink, where it is — ArtRage's working time. A wash
+  laid into wet paint (`Wet.blendsWhenWet`, Brush Studio → Wet → Blends when wet)
+  blends with it as pigment instead of glazing over it, and keeps its edge soft there:
+  the crisp boundary and the rim fade with the wetness under the stroke. Over dry paint
+  it glazes with a crisp edge as before. The live composite reads the map the same way
+  as the merge, so the preview is what you get.
+- **Seeing and stopping it.** View → Show Wet Paint (⌥⌘W) tints the active layer's wet
+  paint blue, fading as it dries (the display redraws four times a second while the
+  layer is wet, and not otherwise); Edit → Dry Layer dries the active layer at once, as
+  does clearing it. Nothing is saved: a document opens dry, as the research said.
+- **Not done.** Smudge and the knife move paint wet or dry: they are tools, and dry
+  paint that cannot be smudged would surprise. A selection moved or transformed leaves
+  its wetness where it was; a layer merged down or duplicated takes the lower layer's or
+  none. Edge darkening as a wash dries, and a water brush that only wets the paper, wait
+  for the water step.
+- **Cost.** One small pass per wet stroke at pen-up, over its rectangle; one more texture
+  read in the merge and the transfer. The frame while drawing on 8192² with twelve layers is as it was
+  (4.5 ms, `testLargeCanvasCosts`); the pen-up of a canvas-spanning Oil stroke there went
+  from 48–62 ms to 53–117 ms across runs, the spread being the first wet stroke on a
+  layer, which makes and clears the 128 MB map and copies the stroke's rectangle of it
+  for undo. The wet map is 2 bytes a pixel per layer that has been wet.
+- **Tests** (`WetDryTests`): paint stays wet for the brush's share of the drying time and
+  dries on schedule, a fast-drying brush for its share, ink never; Dry Layer dries at
+  once; a loaded brush picks up wet red and not dried or never-wet red; a blue wash into
+  a wet yellow one blends to a saturated green with a soft edge and no rim, and over the
+  dried one glazes grey with a rim; undo puts back how wet the paint was; Show Wet Paint
+  tints wet paint and not dry; the settings survive the brush file and an older file
+  reads as dry. The loaded-brush fixture now lays its red block wet, since that is what
+  the brush picks up. The watercolor and acrylic preview tiles were re-recorded after
+  viewing: the watercolor's crossing stroke feathers into the wet zigzag instead of
+  glazing it hard-edged; the acrylic's crossings pick up a little less from its
+  faster-drying paint.
+
 ## At the limits: 8192² with 12 layers
 
 Measured after step 6 opened these limits up (`testLargeCanvasCosts`, debug build, M4 Pro):

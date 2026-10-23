@@ -21,6 +21,7 @@ final class AppPreferences: ObservableObject {
         static let easeStrokesWithoutPressure = "easeStrokesWithoutPressure"
         static let paintRelief = "paintRelief"
         static let paintGloss = "paintGloss"
+        static let dryingTime = "dryingTime"
         static let snapShapesOnHold = "snapShapesOnHold"
         static let layersDocked = "layersDocked"
     }
@@ -77,6 +78,12 @@ final class AppPreferences: ObservableObject {
         didSet { defaults.set(paintGloss, forKey: Key.paintGloss) }
     }
 
+    /// How long wet paint (Oil, Watercolor) stays wet, seconds; a brush's own wetness is a
+    /// share of it.
+    @Published var dryingTime: Double {
+        didSet { defaults.set(dryingTime, forKey: Key.dryingTime) }
+    }
+
     /// Hold the pen still at the end of a stroke to snap it to the shape it was going for.
     @Published var snapShapesOnHold: Bool {
         didSet { defaults.set(snapShapesOnHold, forKey: Key.snapShapesOnHold) }
@@ -123,6 +130,7 @@ final class AppPreferences: ObservableObject {
         self.easeStrokesWithoutPressure = (defaults.object(forKey: Key.easeStrokesWithoutPressure) as? Bool) ?? true
         self.paintRelief = min(max((defaults.object(forKey: Key.paintRelief) as? Double) ?? 1.0, 0), 2)
         self.paintGloss = min(max((defaults.object(forKey: Key.paintGloss) as? Double) ?? 0.5, 0), 1)
+        self.dryingTime = min(max((defaults.object(forKey: Key.dryingTime) as? Double) ?? 60, 5), 600)
         self.snapShapesOnHold = (defaults.object(forKey: Key.snapShapesOnHold) as? Bool) ?? true
         self.layersDocked = (defaults.object(forKey: Key.layersDocked) as? Bool) ?? true
         self.pressureCurves = defaults.data(forKey: Key.pressureCurves)
