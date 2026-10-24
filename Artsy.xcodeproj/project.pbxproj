@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		750742F2DD62C40B161AF72D /* BrushPanelView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4AB0672375E9A4AB68BD81EE /* BrushPanelView.swift */; };
 		3C0FC76DDFC70BA93D60B293 /* BristleTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2A39BDB3A66ACC9CD8FE8318 /* BristleTests.swift */; };
 		4C6191F508EFA01F3D483EAA /* WaterTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6BB0C198CA3F458657968930 /* WaterTests.swift */; };
 		C91BD2982D55DEBEF3C7A1C9 /* WaterRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0FD3C2494DE10DA9C89BB07 /* WaterRenderer.swift */; };
@@ -137,6 +138,7 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		4AB0672375E9A4AB68BD81EE /* BrushPanelView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrushPanelView.swift; sourceTree = "<group>"; };
 		2A39BDB3A66ACC9CD8FE8318 /* BristleTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BristleTests.swift; sourceTree = "<group>"; };
 		6BB0C198CA3F458657968930 /* WaterTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WaterTests.swift; sourceTree = "<group>"; };
 		B0FD3C2494DE10DA9C89BB07 /* WaterRenderer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WaterRenderer.swift; sourceTree = "<group>"; };
@@ -294,6 +296,7 @@
 		30F8CBE1AC0CF03D0DA0FDA3 /* UI */ = {
 			isa = PBXGroup;
 			children = (
+				4AB0672375E9A4AB68BD81EE /* BrushPanelView.swift */,
 				7E3B142B246542848C95DFDB /* MainLayout.swift */,
 				A28B40AD7E6A4EEAB4058E45 /* LayersDockView.swift */,
 				62DB2D83987A46D1A8A66631 /* BottomBarView.swift */,
@@ -675,6 +678,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				750742F2DD62C40B161AF72D /* BrushPanelView.swift in Sources */,
 				C91BD2982D55DEBEF3C7A1C9 /* WaterRenderer.swift in Sources */,
 				21E40D20D4828AC77F525E8C /* PaintRenderer.swift in Sources */,
 				A5479C02D33743B19C871090 /* MainLayout.swift in Sources */,

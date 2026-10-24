@@ -101,6 +101,127 @@ final class ShellTests: XCTestCase {
         XCTAssertEqual(taps.rows.count, 2, "a second row tapped")
     }
 
+    /// A pen held still on a row is a right-click on it, so a context menu can open for a
+    /// pen with no second button; the lift after it taps nothing.
+    func testAPenHeldStillIsARightClick() throws {
+        let taps = Taps()
+        let host = NSHostingView(rootView: DragScroll {
+            VStack(spacing: 0) {
+                ForEach(0..<10, id: \.self) { row in
+                    Button(action: { taps.rows.append(row) }) {
+                        Text("Row \(row)").frame(maxWidth: .infinity, minHeight: 44).contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        })
+        show(host, size: NSSize(width: 300, height: 220))
+        var rightClicks: [NSPoint] = []
+        let monitor = NSEvent.addLocalMonitorForEvents(matching: .rightMouseDown) { event in
+            rightClicks.append(event.locationInWindow)
+            return event
+        }
+        defer { if let monitor { NSEvent.removeMonitor(monitor) } }
+
+        send(.leftMouseDown, at: NSPoint(x: 150, y: 220 - 66), time: 1)
+        RunLoop.main.run(until: Date().addingTimeInterval(PenScrollView.holdDuration + 0.2))
+        XCTAssertEqual(rightClicks.count, 1, "held still: a right-click where the pen is")
+        XCTAssertEqual(rightClicks.first?.x ?? 0, 150, accuracy: 0.5)
+        send(.leftMouseUp, at: NSPoint(x: 150, y: 220 - 66), time: 2)
+        RunLoop.main.run(until: Date().addingTimeInterval(0.05))
+        XCTAssertEqual(taps.rows, [], "and the lift tapped nothing")
+
+        // A tap lifted before the hold is a tap, and no right-click
+        send(.leftMouseDown, at: NSPoint(x: 150, y: 220 - 66), time: 3)
+        send(.leftMouseUp, at: NSPoint(x: 150, y: 220 - 66), time: 3.1)
+        RunLoop.main.run(until: Date().addingTimeInterval(PenScrollView.holdDuration + 0.2))
+        XCTAssertEqual(taps.rows, [1])
+        XCTAssertEqual(rightClicks.count, 1)
+    }
+
+    /// The brush panel: a tap on a card picks the brush, a tap on the strip changes the
+    /// category, and the menu's actions do what they say.
+    func testTheBrushPanelPicksBrushesByCardAndCategory() throws {
+        let (_, viewModel) = try canvas()
+        let library = BrushLibrary.shared
+        viewModel.currentBrush = .hardRound
+        // Real previews only for a look at the panel; the taps do not need them
+        let snapshotting = ProcessInfo.processInfo.environment["ARTSY_SNAPSHOT_DIR"] != nil
+        let previews = BrushPreviewCache(renderer: snapshotting ? try? BrushPreview(context: EngineHarness.sharedContext, size: BrushPreviewCache.size) : nil)
+        let panel = BrushPanelView(viewModel: viewModel, previews: previews, actions: ChromeActions(), dismiss: {})
+        let host = NSHostingView(rootView: panel)
+        show(host, size: NSSize(width: Chrome.panelWidth, height: 600))
+        settle(host)
+        if snapshotting { snapshot(host, named: "brush-panel") }
+
+        // Hard Round is an inking brush, so the strip opens on Inking: the second card is the
+        // second inking brush. Cards sit under the header (44) and the strip (56), inset 12,
+        // 78 tall; the window's y runs upward.
+        let inking = library.all.filter { $0.category == .inking && !library.isUserBrush($0) }
+        let firstRow = 600 - (44 + 56 + 12 + BrushCard.height / 2)
+        click(at: NSPoint(x: 250, y: firstRow))
+        XCTAssertEqual(viewModel.currentBrush.id, inking[1].id, "the second card: \(viewModel.currentBrush.name)")
+        XCTAssertEqual(viewModel.currentTool, .brush)
+
+        // The strip: five equal pills across the inset width; Painting is the third
+        let pill = (Chrome.panelWidth - 24) / 5
+        click(at: NSPoint(x: 12 + pill * 2.5, y: 600 - 44 - 28))
+        settle(host)
+        click(at: NSPoint(x: 88, y: firstRow))
+        let painting = library.all.filter { $0.category == .painting && !library.isUserBrush($0) }
+        XCTAssertEqual(viewModel.currentBrush.id, painting[0].id, "the first painting brush: \(viewModel.currentBrush.name)")
+
+        // Erasers is the fourth pill, and picking the eraser picks the tool
+        click(at: NSPoint(x: 12 + pill * 3.5, y: 600 - 44 - 28))
+        settle(host)
+        click(at: NSPoint(x: 88, y: firstRow))
+        XCTAssertEqual(viewModel.currentTool, .eraser)
+    }
+
+    func testTheBrushCardMenuDuplicatesResetsAndDeletes() throws {
+        let (_, viewModel) = try canvas()
+        let library = BrushLibrary.shared
+        viewModel.currentBrush = .oil
+        viewModel.brushSize = 77
+        viewModel.smoothingStrength = 0.9
+        BrushPanelActions.reset(.oil, viewModel: viewModel)
+        XCTAssertEqual(viewModel.brushSize, BrushDescriptor.oil.baseSize)
+        XCTAssertEqual(viewModel.smoothingStrength, BrushDescriptor.oil.smoothing)
+
+        let before = library.userBrushes.count
+        let copy = try XCTUnwrap(BrushPanelActions.duplicate(.oil, in: library, viewModel: viewModel))
+        defer { try? library.remove(copy) }
+        XCTAssertEqual(library.userBrushes.count, before + 1)
+        XCTAssertEqual(viewModel.currentBrush.id, copy.id, "the copy is selected")
+        XCTAssertTrue(BrushPanelCategory.mine.holds(copy, in: library), "and lives under Mine")
+        XCTAssertFalse(BrushPanelCategory.painting.holds(copy, in: library))
+
+        BrushPanelActions.delete(.oil, in: library, viewModel: viewModel)
+        XCTAssertEqual(library.userBrushes.count, before + 1, "a built-in cannot be deleted")
+        BrushPanelActions.delete(copy, in: library, viewModel: viewModel)
+        XCTAssertEqual(library.userBrushes.count, before)
+        XCTAssertEqual(viewModel.currentBrush.id, BrushDescriptor.hardRound.id, "Hard Round takes the deleted brush's place")
+    }
+
+    /// A click through the window's dispatch, which is the only way a SwiftUI view takes one.
+    private func click(at point: NSPoint) {
+        for type in [NSEvent.EventType.leftMouseDown, .leftMouseUp] {
+            let event = NSEvent.mouseEvent(with: type, location: point, modifierFlags: [], timestamp: ProcessInfo.processInfo.systemUptime,
+                                           windowNumber: window.windowNumber, context: nil, eventNumber: 0, clickCount: 1, pressure: 1)!
+            NSApp.sendEvent(event)
+        }
+        RunLoop.main.run(until: Date().addingTimeInterval(0.05))
+    }
+
+    /// The view as drawn, written where `ARTSY_SNAPSHOT_DIR` says, for a look.
+    private func snapshot(_ view: NSView, named name: String) {
+        guard let directory = ProcessInfo.processInfo.environment["ARTSY_SNAPSHOT_DIR"],
+              let rep = view.bitmapImageRepForCachingDisplay(in: view.bounds) else { return }
+        view.cacheDisplay(in: view.bounds, to: rep)
+        guard let png = rep.representation(using: .png, properties: [:]) else { return }
+        try? png.write(to: URL(fileURLWithPath: directory).appendingPathComponent("\(name).png"))
+    }
+
     /// The Layers dock needs a wide window and the user's say-so; the chrome goes together,
     /// leaving the canvas the whole window and a pill in the corner.
     func testTheLayersDockNeedsAWideWindowAndTheChromeGoesTogether() throws {

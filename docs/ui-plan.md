@@ -154,7 +154,17 @@ come first.
    `MainLayout`, `BottomBarView`, `ToolRailView`, `LayersDockView`, `Chrome`.
 2. **The brush panel**, with previews and per-brush settings; the tool strip's brush
    list retires. Medium to large: the grid, the previews cached per brush and size,
-   categories, the long-press menu.
+   categories, the long-press menu. Done: `BrushPanelView` — a strip of categories
+   (Sketching, Inking, Painting, Erasers, and Mine for the user's duplicates and
+   imports) over a two-column grid of cards, each the brush's stroke preview with its
+   name and its number key, the current one marked; the current brush's size, opacity,
+   pressure curve and smoothing beneath in the panel's own rows, and a row to the
+   Studio. A long press on a card is a right-click (`PenScrollView` turns a pen held
+   still for half a second into one, and drops the lift that follows), which opens the
+   card's menu: duplicate (into Mine, selected), reset size and smoothing, export,
+   and delete for the user's own with a confirmation. The previews are the bar's
+   cache, rendered once per brush at one size and kept in memory; on disk and per size
+   can wait until there are enough brushes to need it.
 3. **The colour panel.** Medium.
 4. **The layers panel** and its docked form. Medium.
 5. **Adjust and Add.** Small to medium; mostly moving existing views into pop-ups.
@@ -189,6 +199,13 @@ pick a brush — so the pen path is tested, not just the mouse path.
   view again: it lets such events past while it is forwarding.
 - **The chrome's animation lands its frames after the run loop turns**, so a test of the
   layout waits a third of a second after a toggle; the app does not care.
+- **A pen has no right button, and SwiftUI's context menu wants one.** Rather than teach
+  every card a long-press gesture (which the scroll view, holding the press to tell a tap
+  from a drag, would never let through), the scroll view itself turns a pen held still
+  into a synthetic right-click through the application's dispatch. The menu is then an
+  ordinary `.contextMenu`, which a mouse's right-click and control-click open too, and a
+  test can watch for the right-click with an event monitor without the menu's modal
+  tracking loop getting in the way.
 
 ## Risks
 

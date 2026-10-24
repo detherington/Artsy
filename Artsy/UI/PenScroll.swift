@@ -6,11 +6,15 @@ import SwiftUI
 /// scroll wheel, and a plain `NSScrollView` (or SwiftUI's `ScrollView`) sits still under
 /// it. Here a tap still lands on whatever is under it; a drag of more than
 /// `dragThreshold` scrolls instead, and after the pen lifts the content keeps the pen's
-/// speed for a moment. The wheel and the scroller work as ever.
+/// speed for a moment. A pen held still for `holdDuration` is a right-click on what is
+/// under it, so a context menu opens for a pen with no second button. The wheel and the
+/// scroller work as ever.
 final class PenScrollView: NSScrollView {
     static let dragThreshold: CGFloat = 6
+    static let holdDuration: TimeInterval = 0.5
 
     private var pressed: (down: NSEvent, moves: [NSEvent])?
+    private var hold: Timer?
     private var dragging = false
     private var lastDrag: (y: CGFloat, time: TimeInterval)?
     /// Points a second, up positive.
@@ -56,6 +60,9 @@ final class PenScrollView: NSScrollView {
         dragging = false
         lastDrag = (event.locationInWindow.y, event.timestamp)
         velocity = 0
+        let timer = Timer(timeInterval: Self.holdDuration, repeats: false) { [weak self] _ in self?.holdFired() }
+        RunLoop.main.add(timer, forMode: .common)
+        hold = timer
     }
 
     override func mouseDragged(with event: NSEvent) {
@@ -67,6 +74,7 @@ final class PenScrollView: NSScrollView {
             let start = pressed!.down.locationInWindow
             guard abs(point.y - start.y) >= Self.dragThreshold || abs(point.x - start.x) >= Self.dragThreshold else { return }
             dragging = true
+            cancelHold()
         }
         if let last = lastDrag {
             let dy = point.y - last.y
@@ -79,6 +87,7 @@ final class PenScrollView: NSScrollView {
 
     override func mouseUp(with event: NSEvent) {
         if forwarding { super.mouseUp(with: event); return }
+        cancelHold()
         guard let pressed else { return }
         let wasDragging = dragging
         self.pressed = nil
@@ -99,6 +108,30 @@ final class PenScrollView: NSScrollView {
         defer { forwarding = false }
         for event in [down] + moves + [up] {
             NSApp.sendEvent(event)
+        }
+    }
+
+    private func cancelHold() {
+        hold?.invalidate()
+        hold = nil
+    }
+
+    /// The pen has been held still: what is under it gets a right-click, and the lift that
+    /// follows is nobody's business.
+    private func holdFired() {
+        hold = nil
+        guard let pressed, !dragging else { return }
+        self.pressed = nil
+        lastDrag = nil
+        guard let window = pressed.down.window ?? window else { return }
+        forwarding = true
+        defer { forwarding = false }
+        for type in [NSEvent.EventType.rightMouseDown, .rightMouseUp] {
+            if let event = NSEvent.mouseEvent(with: type, location: pressed.down.locationInWindow, modifierFlags: [],
+                                              timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: window.windowNumber,
+                                              context: nil, eventNumber: 0, clickCount: 1, pressure: 1) {
+                NSApp.sendEvent(event)
+            }
         }
     }
 
