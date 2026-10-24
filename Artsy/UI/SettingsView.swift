@@ -17,7 +17,7 @@ struct SettingsView: View {
                     .font(.headline)
 
                 Text("Keys are stored securely in macOS Keychain.")
-                    .font(.system(size: 11))
+                    .font(.system(size: 13))
                     .foregroundColor(.secondary)
 
                 GroupBox("OpenAI") {
@@ -34,9 +34,9 @@ struct SettingsView: View {
                             HStack {
                                 Image(systemName: "checkmark.circle.fill")
                                     .foregroundColor(.green)
-                                    .font(.system(size: 11))
+                                    .font(.system(size: 13))
                                 Text("Key configured")
-                                    .font(.system(size: 11))
+                                    .font(.system(size: 13))
                                     .foregroundColor(.secondary)
                                 Spacer()
                                 Button("Remove") {
@@ -44,7 +44,7 @@ struct SettingsView: View {
                                     openAIKey = ""
                                     openAIKeySaved = false
                                 }
-                                .font(.system(size: 11))
+                                .font(.system(size: 13))
                             }
                         }
                     }
@@ -65,9 +65,9 @@ struct SettingsView: View {
                             HStack {
                                 Image(systemName: "checkmark.circle.fill")
                                     .foregroundColor(.green)
-                                    .font(.system(size: 11))
+                                    .font(.system(size: 13))
                                 Text("Key configured")
-                                    .font(.system(size: 11))
+                                    .font(.system(size: 13))
                                     .foregroundColor(.secondary)
                                 Spacer()
                                 Button("Remove") {
@@ -75,7 +75,7 @@ struct SettingsView: View {
                                     googleKey = ""
                                     googleKeySaved = false
                                 }
-                                .font(.system(size: 11))
+                                .font(.system(size: 13))
                             }
                         }
                     }
@@ -96,9 +96,9 @@ struct SettingsView: View {
                             HStack {
                                 Image(systemName: "checkmark.circle.fill")
                                     .foregroundColor(.green)
-                                    .font(.system(size: 11))
+                                    .font(.system(size: 13))
                                 Text("Key configured")
-                                    .font(.system(size: 11))
+                                    .font(.system(size: 13))
                                     .foregroundColor(.secondary)
                                 Spacer()
                                 Button("Remove") {
@@ -106,11 +106,11 @@ struct SettingsView: View {
                                     unsplashKey = ""
                                     unsplashKeySaved = false
                                 }
-                                .font(.system(size: 11))
+                                .font(.system(size: 13))
                             }
                         }
                         Text("Use your Unsplash app's Access Key — not the Secret Key.")
-                            .font(.system(size: 10))
+                            .font(.system(size: 12))
                             .foregroundColor(.secondary)
                     }
                     .padding(4)
@@ -135,11 +135,11 @@ struct SettingsView: View {
                 GroupBox("Pressure") {
                     VStack(alignment: .leading, spacing: 8) {
                         Text("Pressure curve and smoothing can be adjusted in the brush settings panel on the right sidebar.")
-                            .font(.system(size: 11))
+                            .font(.system(size: 13))
                             .foregroundColor(.secondary)
 
                         Text("Pen flip to eraser is automatically detected for Wacom and compatible tablets.")
-                            .font(.system(size: 11))
+                            .font(.system(size: 13))
                             .foregroundColor(.secondary)
                     }
                     .padding(4)
@@ -192,7 +192,7 @@ struct PressurelessInputSettings: View {
                 Toggle("Hold still at the end of a stroke to snap it to a shape", isOn: $prefs.snapShapesOnHold)
 
                 Text("Draw a rough line, circle, rectangle or polygon and keep the pen down and still for a moment: the stroke becomes the shape, drawn with the same brush. Move on and it goes back to what you drew.")
-                    .font(.system(size: 11))
+                    .font(.system(size: 13))
                     .foregroundColor(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -204,7 +204,7 @@ struct PressurelessInputSettings: View {
                 Toggle("Ease strokes in and out", isOn: $prefs.easeStrokesWithoutPressure)
 
                 Text("A mouse has no pressure, so strokes start and end at full width. With this on they taper as if a pen were touching down and lifting off. Pen strokes are not affected.")
-                    .font(.system(size: 11))
+                    .font(.system(size: 13))
                     .foregroundColor(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -234,7 +234,7 @@ struct GeneralSettingsView: View {
                         // Default canvas size preset picker
                         VStack(alignment: .leading, spacing: 6) {
                             Text("Default canvas size")
-                                .font(.system(size: 11, weight: .medium))
+                                .font(.system(size: 13, weight: .medium))
 
                             Picker("", selection: Binding(
                                 get: { matchingPreset?.id ?? UUID() },
@@ -258,7 +258,7 @@ struct GeneralSettingsView: View {
                             // Custom dimensions
                             HStack(spacing: 8) {
                                 Text("Custom:")
-                                    .font(.system(size: 11))
+                                    .font(.system(size: 13))
                                     .foregroundColor(.secondary)
                                 TextField("Width", text: $customWidth)
                                     .frame(width: 70)
@@ -278,9 +278,9 @@ struct GeneralSettingsView: View {
                         Divider()
 
                         Toggle("Skip new canvas dialog on launch", isOn: $prefs.skipNewCanvasDialog)
-                            .font(.system(size: 11))
+                            .font(.system(size: 13))
                         Text("If enabled, opens a new canvas at the default size immediately when launching.")
-                            .font(.system(size: 10))
+                            .font(.system(size: 12))
                             .foregroundColor(.secondary)
                     }
                     .padding(4)
@@ -290,29 +290,29 @@ struct GeneralSettingsView: View {
                     VStack(alignment: .leading, spacing: 8) {
                         HStack {
                             Text("Relief")
-                                .font(.system(size: 11, weight: .medium))
+                                .font(.system(size: 13, weight: .medium))
                                 .frame(width: 60, alignment: .leading)
                             Slider(value: $prefs.paintRelief, in: 0...2)
                             Text("\(Int((prefs.paintRelief * 100).rounded()))%")
-                                .font(.system(size: 11, design: .monospaced))
+                                .font(.system(size: 12, design: .monospaced))
                                 .foregroundColor(.secondary)
                                 .frame(width: 50, alignment: .trailing)
                         }
                         Text("How strongly thick paint (Oil, Acrylic) is lit on the canvas and in exports. 0 shows it flat.")
-                            .font(.system(size: 10))
+                            .font(.system(size: 12))
                             .foregroundColor(.secondary)
                         HStack {
                             Text("Finish")
-                                .font(.system(size: 11, weight: .medium))
+                                .font(.system(size: 13, weight: .medium))
                                 .frame(width: 60, alignment: .leading)
                             Slider(value: $prefs.paintGloss, in: 0...1)
                             Text(prefs.paintGloss < 0.33 ? "Matte" : prefs.paintGloss < 0.67 ? "Satin" : "Gloss")
-                                .font(.system(size: 11, design: .monospaced))
+                                .font(.system(size: 12, design: .monospaced))
                                 .foregroundColor(.secondary)
                                 .frame(width: 50, alignment: .trailing)
                         }
                         Text("A broad sheen on matte paint, a tight glint on glossy.")
-                            .font(.system(size: 10))
+                            .font(.system(size: 12))
                             .foregroundColor(.secondary)
                     }
                     .padding(4)
@@ -322,30 +322,30 @@ struct GeneralSettingsView: View {
                     VStack(alignment: .leading, spacing: 8) {
                         HStack {
                             Text("Drying time")
-                                .font(.system(size: 11, weight: .medium))
+                                .font(.system(size: 13, weight: .medium))
                                 .frame(width: 80, alignment: .leading)
                             Slider(value: $prefs.dryingTime, in: 5...600)
                             Text(prefs.dryingTime < 90 ? "\(Int(prefs.dryingTime.rounded())) s" : "\(Int((prefs.dryingTime / 60).rounded())) min")
-                                .font(.system(size: 11, design: .monospaced))
+                                .font(.system(size: 12, design: .monospaced))
                                 .foregroundColor(.secondary)
                                 .frame(width: 50, alignment: .trailing)
                         }
                         Text("How long Oil and Watercolor stay wet. A brush crossing wet paint picks it up, and a wash into wet paint blends and feathers; dry paint is glazed or covered. Edit → Dry Layer dries a layer at once, and View → Show Wet Paint shows what is still wet.")
-                            .font(.system(size: 10))
+                            .font(.system(size: 12))
                             .foregroundColor(.secondary)
                         HStack {
                             Text("Tilt")
-                                .font(.system(size: 11, weight: .medium))
+                                .font(.system(size: 13, weight: .medium))
                                 .frame(width: 80, alignment: .leading)
-                            Text("←→").font(.system(size: 10)).foregroundColor(.secondary)
+                            Text("←→").font(.system(size: 12)).foregroundColor(.secondary)
                             Slider(value: $prefs.canvasTiltX, in: -1...1)
-                            Text("↑↓").font(.system(size: 10)).foregroundColor(.secondary)
+                            Text("↑↓").font(.system(size: 12)).foregroundColor(.secondary)
                             Slider(value: $prefs.canvasTiltY, in: -1...1)
                             Button("Level") { prefs.canvasTiltX = 0; prefs.canvasTiltY = 0 }
-                                .font(.system(size: 10))
+                                .font(.system(size: 12))
                         }
                         Text("Which way water runs on the canvas: a Watercolor wash spreads, runs downhill and dries from the edges in.")
-                            .font(.system(size: 10))
+                            .font(.system(size: 12))
                             .foregroundColor(.secondary)
                     }
                     .padding(4)
@@ -355,7 +355,7 @@ struct GeneralSettingsView: View {
                     VStack(alignment: .leading, spacing: 12) {
                         HStack {
                             Text("Brush")
-                                .font(.system(size: 11, weight: .medium))
+                                .font(.system(size: 13, weight: .medium))
                                 .frame(width: 60, alignment: .leading)
                             Picker("", selection: $prefs.defaultBrushName) {
                                 ForEach(BrushLibrary.shared.all, id: \.name) { brush in
@@ -368,11 +368,11 @@ struct GeneralSettingsView: View {
 
                         HStack {
                             Text("Size")
-                                .font(.system(size: 11, weight: .medium))
+                                .font(.system(size: 13, weight: .medium))
                                 .frame(width: 60, alignment: .leading)
                             Slider(value: $prefs.defaultBrushSize, in: 1...200)
                             Text("\(Int(prefs.defaultBrushSize))px")
-                                .font(.system(size: 11, design: .monospaced))
+                                .font(.system(size: 12, design: .monospaced))
                                 .foregroundColor(.secondary)
                                 .frame(width: 50, alignment: .trailing)
                         }

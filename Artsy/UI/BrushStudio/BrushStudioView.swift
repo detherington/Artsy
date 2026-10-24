@@ -79,14 +79,14 @@ struct BrushStudioView: View {
                 Text(model.stampSettings == nil
                      ? "One continuous strip: crisp, for pens and inks."
                      : "Copies of a tip laid along the stroke: texture, build-up and scatter.")
-                    .font(.system(size: 11))
+                    .font(.system(size: 13))
                     .foregroundColor(.secondary)
                     .lineLimit(2)
             }
 
             if model.isBuiltIn {
                 Label("Built-in brush. The first change makes a copy of it in your library.", systemImage: "lock")
-                    .font(.system(size: 11))
+                    .font(.system(size: 13))
                     .foregroundColor(.secondary)
             }
         }
@@ -215,7 +215,7 @@ struct BrushStudioView: View {
                 slider("Picks up", loadBinding(\.bleed, load), in: 0...1, percent: true)
                 slider("Uneven bristles", loadBinding(\.variation, load), in: 0...1, percent: true)
                 Text("Per diameter of stroke: how much of the paint on the brush comes off, how much of its own colour comes back, and how much of what is under it comes up.")
-                    .font(.system(size: 11))
+                    .font(.system(size: 13))
                     .foregroundColor(.secondary)
             }
         }
@@ -491,7 +491,7 @@ struct BrushStudioView: View {
                 .frame(width: 160, alignment: .leading)
             Slider(value: value, in: range)
             Text(percent ? "\(Int((value.wrappedValue * 100).rounded()))%" : formatted(value.wrappedValue) + unit)
-                .font(.system(size: 11, design: .monospaced))
+                .font(.system(size: 12, design: .monospaced))
                 .foregroundColor(.secondary)
                 .frame(width: 64, alignment: .trailing)
         }
