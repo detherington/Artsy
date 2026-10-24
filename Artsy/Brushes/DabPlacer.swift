@@ -21,6 +21,10 @@ struct Dab {
     var secondAngle: Float = 0
     /// Which way the stroke was going at this dab, radians: thick paint is pushed ahead.
     var heading: Float = 0
+    /// How wide a bristle bundle is here, 0...1 of its full width: narrower at a light touch.
+    var fan: Float = 1
+    /// How far the bundle's clumps have parted here, 0...1: further at speed.
+    var gap: Float = 0
 }
 
 /// Walks a stroke's path and lays dabs along it at the brush's spacing.
@@ -30,6 +34,8 @@ struct Dab {
 /// frame. Because a dab's jitter comes from its index, a tail dab looks the same once the
 /// path under it settles and the real placer reaches it.
 struct DabPlacer {
+    /// The speed, canvas pixels a second, at which a bundle's clumps have fully parted.
+    static let partingSpeed: Float = 1500
     /// Path distance at which the next dab goes down.
     private var nextDistance: CGFloat = 0
     private var index = 0
@@ -71,6 +77,11 @@ struct DabPlacer {
             let pressed = a.opacity + (b.opacity - a.opacity) * t
             let usesReach = settings.grain?.mode == .height
             var opacity = usesReach ? settings.flow : pressed * settings.flow
+            // A bundle of bristles: narrower the lighter the touch, parted the faster the pen
+            let press = a.pressure + (b.pressure - a.pressure) * t
+            let speed = a.speed + (b.speed - a.speed) * t
+            let fan = settings.bristles.map { 1 - $0.fan * (1 - press) } ?? 1
+            let gap = settings.bristles.map { $0.parting * min(1, speed / Self.partingSpeed) } ?? 0
             var center = CGPoint(x: a.position.x + (b.position.x - a.position.x) * CGFloat(t),
                                  y: a.position.y + (b.position.y - a.position.y) * CGFloat(t))
             // Interpolating an angle across the ±π seam would spin the dab; the path is
@@ -103,8 +114,11 @@ struct DabPlacer {
             let secondAngle = (settings.secondTip?.angleJitter ?? 0) > 0
                 ? (random(6) - 0.5) * 2 * .pi * settings.secondTip!.angleJitter : 0
             result.append(Dab(center: center, size: max(size, 0.5), angle: angle, aspect: aspect,
-                              opacity: opacity, seed: random(0), reach: usesReach ? pressed : 1,
-                              pathDistance: Float(nextDistance), secondAngle: secondAngle, heading: direction))
+                              opacity: opacity, seed: random(0),
+                              // How firmly the dab is pressed: the paper's tooth, and dry-brushing
+                              reach: usesReach ? pressed : (settings.bristles != nil ? press : 1),
+                              pathDistance: Float(nextDistance), secondAngle: secondAngle, heading: direction,
+                              fan: fan, gap: gap))
             index += 1
 
             // Each copy of a tap's dab gets its own index, and so its own jitter.
@@ -140,8 +154,10 @@ struct DabPlacer {
             let secondAngle = (settings.secondTip?.angleJitter ?? 0) > 0
                 ? (restingRandom(6) - 0.5) * 2 * .pi * settings.secondTip!.angleJitter : 0
             return Dab(center: center, size: max(size, 0.5), angle: angle, aspect: point.aspect,
-                       opacity: opacity, seed: restingRandom(0), reach: usesReach ? point.opacity : 1,
-                       pathDistance: Float(point.distance), secondAngle: secondAngle, heading: point.angle)
+                       opacity: opacity, seed: restingRandom(0),
+                       reach: usesReach ? point.opacity : (settings.bristles != nil ? point.pressure : 1),
+                       pathDistance: Float(point.distance), secondAngle: secondAngle, heading: point.angle,
+                       fan: settings.bristles.map { 1 - $0.fan * (1 - point.pressure) } ?? 1, gap: 0)
         }
     }
 

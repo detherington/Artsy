@@ -119,6 +119,8 @@ struct StampInstance {
     float aspect;           // length-to-width ratio along the dab's x axis
     float pathDistance;     // how far along the stroke the dab sits
     float secondAngle;      // rotation of the second tip, radians
+    float fan;              // how wide a bristle bundle is here, 0...1 of its full width
+    float gap;              // how far its clumps have parted, 0...1
 };
 
 struct StampVertexOut {
@@ -130,6 +132,8 @@ struct StampVertexOut {
     float  seed;
     float  reach;
     float  secondAngle;
+    float  fan;
+    float  gap;
 };
 
 struct StampParams {
@@ -146,7 +150,63 @@ struct StampParams {
     int    usesCarry;        // 1: the dab's colour and amount come from the carry texture
     float2 carryTexels;      // texels of the carry in use
     float  grooves;          // grooves along the stroke cut into the height a dab leaves, 0...1
+    int    bristleCount;     // above 0, the tip is a bundle of this many clumps (see bristleBundle)
+    float  dryBrush;         // how much a light touch skips the paper's valleys, 0...1
 };
+
+// --- Bristles ---
+//
+// The tip as a bundle: clumps of bristles across the dab, each a streak along it with its
+// own width and length, at fixed homes in the dab's space (the same every stroke, like the
+// brush's grain), within the tip's disc. At a light touch the bundle narrows about its
+// middle (`fan` below 1); at speed the clumps thin apart (`gap` above 0), so the stroke
+// breaks into streaks. A pixel takes the clump that covers it most, and reads a loaded
+// brush's carry at that clump's home, so each clump keeps its own paint wherever the
+// bundle has put it.
+
+static inline float bristleHash(int k, int salt) {
+    uint h = uint(k + 1) * 2654435761u ^ uint(salt) * 2246822519u;
+    h ^= h >> 13; h *= 3266489917u; h ^= h >> 16;
+    return float(h & 0xFFFFFFu) / 16777216.0;
+}
+
+struct Bundle {
+    float coverage;
+    float2 carryUV;    // where in the carry this pixel's clump keeps its paint
+};
+
+// `edge` is the antialiasing width in dab units (a pixel's, or a constant in a kernel).
+static inline Bundle bristleBundle(float2 uv, float fan, float gap, int count, float edge) {
+    Bundle b;
+    b.coverage = 0.0;
+    b.carryUV = uv;
+    // The bundle sits in the tip's disc, so the stroke's ends are round, if ragged
+    float disc = 1.0 - smoothstep(0.8, 1.0, distance(uv, float2(0.5)) * 2.0);
+    if (disc <= 0.0) return b;
+    for (int k = 0; k < count; k++) {
+        // Evenly across the dab, each a little off its place, and wide enough to overlap
+        // its neighbours until the bundle parts
+        float home = 0.05 + 0.9 * (float(k) + 0.5 + (bristleHash(k, 1) - 0.5) * 0.4) / float(count);
+        float pos = 0.5 + (home - 0.5) * fan;
+        float halfWidth = (0.6 / float(count)) * (0.8 + 0.6 * bristleHash(k, 3)) * (1.0 - 0.65 * gap);
+        float halfLength = 0.5 * (0.6 + 0.4 * bristleHash(k, 2));
+        float2 d = abs(uv - float2(0.5, pos));
+        // A rounded bristle: soft at its sides, so where clumps meet the tone dips
+        float soft = max(edge, halfWidth * 0.6);
+        float c = (1.0 - smoothstep(max(0.0, halfWidth - soft), halfWidth, d.y))
+                * (1.0 - smoothstep(max(0.0, halfLength - 0.06), halfLength, d.x));
+        if (c > b.coverage) {
+            b.coverage = c;
+            b.carryUV = float2(uv.x, home + (uv.y - pos));
+        }
+    }
+    b.coverage *= disc;
+    return b;
+}
+
+static inline float bristleCoverageFlat(float2 uv, float fan, float gap, int count) {
+    return bristleBundle(uv, fan, gap, count, 0.02).coverage;
+}
 
 /// The paint a loaded brush's carry holds under this fragment: premultiplied, its alpha
 /// how much paint the bristle has. Sampled from texel centre to texel centre, as a
@@ -182,17 +242,26 @@ vertex StampVertexOut stampVertex(
     out.seed = dab.seed;
     out.reach = dab.reach;
     out.secondAngle = dab.secondAngle;
+    out.fan = dab.fan;
+    out.gap = dab.gap;
     return out;
 }
 
-/// A dab's coverage at this fragment: the tip's shape, the second tip's mask, and grain.
+/// A dab's coverage at this fragment: the tip's shape (or the bristle bundle's), the second
+/// tip's mask, grain, and dry-brushing over the paper. `carryUV` comes back as where a
+/// loaded brush's carry is read for this pixel: the pixel itself, or its clump's home.
 static inline float stampCoverage(
     StampVertexOut in, constant StampParams &params,
-    texture2d<float> tip, texture2d<float> grain, texture2d<float> secondTip,
-    sampler tipSampler, sampler grainSampler
+    texture2d<float> tip, texture2d<float> grain, texture2d<float> secondTip, texture2d<float> paper,
+    sampler tipSampler, sampler grainSampler, thread float2 &carryUV
 ) {
     float coverage;
-    if (params.tipIsTexture != 0) {
+    carryUV = in.uv;
+    if (params.bristleCount > 0) {
+        Bundle bundle = bristleBundle(in.uv, in.fan, in.gap, params.bristleCount, fwidth(in.uv.x));
+        coverage = bundle.coverage;
+        carryUV = bundle.carryUV;
+    } else if (params.tipIsTexture != 0) {
         coverage = tip.sample(tipSampler, in.uv).r;
     } else {
         float dist = distance(in.uv, float2(0.5)) * 2.0;
@@ -232,6 +301,12 @@ static inline float stampCoverage(
             alpha *= saturate((press - (1.0 - height) * params.grainDepth) / 0.3);
         }
     }
+    if (params.dryBrush > 0.0) {
+        // Dry-brushing: a light touch reaches only the peaks of the paper's tooth; pressed
+        // fully it reaches the valleys too
+        float height = paper.sample(grainSampler, in.canvas / float(paper.get_width())).r;
+        alpha *= saturate((in.reach - (1.0 - height) * params.dryBrush * 0.7) / 0.3);
+    }
     return alpha;
 }
 
@@ -241,15 +316,17 @@ fragment float4 stampFragment(
     texture2d<float> grain [[texture(1)]],
     texture2d<float> secondTip [[texture(2)]],
     texture2d<float> carry [[texture(3)]],
+    texture2d<float> paper [[texture(5)]],
     sampler tipSampler [[sampler(0)]],
     sampler grainSampler [[sampler(1)]],
     sampler carrySampler [[sampler(2)]],
     constant StampParams &params [[buffer(0)]]
 ) {
-    float alpha = stampCoverage(in, params, tip, grain, secondTip, tipSampler, grainSampler);
+    float2 carryUV;
+    float alpha = stampCoverage(in, params, tip, grain, secondTip, paper, tipSampler, grainSampler, carryUV);
     if (params.usesCarry != 0) {
         // The carry is premultiplied by the bristle's load: a bristle out of paint leaves nothing
-        return carriedPaint(in.uv, params, carry, carrySampler) * saturate(params.color.a * alpha);
+        return carriedPaint(saturate(carryUV), params, carry, carrySampler) * saturate(params.color.a * alpha);
     }
     return premultiplied(params.color.rgb, params.color.a * alpha);
 }
@@ -263,14 +340,16 @@ fragment float4 stampHeightFragment(
     texture2d<float> secondTip [[texture(2)]],
     texture2d<float> carry [[texture(3)]],
     texture2d<float> bristles [[texture(4)]],
+    texture2d<float> paper [[texture(5)]],
     sampler tipSampler [[sampler(0)]],
     sampler grainSampler [[sampler(1)]],
     sampler carrySampler [[sampler(2)]],
     constant StampParams &params [[buffer(0)]]
 ) {
-    float alpha = stampCoverage(in, params, tip, grain, secondTip, tipSampler, grainSampler);
+    float2 carryUV;
+    float alpha = stampCoverage(in, params, tip, grain, secondTip, paper, tipSampler, grainSampler, carryUV);
     // Less paint on the bristle, less thickness left behind
-    float load = params.usesCarry != 0 ? carriedPaint(in.uv, params, carry, carrySampler).a : 1.0;
+    float load = params.usesCarry != 0 ? carriedPaint(saturate(carryUV), params, carry, carrySampler).a : 1.0;
     // The bristles leave grooves along the stroke, cut into the height: the bristle grain,
     // attached to the stroke, so they run with it and bend with it, and line up with the
     // bristle streaks a brush grained the same way has in its colour
@@ -932,6 +1011,7 @@ struct LoadedBrushParams {
     int    usesWet;         // 1: the layer has a wet map, read for how much comes up
     float  wetNow;          // seconds since the layer's wet epoch
     float  dryingTime;
+    int    bristleCount;    // above 0, the tip is a bundle: a carry texel touches where its clump is
 };
 
 // A tip's coverage without the antialiasing a fragment can do (no derivatives in a kernel).
@@ -970,8 +1050,10 @@ kernel void loadedBrushTransferKernel(
 ) {
     if (gid.x >= uint(p.carryTexels.x) || gid.y >= uint(p.carryTexels.y)) return;
     float2 uv = (float2(gid) + 0.5) / p.carryTexels;
-    // This bristle's touch: the tip's coverage here, by how firmly the dab was pressed
-    float k = tipCoverageFlat(uv, p.hardness, p.tipIsTexture, tip, tipSampler) * p.press;
+    // This bristle's touch: the tip's coverage here (the bundle's, at its home layout), by
+    // how firmly the dab was pressed
+    float k = (p.bristleCount > 0 ? bristleCoverageFlat(uv, 1.0, 0.0, p.bristleCount)
+                                  : tipCoverageFlat(uv, p.hardness, p.tipIsTexture, tip, tipSampler)) * p.press;
     float4 paint = carry.read(gid);
 
     // What is under the bristle, on the layer
@@ -1027,7 +1109,16 @@ struct ImpastoPushParams {
     float2 heading;        // unit vector of the stroke's motion, canvas axes
     float  forward;        // how much more goes ahead than behind, 0...1
     float  band;           // the band's width outside the tip, as a fraction of the dab's size
+    int    bristleCount;   // above 0, the tip is a bundle of this many clumps
+    float  fan;            // the bundle's width and parting at this dab
+    float  gap;
 };
+
+// The tip's coverage for the push: the bundle's, or the one shape's.
+static inline float pushCoverage(float2 uv, constant ImpastoPushParams &p, texture2d<float> tip, sampler tipSampler) {
+    return p.bristleCount > 0 ? bristleCoverageFlat(uv, p.fan, p.gap, p.bristleCount)
+                              : tipCoverageFlat(uv, p.hardness, p.tipIsTexture, tip, tipSampler);
+}
 
 kernel void impastoPushKernel(
     texture2d<float, access::write> height [[texture(0)]],
@@ -1046,8 +1137,7 @@ kernel void impastoPushKernel(
     float2 local = float2(d.x * c + d.y * sn, -d.x * sn + d.y * c) / float2(p.size * p.aspect, p.size);
     float2 uv = local + 0.5;
     float h = before.read(gid).r;
-    float inside = (all(uv >= 0.0) && all(uv <= 1.0))
-        ? tipCoverageFlat(uv, p.hardness, p.tipIsTexture, tip, tipSampler) : 0.0;
+    float inside = (all(uv >= 0.0) && all(uv <= 1.0)) ? pushCoverage(uv, p, tip, tipSampler) : 0.0;
     float share = p.squeeze * p.press;
     float lost = h * share * inside;
 
@@ -1065,7 +1155,7 @@ kernel void impastoPushKernel(
         for (int i = 0; i < steps; i++) {
             float s = (float(i) + 0.5) / float(steps) * edge;
             float2 q = dir * s;
-            float cover = tipCoverageFlat(q + 0.5, p.hardness, p.tipIsTexture, tip, tipSampler);
+            float cover = pushCoverage(q + 0.5, p, tip, tipSampler);
             if (cover <= 0.0) continue;
             float2 stretched = q * float2(p.size * p.aspect, p.size);
             float2 qCanvas = p.center + float2(stretched.x * c - stretched.y * sn, stretched.x * sn + stretched.y * c);

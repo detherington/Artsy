@@ -2,6 +2,19 @@ import CoreGraphics
 @testable import Artsy
 
 extension BrushDescriptor {
+    /// The brush with its tip one shape rather than a bundle of bristles, for tests about
+    /// what a stroke carries rather than how its edge looks.
+    var withoutBristles: BrushDescriptor {
+        var brush = self
+        if case .stamp(var settings) = brush.rendering {
+            settings.bristles = nil
+            brush.rendering = .stamp(settings)
+        }
+        return brush
+    }
+}
+
+extension BrushDescriptor {
     /// The brush with its load taken off: the same paint from start to end, nothing
     /// picked up. For tests of what is not the loaded brush.
     var withoutLoad: BrushDescriptor {

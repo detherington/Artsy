@@ -180,7 +180,8 @@ final class StrokePath {
                 distance: b.distance,
                 aspect: aspect,
                 tiltAngle: atan2(b.tilt.y, b.tilt.x),
-                rotation: b.rotation * .pi / 180
+                rotation: b.rotation * .pi / 180,
+                speed: b.speed
             ))
         }
 

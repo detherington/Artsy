@@ -403,6 +403,42 @@ struct StampSettings: Codable, Equatable {
     var impasto: Impasto? = nil
     /// Set for a brush that carries paint.
     var load: Load? = nil
+    /// The tip as a bundle of bristles; nil for a tip that is one shape.
+    var bristles: Bristles? = nil
+
+    /// The tip as a bundle: clumps of bristles across the brush that fan out with pressure
+    /// and come to a point at a light touch, part at speed so a fast stroke breaks into
+    /// streaks, skip the paper's valleys at a light touch (dry-brushing), and each carry
+    /// their own share of a loaded brush's paint. The bundle is the same every stroke, like
+    /// the brush's grain.
+    struct Bristles: Codable, Equatable {
+        /// Clumps of bristles across the brush.
+        var count: Int = 10
+        /// How much the bundle narrows at a light touch, 0...1: at 0 it is always its full
+        /// width; at 1 a light touch brings the bristles to a point.
+        var fan: Float = 0.6
+        /// How far the clumps part at speed, 0...1.
+        var parting: Float = 0.5
+        /// How much a light touch skips the paper's valleys, 0...1.
+        var dryBrush: Float = 0.5
+
+        init(count: Int = 10, fan: Float = 0.6, parting: Float = 0.5, dryBrush: Float = 0.5) {
+            self.count = count
+            self.fan = fan
+            self.parting = parting
+            self.dryBrush = dryBrush
+        }
+
+        private enum CodingKeys: String, CodingKey { case count, fan, parting, dryBrush }
+
+        init(from decoder: Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            count = min(max(try c.decodeIfPresent(Int.self, forKey: .count) ?? 10, 1), 32)
+            fan = try c.decodeIfPresent(Float.self, forKey: .fan) ?? 0.6
+            parting = try c.decodeIfPresent(Float.self, forKey: .parting) ?? 0.5
+            dryBrush = try c.decodeIfPresent(Float.self, forKey: .dryBrush) ?? 0.5
+        }
+    }
     /// Distance between dabs, as a fraction of the dab's diameter.
     var spacing: Float
     /// Opacity of a single dab, before pressure.
@@ -586,8 +622,9 @@ extension BrushDescriptor {
             impasto: .init(thickness: 0.075, squeeze: 0.35, grooves: 0.3),
             // Loaded: dries faster than oil and takes up less of what it crosses
             load: .init(amount: 1, depletion: 0.25, resaturation: 0.1, bleed: 0.4, variation: 0.5),
+            bristles: .init(count: 10, fan: 0.5, parting: 0.6, dryBrush: 0.5),
             spacing: 0.05, flow: 0.6, accumulation: .wash,
-            grain: .init(mode: .multiply, texture: .bristles, attachment: .stroke, scale: 1.2, depth: 0.55),
+            grain: .init(mode: .multiply, texture: .bristles, attachment: .stroke, scale: 1.2, depth: 0.3),
             opacityJitter: 0.1, followsDirection: true
         )),
         mixing: .pigment,
@@ -718,8 +755,11 @@ extension BrushDescriptor {
             impasto: .init(thickness: 0.1, squeeze: 0.5, grooves: 0.4),
             // Loaded: runs out slowly, drags what it crosses, comes back to its colour slowly
             load: .init(amount: 1, depletion: 0.12, resaturation: 0.06, bleed: 0.5, variation: 0.6),
+            // A bundle of a dozen clumps: narrows at a light touch, breaks into streaks at
+            // speed, and scumbles over the tooth when barely pressed
+            bristles: .init(count: 12, fan: 0.6, parting: 0.5, dryBrush: 0.4),
             spacing: 0.05, flow: 0.75, accumulation: .wash,
-            grain: .init(mode: .multiply, texture: .bristles, attachment: .stroke, scale: 1.0, depth: 0.7),
+            grain: .init(mode: .multiply, texture: .bristles, attachment: .stroke, scale: 1.0, depth: 0.35),
             sizeJitter: 0.05, opacityJitter: 0.1, followsDirection: true
         )),
         mixing: .pigment,

@@ -66,6 +66,7 @@ final class PaintRenderer {
         var usesWet: Int32
         var wetNow: Float
         var dryingTime: Float
+        var bristleCount: Int32
     }
 
     /// Draw settled `dabs`, in order, one copy per entry in `mirrors`: the colour into
@@ -119,7 +120,8 @@ final class PaintRenderer {
             color: SIMD4(color.red, color.green, color.blue, (load?.amount ?? 1) * color.alpha),
             // The loading pattern belongs to the brush, like its grain: the same every stroke
             variation: load?.variation ?? 0, seed: 0.37, mixPigments: brush.mixing == .pigment ? 1 : 0,
-            usesWet: wet == nil ? 0 : 1, wetNow: wetNow, dryingTime: dryingTime
+            usesWet: wet == nil ? 0 : 1, wetNow: wetNow, dryingTime: dryingTime,
+            bristleCount: Int32(settings.bristles?.count ?? 0)
         )
 
         if let load, !filled {
@@ -176,8 +178,8 @@ final class PaintRenderer {
                 for dab in group {
                     if pushes {
                         pusher.push(dab, press: dab.opacity * opacityScale, squeeze: share, brush: brush,
-                                    tip: tipTexture, tipIsTexture: tipIsTexture, mirrors: mirrors, height: height,
-                                    commandBuffer: commandBuffer, canvasSize: canvasSize)
+                                    tip: tipTexture, tipIsTexture: tipIsTexture, bristleCount: settings.bristles?.count ?? 0,
+                                    mirrors: mirrors, height: height, commandBuffer: commandBuffer, canvasSize: canvasSize)
                     }
                     if lays {
                         let pass = MTLRenderPassDescriptor()
@@ -301,18 +303,23 @@ final class ImpastoPusher {
         var heading: SIMD2<Float>
         var forward: Float
         var band: Float
+        var bristleCount: Int32
+        var fan: Float
+        var gap: Float
     }
 
     /// Push the paint under `dab`, one copy per entry in `mirrors`.
     /// - Parameter squeeze: the share of it this dab pushes out (see `share(squeeze:spacing:)`).
     func push(_ dab: Dab, press: Float, squeeze: Float, brush: BrushDescriptor, tip: MTLTexture, tipIsTexture: Int32,
-              mirrors: [(CGPoint) -> CGPoint], height: MTLTexture, commandBuffer: MTLCommandBuffer, canvasSize: CGSize) {
+              bristleCount: Int = 0, mirrors: [(CGPoint) -> CGPoint], height: MTLTexture, commandBuffer: MTLCommandBuffer,
+              canvasSize: CGSize) {
         var params = Params(
             center: .zero, size: dab.size, angle: 0, aspect: dab.aspect,
             canvasSize: SIMD2(Float(canvasSize.width), Float(canvasSize.height)),
             patchOrigin: .zero, patchSize: .zero,
             hardness: brush.hardness, tipIsTexture: tipIsTexture, press: min(press, 1), squeeze: min(squeeze, 1),
-            heading: .zero, forward: Self.forward, band: Self.band
+            heading: .zero, forward: Self.forward, band: Self.band,
+            bristleCount: Int32(bristleCount), fan: dab.fan, gap: dab.gap
         )
         let reach = CGFloat(dab.size * max(dab.aspect, 1)) * 0.7072 * CGFloat(1 + 2 * Self.band) + 2
         for mirror in mirrors {

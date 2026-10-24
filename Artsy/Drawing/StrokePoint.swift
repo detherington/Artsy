@@ -33,9 +33,10 @@ struct InterpolatedPoint {
     let aspect: Float            // Length-to-width ratio of the mark (1 = round)
     let tiltAngle: Float         // Direction the pen leans in, radians; the mark's long side
     let rotation: Float          // Barrel rotation in radians
+    let speed: Float             // Canvas pixels a second the pen was moving here
 
     init(position: CGPoint, pressure: Float, width: Float, opacity: Float, angle: Float, distance: CGFloat,
-         aspect: Float = 1, tiltAngle: Float = 0, rotation: Float = 0) {
+         aspect: Float = 1, tiltAngle: Float = 0, rotation: Float = 0, speed: Float = 0) {
         self.position = position
         self.pressure = pressure
         self.width = width
@@ -45,6 +46,7 @@ struct InterpolatedPoint {
         self.aspect = aspect
         self.tiltAngle = tiltAngle
         self.rotation = rotation
+        self.speed = speed
     }
 }
 

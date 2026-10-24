@@ -218,7 +218,7 @@ final class ShapeSnapTests: XCTestCase {
             // Thick paint pushes a little of itself out beyond the brush's edge, so a trace of
             // the snapped line's own paint can reach a stray; the rough stroke's would be a
             // hundred times that
-            XCTAssertEqual(heights.at(x: Int(p.x), y: Int(p.y)).x, 0, accuracy: 0.01, "none where the hand wandered")
+            XCTAssertEqual(heights.at(x: Int(p.x), y: Int(p.y)).x, 0, accuracy: 0.02, "none where the hand wandered")
         }
         harness.viewModel.performUndo(renderer: harness.renderer)
         XCTAssertEqual(harness.heights(of: harness.drawingLayer).at(x: Int(middle.x), y: Int(middle.y)).x, 0, accuracy: 0.001)

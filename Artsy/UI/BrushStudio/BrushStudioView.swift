@@ -17,6 +17,7 @@ struct BrushStudioView: View {
                     impastoSection
                     if model.stampSettings?.smudge == nil {
                         loadSection
+                        bristlesSection
                     }
                     secondTipSection
                     grainSection
@@ -164,6 +165,39 @@ struct BrushStudioView: View {
                 slider("Grooves", impastoBinding(\.grooves, impasto), in: 0...1, percent: true)
             }
         }
+    }
+
+    private var bristlesSection: some View {
+        Section("Bristles") {
+            Toggle("A bundle of bristles: fans with pressure, parts at speed, dry-brushes at a light touch", isOn: Binding(
+                get: { model.stampSettings?.bristles != nil },
+                set: { on in
+                    model.stampBinding(\.bristles, default: nil).wrappedValue = on ? StampSettings.Bristles() : nil
+                }
+            ))
+            if let bristles = model.stampSettings?.bristles {
+                Stepper("Clumps: \(bristles.count)", value: bristlesBinding(\.count, bristles), in: 2...24)
+                slider("Fan", bristlesBinding(\.fan, bristles), in: 0...1, percent: true)
+                slider("Parting", bristlesBinding(\.parting, bristles), in: 0...1, percent: true)
+                slider("Dry brush", bristlesBinding(\.dryBrush, bristles), in: 0...1, percent: true)
+            }
+        }
+    }
+
+    private func bristlesBinding<Value>(_ keyPath: WritableKeyPath<StampSettings.Bristles, Value>,
+                                        _ current: StampSettings.Bristles) -> Binding<Value> {
+        Binding(
+            get: { (model.stampSettings?.bristles ?? current)[keyPath: keyPath] },
+            set: { value in
+                model.apply { brush in
+                    guard case .stamp(var settings) = brush.rendering else { return }
+                    var bristles = settings.bristles ?? current
+                    bristles[keyPath: keyPath] = value
+                    settings.bristles = bristles
+                    brush.rendering = .stamp(settings)
+                }
+            }
+        )
     }
 
     private var loadSection: some View {

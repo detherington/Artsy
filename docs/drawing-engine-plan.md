@@ -638,6 +638,57 @@ of the layer and to what a laptop can run every frame.
   the settings survive the brush file. The watercolor tile, the Water tile, the soft
   brushes over dark paint and the everything document were re-recorded after viewing.
 
+### 11. Bristles (medium) — done, untested by hand
+
+The fifth and last step of `paint-media-research.md`: the tip as a bundle of bristles.
+
+- **The bundle** (`StampSettings.Bristles`; `bristleBundle` in Shaders.metal): clumps of
+  bristles across the dab, each a streak along it with its own width and length, at
+  fixed homes in the dab's space — evenly spaced, each a little off its place, the same
+  every stroke like the brush's grain — within the tip's disc, so a stroke's ends are
+  round if ragged. A clump is soft at its sides and just wider than the spacing, so a
+  stroke pressed normally is solid with the tone dipping where clumps meet. Nothing
+  about dab placement changed: the bundle is drawn in the fragment, a pixel taking the
+  clump that covers it most, so it costs a loop over the clumps per pixel and no more
+  instances.
+- **What moves it.** At a light touch the bundle narrows about its middle (*fan*: a
+  light touch brings the bristles towards a point); at speed the clumps thin apart
+  (*parting*: a fast stroke breaks into streaks; full at 1500 px/s); the dab's pressure
+  and speed go with it as two floats on the stamp instance, from the path, which now
+  carries its speed on every point. *Dry brush*: a light touch reaches only the peaks of
+  the paper's tooth (the canvas-fixed paper, whatever the brush's own grain), pressed
+  fully it reaches the valleys too — the height-grain rule, on paint brushes. Tilt
+  already stretches the dab along the lean, and the bundle with it.
+- **Each clump keeps its own paint.** A pixel reads a loaded brush's carry at its clump's
+  home, not at the pixel, so a clump that has run dry or picked up red stays that clump
+  wherever the fan has put it. The carry's "uneven bristles" already vary the load by
+  row, which is by clump. The transfer kernel's touch and the thick paint's push use the
+  bundle too (the transfer at the home layout; the push at the dab's own fan and
+  parting), so bristles that did not touch neither deplete nor pick up, and the ridges a
+  thick stroke pushes up are the clumps'.
+- **Oil and Acrylic** have bundles (12 and 10 clumps); their stroke-attached bristle
+  grain is halved, since the bundle now carries most of the streaking. Brush Studio has
+  a Bristles section: clumps, fan, parting, dry brush.
+- **What it took.** Clumps as dots a few pixels across covered each pixel with a
+  handful of dabs instead of twenty, and thickness and colour collapsed to a tenth: a
+  bristle mark is a streak the length of the dab. Random homes left white gaps, and a
+  stroke read as a rake; fully overlapping clumps saturated to a flat disc and nothing
+  parted. Even spacing, a width just over the spacing and soft sides are the middle.
+- **Cost.** The loop over the clumps is per pixel of each dab and nothing else changed:
+  a fast Oil stroke on 8192² with twelve layers is 4.2 ms a frame, as it was
+  (`testLargeCanvasCosts`).
+- **Not done.** A brush loaded with two colours at the edges (the carry can hold it; the
+  loading is a colour-picker feature). Bristles bending with tilt beyond the stretch the
+  dab already gets. Clumps that cross one another.
+- **Tests** (`BristleTests`): streaks across the stroke and the same streaks 60 px on; a
+  light touch narrows the bundle and a bundle that does not fan stays wide; a fast
+  stroke breaks into streaks and a bundle that does not part is the same at any speed;
+  a light touch leaves the paper's valleys, pressed hard it fills them, and without dry
+  brush it fills them at any touch; the settings survive the brush file and old files
+  have none. The impasto tests use a bristle-free Oil, since they are about thickness
+  carrying through. The oil and acrylic tiles, the relief scene and the everything
+  document were re-recorded after viewing.
+
 ## At the limits: 8192² with 12 layers
 
 Measured after step 6 opened these limits up (`testLargeCanvasCosts`, debug build, M4 Pro):

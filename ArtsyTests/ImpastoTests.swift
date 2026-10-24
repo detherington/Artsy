@@ -18,7 +18,7 @@ final class ImpastoTests: XCTestCase {
     /// what carries thickness, not about the paint on the brush.
     private func canvasWithAStroke(width: Int = 200, height: Int = 120, size: Float = 40) throws -> EngineHarness {
         let harness = try EngineHarness(width: width, height: height)
-        harness.select(.oil.withoutLoad)
+        harness.select(.oil.withoutLoad.withoutBristles)
         harness.viewModel.brushSize = size
         harness.viewModel.currentColor = ochre
         harness.draw(StrokeFixtures.line(from: CGPoint(x: 30, y: 60), to: CGPoint(x: 170, y: 60), pressure: 1...1))
@@ -178,7 +178,7 @@ final class ImpastoTests: XCTestCase {
     func testFlatteningAndMergingKeepTheThickness() throws {
         let harness = try canvasWithAStroke()
         try harness.addLayer()
-        harness.select(.oil.withoutLoad)
+        harness.select(.oil.withoutLoad.withoutBristles)
         harness.viewModel.brushSize = 40
         harness.viewModel.currentColor = ochre
         harness.draw(StrokeFixtures.line(from: CGPoint(x: 30, y: 60), to: CGPoint(x: 170, y: 60), pressure: 1...1))
@@ -314,7 +314,7 @@ final class ImpastoTests: XCTestCase {
     func testThinnerPaintPilesLess() throws {
         let full = try canvasWithAStroke()
         let thin = try EngineHarness(width: 200, height: 120)
-        thin.select(.oil.withoutLoad)
+        thin.select(.oil.withoutLoad.withoutBristles)
         thin.viewModel.brushSize = 40
         thin.viewModel.currentColor = ochre
         thin.viewModel.brushOpacity = 0.5
@@ -330,7 +330,7 @@ final class ImpastoTests: XCTestCase {
     /// one screen pixel; the paint is lit as it is at 1:1, with finer detail averaged away.
     func testReliefKeepsItsLightZoomedOut() throws {
         let harness = try EngineHarness(width: 400, height: 240)
-        harness.select(.oil.withoutLoad)   // an even stroke: the subject is the light, not the paint
+        harness.select(.oil.withoutLoad.withoutBristles)   // an even stroke: the subject is the light, not the paint
         harness.viewModel.brushSize = 80
         harness.viewModel.currentColor = ochre
         harness.draw(StrokeFixtures.line(from: CGPoint(x: 200, y: 20), to: CGPoint(x: 200, y: 220), pressure: 1...1))
