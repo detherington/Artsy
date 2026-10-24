@@ -182,5 +182,13 @@
         <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
         <enclosure url="https://github.com/detherington/Artsy/releases/download/v0.8.9/Artsy-0.8.9.dmg" length="5540571" type="application/octet-stream" sparkle:edSignature="xMrkxoPagE0Tnr//bSyTKY7q9gII3C5HnNrhZ/k4zyD20my6eUfHX6rXQc11ztjZvhi4Lrx2HlWJQgqgCsfwCw=="/>
     </item>
+    <item>
+        <title>Version 0.8.10</title>
+        <pubDate>Sat, 24 Oct 2026 19:38:31 +0000</pubDate>
+        <sparkle:version>23</sparkle:version>
+        <sparkle:shortVersionString>0.8.10</sparkle:shortVersionString>
+        <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+        <enclosure url="https://github.com/detherington/Artsy/releases/download/v0.8.10/Artsy-0.8.10.dmg" length="5541736" type="application/octet-stream" sparkle:edSignature="wo283K0yKLVZm70uvk3B6ZlS6OWtni/pks9DwaYipQLoWwpRY2CMsJjZnsoQGVq7DAuuZHjdW9z4V2o6aILyBw=="/>
+    </item>
 </channel>
 </rss>
