@@ -78,7 +78,6 @@
 		AF02C001AAAAAAAAAAAAAAAA /* CustomColorPickerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AF02C002BBBBBBBBBBBBBBBB /* CustomColorPickerView.swift */; };
 		AF03D001AAAAAAAAAAAAAAAA /* BucketFill.swift in Sources */ = {isa = PBXBuildFile; fileRef = AF03D002BBBBBBBBBBBBBBBB /* BucketFill.swift */; };
 		AF04E001AAAAAAAAAAAAAAAA /* SymmetryMode.swift in Sources */ = {isa = PBXBuildFile; fileRef = AF04E002BBBBBBBBBBBBBBBB /* SymmetryMode.swift */; };
-		AF04E003AAAAAAAAAAAAAAAA /* SymmetryControlView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AF04E004BBBBBBBBBBBBBBBB /* SymmetryControlView.swift */; };
 		AF05F001AAAAAAAAAAAAAAAA /* TransformSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = AF05F002BBBBBBBBBBBBBBBB /* TransformSession.swift */; };
 		AF06A001AAAAAAAAAAAAAAAA /* ClipboardManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = AF06A002BBBBBBBBBBBBBBBB /* ClipboardManager.swift */; };
 		AF07B001AAAAAAAAAAAAAAAA /* TransformCursor.swift in Sources */ = {isa = PBXBuildFile; fileRef = AF07B002BBBBBBBBBBBBBBBB /* TransformCursor.swift */; };
@@ -186,7 +185,6 @@
 		AF02C002BBBBBBBBBBBBBBBB /* CustomColorPickerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CustomColorPickerView.swift; sourceTree = "<group>"; };
 		AF03D002BBBBBBBBBBBBBBBB /* BucketFill.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BucketFill.swift; sourceTree = "<group>"; };
 		AF04E002BBBBBBBBBBBBBBBB /* SymmetryMode.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SymmetryMode.swift; sourceTree = "<group>"; };
-		AF04E004BBBBBBBBBBBBBBBB /* SymmetryControlView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SymmetryControlView.swift; sourceTree = "<group>"; };
 		AF05F002BBBBBBBBBBBBBBBB /* TransformSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TransformSession.swift; sourceTree = "<group>"; };
 		AF06A002BBBBBBBBBBBBBBBB /* ClipboardManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClipboardManager.swift; sourceTree = "<group>"; };
 		AF07B002BBBBBBBBBBBBBBBB /* TransformCursor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TransformCursor.swift; sourceTree = "<group>"; };
@@ -312,7 +310,6 @@
 				DB157DCFAA0D25C78F80DBE7 /* BrushSettingsView.swift */,
 				1EA099CE5CB6D694FA248491 /* NewCanvasView.swift */,
 				BD8E45F79CA68DA8870D2281 /* SettingsView.swift */,
-				AF04E004BBBBBBBBBBBBBBBB /* SymmetryControlView.swift */,
 				9BB66B16CCCE0203E60E9A49 /* AIPanel */,
 				ACE5880AE63A8E10898D3826 /* UnsplashPanel */,
 				E59856583A00462341D34609 /* BrushStudio */,
@@ -733,7 +730,6 @@
 				AF02C001AAAAAAAAAAAAAAAA /* CustomColorPickerView.swift in Sources */,
 				AF03D001AAAAAAAAAAAAAAAA /* BucketFill.swift in Sources */,
 				AF04E001AAAAAAAAAAAAAAAA /* SymmetryMode.swift in Sources */,
-				AF04E003AAAAAAAAAAAAAAAA /* SymmetryControlView.swift in Sources */,
 				AF05F001AAAAAAAAAAAAAAAA /* TransformSession.swift in Sources */,
 				AF06A001AAAAAAAAAAAAAAAA /* ClipboardManager.swift in Sources */,
 				AF07B001AAAAAAAAAAAAAAAA /* TransformCursor.swift in Sources */,

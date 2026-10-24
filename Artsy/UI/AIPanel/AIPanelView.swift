@@ -96,13 +96,13 @@ struct AIPanelView: View {
                             newPresetName = ""
                             showSavePreset = true
                         }
-                        .font(.system(size: 10))
+                        .font(.system(size: 12))
                         .buttonStyle(.plain)
                         .foregroundColor(.accentColor)
                     }
                 }
                 TextEditor(text: $prompt)
-                    .font(.system(size: 11))
+                    .font(.system(size: 13))
                     .frame(height: 60)
                     .scrollContentBackground(.hidden)
                     .padding(6)
@@ -113,8 +113,8 @@ struct AIPanelView: View {
             // Quality
             HStack {
                 Text("Quality")
-                    .font(.system(size: 11))
-                    .foregroundColor(Color(white: 0.75))
+                    .font(.system(size: 13))
+                    .foregroundColor(Chrome.text)
                 Spacer()
                 Picker("", selection: $selectedQuality) {
                     ForEach(AIQuality.allCases) { q in
@@ -131,8 +131,8 @@ struct AIPanelView: View {
                     ProgressView()
                         .controlSize(.small)
                     Text(aiManager.progress ?? "Generating...")
-                        .font(.system(size: 11))
-                        .foregroundColor(.gray)
+                        .font(.system(size: 13))
+                        .foregroundColor(Chrome.secondaryText)
                     Spacer()
                     Button("Cancel") { aiManager.cancel() }
                         .controlSize(.small)
@@ -148,7 +148,7 @@ struct AIPanelView: View {
 
                 if !aiManager.activeService.isConfigured {
                     Label("Set API key in Settings", systemImage: "exclamationmark.triangle.fill")
-                        .font(.system(size: 10))
+                        .font(.system(size: 12))
                         .foregroundColor(.orange)
                 }
             }
@@ -156,7 +156,7 @@ struct AIPanelView: View {
             // Error
             if let error = aiManager.error {
                 Text(error)
-                    .font(.system(size: 10))
+                    .font(.system(size: 12))
                     .foregroundColor(.red)
                     .lineLimit(3)
                     .padding(8)
@@ -356,7 +356,7 @@ struct StylePresetGrid: View {
                         Image(systemName: iconName(for: style))
                             .font(.system(size: 14))
                         Text(shortName(for: style))
-                            .font(.system(size: 10, weight: .medium))
+                            .font(.system(size: 12, weight: .medium))
                             .lineLimit(1)
                     }
                     .frame(maxWidth: .infinity, minHeight: 44)
@@ -389,10 +389,10 @@ struct CustomPresetButton: View {
     var body: some View {
         HStack(spacing: 4) {
             Image(systemName: "star.fill")
-                .font(.system(size: 9))
+                .font(.system(size: 12))
                 .foregroundColor(isSelected ? .white : Color(white: 0.55))
             Text(preset.name)
-                .font(.system(size: 10, weight: .medium))
+                .font(.system(size: 12, weight: .medium))
                 .lineLimit(1)
         }
         .frame(maxWidth: .infinity, minHeight: 32)
@@ -431,7 +431,7 @@ struct SavePresetSheet: View {
                 .textFieldStyle(.roundedBorder)
 
             Text(prompt)
-                .font(.system(size: 11))
+                .font(.system(size: 13))
                 .foregroundColor(.secondary)
                 .lineLimit(4)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -471,7 +471,7 @@ struct EditPresetSheet: View {
                 .textFieldStyle(.roundedBorder)
 
             TextEditor(text: $prompt)
-                .font(.system(size: 11))
+                .font(.system(size: 13))
                 .frame(height: 100)
                 .cornerRadius(4)
 
@@ -508,8 +508,8 @@ struct SectionLabel: View {
 
     var body: some View {
         Text(text)
-            .font(.system(size: 10, weight: .semibold))
-            .foregroundColor(Color(white: 0.6))
+            .font(.system(size: 12, weight: .semibold))
+            .foregroundColor(Chrome.secondaryText)
             .textCase(.uppercase)
             .tracking(0.4)
     }

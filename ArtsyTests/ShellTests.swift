@@ -381,6 +381,59 @@ final class ShellTests: XCTestCase {
         XCTAssertEqual(scroll.contentView.bounds.origin.y, 80, accuracy: 1, "a drag on the row scrolls")
     }
 
+    /// The Adjust panel: symmetry buttons set the mode, and Reset view does what it says.
+    func testTheAdjustPanelSetsSymmetryAndResetsTheView() throws {
+        let (_, viewModel) = try canvas()
+        var resets = 0
+        var actions = ChromeActions()
+        actions.resetView = { resets += 1 }
+        let host = NSHostingView(rootView: AdjustPanelView(viewModel: viewModel, actions: actions))
+        show(host, size: NSSize(width: Chrome.panelWidth, height: 640))
+        settle(host)
+        if ProcessInfo.processInfo.environment["ARTSY_SNAPSHOT_DIR"] != nil { snapshot(host, named: "adjust-panel") }
+
+        // Under the header (44) and the Symmetry label (30): four buttons across, then
+        // the radial row; the list scrolls, so taps go through the scroll view
+        let modesY: CGFloat = 44 + 30 + SymmetryButtons.modeHeight / 2
+        let radialY: CGFloat = 44 + 30 + SymmetryButtons.modeHeight + 6 + 20
+        func tap(_ x: CGFloat, _ y: CGFloat, _ t: TimeInterval) {
+            send(.leftMouseDown, at: NSPoint(x: x, y: 640 - y), time: t)
+            send(.leftMouseUp, at: NSPoint(x: x, y: 640 - y), time: t + 0.1)
+            RunLoop.main.run(until: Date().addingTimeInterval(0.1))
+        }
+        let inset: CGFloat = 14, slot = (Chrome.panelWidth - 28 - 18) / 4
+        tap(inset + slot * 3.5, modesY, 1)
+        XCTAssertEqual(viewModel.symmetryMode, .quad, "the fourth button")
+        tap(inset + slot * 1.5, modesY, 2)
+        XCTAssertEqual(viewModel.symmetryMode, .horizontal, "the second")
+        // Radial pills share the row after a 60 pt label
+        let pillSlot = (Chrome.panelWidth - 28 - 60 - 6 - 24) / 5
+        tap(inset + 66 + pillSlot * 2.5, radialY, 3)
+        XCTAssertEqual(viewModel.symmetryMode, .radial(6), "the third pill")
+        tap(inset + slot * 0.5, modesY, 4)
+        XCTAssertEqual(viewModel.symmetryMode, .off)
+
+        // Reset view: the first row of the View section
+        let resetY: CGFloat = radialY + 20 + 8 + 30 + 22
+        tap(150, resetY, 5)
+        XCTAssertEqual(resets, 1, "Reset view asked the window to reset")
+    }
+
+    func testResettingTheViewMakesItUprightUnflippedAndFitted() throws {
+        let (_, viewModel) = try canvas()
+        let size = CGSize(width: 400, height: 300)
+        viewModel.transform.scale = 3
+        viewModel.rotateView(direction: 1, viewSize: size)
+        viewModel.flipView(viewSize: size)
+        XCTAssertTrue(viewModel.transform.isFlipped)
+        viewModel.resetView(viewSize: size)
+        XCTAssertFalse(viewModel.transform.isFlipped, "unflipped")
+        XCTAssertEqual(viewModel.transform.rotation, 0, accuracy: 1e-6, "upright")
+        var fitted = CanvasTransform()
+        fitted.zoomToFit(canvasSize: viewModel.canvasSize, viewSize: size)
+        XCTAssertEqual(viewModel.transform.scale, fitted.scale, accuracy: 1e-6, "fitted")
+    }
+
     /// A click through the window's dispatch, which is the only way a SwiftUI view takes one.
     private func click(at point: NSPoint) {
         for type in [NSEvent.EventType.leftMouseDown, .leftMouseUp] {
