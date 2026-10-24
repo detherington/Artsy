@@ -343,14 +343,17 @@ struct PanelSlider: View {
     @Binding var value: Float
     let range: ClosedRange<Float>
     var logarithmic = false
+    /// Told when a drag on the track starts (true) and ends (false).
+    var onEditingChanged: (Bool) -> Void = { _ in }
     let format: (Float) -> String
 
     init(_ label: String, value: Binding<Float>, range: ClosedRange<Float>, logarithmic: Bool = false,
-         format: @escaping (Float) -> String) {
+         onEditingChanged: @escaping (Bool) -> Void = { _ in }, format: @escaping (Float) -> String) {
         self.label = label
         self._value = value
         self.range = range
         self.logarithmic = logarithmic
+        self.onEditingChanged = onEditingChanged
         self.format = format
     }
 
@@ -380,7 +383,7 @@ struct PanelSlider: View {
                 .font(Chrome.font)
                 .foregroundColor(Chrome.secondaryText)
                 .frame(width: 64, alignment: .leading)
-            Slider(value: position, in: 0...1)
+            Slider(value: position, in: 0...1, onEditingChanged: onEditingChanged)
                 .controlSize(.large)
             Text(format(value))
                 .font(Chrome.valueFont)

@@ -83,6 +83,8 @@ struct ToolRailView: View {
 /// What the chrome asks of the window it is in: things that need the canvas view (its
 /// size, its undo) or the app (files, the studio). Built by `MainLayout`.
 struct ChromeActions {
+    /// The window's renderer, for what a panel does to layers; nil when there is none.
+    var renderer: () -> CanvasRenderer? = { nil }
     var undo: () -> Void = {}
     var redo: () -> Void = {}
     var zoomToFit: () -> Void = {}

@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		D508B298D35A46C37562E077 /* LayersPanelView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3C27E4B2E1BC810375AA172E /* LayersPanelView.swift */; };
 		3454411F03DD1CD6E8987411 /* ColorPanelView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 072C5A7F74E21642A32FB18E /* ColorPanelView.swift */; };
 		750742F2DD62C40B161AF72D /* BrushPanelView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4AB0672375E9A4AB68BD81EE /* BrushPanelView.swift */; };
 		3C0FC76DDFC70BA93D60B293 /* BristleTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2A39BDB3A66ACC9CD8FE8318 /* BristleTests.swift */; };
@@ -52,7 +53,6 @@
 		31A01E1B3ACA8A5C726645F9 /* UnsplashPanelView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E6628365B71C263026F81811 /* UnsplashPanelView.swift */; };
 		33BDE74BD2B1C72B7524F609 /* UnsplashService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5DD13AB08798219682D052C4 /* UnsplashService.swift */; };
 		3ABEF9858237241D63222A2F /* AIPromptBuilder.swift in Sources */ = {isa = PBXBuildFile; fileRef = A81A3FDEC958C2A5A707F738 /* AIPromptBuilder.swift */; };
-		46DC011A581BE663AA0A04DA /* LayerPanelView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 49CD9D8A37644262890FEB83 /* LayerPanelView.swift */; };
 		48367BBE0244FF3F8F06F356 /* MainWindowController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2A4A7C26F5BDA244973B1C73 /* MainWindowController.swift */; };
 		4B89F297CD86FF169CA2BF02 /* AIService.swift in Sources */ = {isa = PBXBuildFile; fileRef = EEE3613F6384791B0F940514 /* AIService.swift */; };
 		4D5B08BA130C75EDC7E2B082 /* AIConfiguration.swift in Sources */ = {isa = PBXBuildFile; fileRef = E82480AA39FA616279063585 /* AIConfiguration.swift */; };
@@ -139,6 +139,7 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		3C27E4B2E1BC810375AA172E /* LayersPanelView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LayersPanelView.swift; sourceTree = "<group>"; };
 		072C5A7F74E21642A32FB18E /* ColorPanelView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ColorPanelView.swift; sourceTree = "<group>"; };
 		4AB0672375E9A4AB68BD81EE /* BrushPanelView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrushPanelView.swift; sourceTree = "<group>"; };
 		2A39BDB3A66ACC9CD8FE8318 /* BristleTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BristleTests.swift; sourceTree = "<group>"; };
@@ -193,7 +194,6 @@
 		3771CA3A4B479853C392C68A /* UndoManager+Canvas.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "UndoManager+Canvas.swift"; sourceTree = "<group>"; };
 		3E8961D5B335007FFFEF2303 /* SelectionMoveHandler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SelectionMoveHandler.swift; sourceTree = "<group>"; };
 		44593BFA95845A8C3563EE36 /* Artsy-Release.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = "Artsy-Release.entitlements"; sourceTree = "<group>"; };
-		49CD9D8A37644262890FEB83 /* LayerPanelView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LayerPanelView.swift; sourceTree = "<group>"; };
 		49CF8EADC65864B304E57C66 /* StrokeSmoothing.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StrokeSmoothing.swift; sourceTree = "<group>"; };
 		4BAE3461ED09A5C4765BCEC9 /* StrokePoint.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StrokePoint.swift; sourceTree = "<group>"; };
 		4CC0B866C90269C400161541 /* ImageExporter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImageExporter.swift; sourceTree = "<group>"; };
@@ -298,6 +298,7 @@
 		30F8CBE1AC0CF03D0DA0FDA3 /* UI */ = {
 			isa = PBXGroup;
 			children = (
+				3C27E4B2E1BC810375AA172E /* LayersPanelView.swift */,
 				072C5A7F74E21642A32FB18E /* ColorPanelView.swift */,
 				4AB0672375E9A4AB68BD81EE /* BrushPanelView.swift */,
 				7E3B142B246542848C95DFDB /* MainLayout.swift */,
@@ -309,7 +310,6 @@
 				C003A0EA878F40E2A7D1DCE8 /* ColorConversions.swift */,
 				43F3C08AB19C323D1E720B44 /* PressureCurveEditor.swift */,
 				DB157DCFAA0D25C78F80DBE7 /* BrushSettingsView.swift */,
-				49CD9D8A37644262890FEB83 /* LayerPanelView.swift */,
 				1EA099CE5CB6D694FA248491 /* NewCanvasView.swift */,
 				BD8E45F79CA68DA8870D2281 /* SettingsView.swift */,
 				AF04E004BBBBBBBBBBBBBBBB /* SymmetryControlView.swift */,
@@ -681,6 +681,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				D508B298D35A46C37562E077 /* LayersPanelView.swift in Sources */,
 				3454411F03DD1CD6E8987411 /* ColorPanelView.swift in Sources */,
 				750742F2DD62C40B161AF72D /* BrushPanelView.swift in Sources */,
 				C91BD2982D55DEBEF3C7A1C9 /* WaterRenderer.swift in Sources */,
@@ -738,7 +739,6 @@
 				AF07B001AAAAAAAAAAAAAAAA /* TransformCursor.swift in Sources */,
 				AF08C001AAAAAAAAAAAAAAAA /* ToolCursor.swift in Sources */,
 				B4D14A65F4D6EAB7131CDCE0 /* Layer.swift in Sources */,
-				46DC011A581BE663AA0A04DA /* LayerPanelView.swift in Sources */,
 				705C32BC3B4D541E303AF574 /* LayerStack.swift in Sources */,
 				48367BBE0244FF3F8F06F356 /* MainWindowController.swift in Sources */,
 				4D9B317B9C53C340867F2690 /* MetalContext.swift in Sources */,
