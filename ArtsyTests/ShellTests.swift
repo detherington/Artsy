@@ -203,6 +203,94 @@ final class ShellTests: XCTestCase {
         XCTAssertEqual(viewModel.currentBrush.id, BrushDescriptor.hardRound.id, "Hard Round takes the deleted brush's place")
     }
 
+    /// The colour panel: a tap on the square sets saturation and brightness, on the strip
+    /// the hue, on Before the colour the panel opened with; a recent swatch picks and closes.
+    func testTheColourPanelTakesTheSquareTheStripAndTheSwatches() throws {
+        let (_, viewModel) = try canvas()
+        let prefs = AppPreferences.shared
+        let recentBefore = prefs.recentColors
+        defer { prefs.recentColors = recentBefore }
+        prefs.recentColors = ["FF0000"]
+        let picked = Picked(color: StrokeColor(red: 0.2, green: 0.4, blue: 0.6, alpha: 1))
+        var dismissed = 0
+        let panel = ColorPanelView(color: Binding(get: { picked.color }, set: { picked.color = $0 }), viewModel: viewModel,
+                                   dismiss: { dismissed += 1 })
+        let host = NSHostingView(rootView: panel)
+        show(host, size: NSSize(width: Chrome.panelWidth, height: 640))
+        settle(host)
+        if ProcessInfo.processInfo.environment["ARTSY_SNAPSHOT_DIR"] != nil { snapshot(host, named: "colour-panel") }
+
+        // The square sits under the header (44) and 12 of padding, inset 12; window y runs up
+        let square = ColorPanelView.squareSize, top: CGFloat = 44 + 12
+        let hueBefore = ColorMath.hsb(of: picked.color).hue
+        click(at: NSPoint(x: 12 + square * 0.75, y: 640 - (top + square * 0.25)))
+        var hsb = ColorMath.hsb(of: picked.color)
+        XCTAssertEqual(hsb.saturation, 0.75, accuracy: 0.03, "three quarters across the square")
+        XCTAssertEqual(hsb.brightness, 0.75, accuracy: 0.03, "a quarter down it")
+        XCTAssertEqual(hsb.hue, hueBefore, accuracy: 0.02, "the hue as it was")
+
+        // The strip, beside the square, halfway down
+        click(at: NSPoint(x: 12 + square + 12 + ColorPanelView.stripWidth / 2, y: 640 - (top + square * 0.5)))
+        hsb = ColorMath.hsb(of: picked.color)
+        XCTAssertEqual(hsb.hue, 0.5, accuracy: 0.03, "halfway round the hues")
+        XCTAssertEqual(hsb.saturation, 0.75, accuracy: 0.03, "saturation and brightness as they were")
+
+        // Before: the right half of the wells row under the square
+        click(at: NSPoint(x: Chrome.panelWidth * 0.75, y: 640 - (top + square + 12 + 22)))
+        XCTAssertEqual(picked.color, StrokeColor(red: 0.2, green: 0.4, blue: 0.6, alpha: 1), "back to where it opened")
+
+        // A recent swatch, in the scrolling part under the fields and the Recent label
+        let scrollTop = top + square + 12 + 44
+        let swatchY = scrollTop + 44 + 30 + 6 + 16
+        send(.leftMouseDown, at: NSPoint(x: 30, y: 640 - swatchY), time: 1)
+        send(.leftMouseUp, at: NSPoint(x: 30, y: 640 - swatchY), time: 1.1)
+        RunLoop.main.run(until: Date().addingTimeInterval(0.1))
+        XCTAssertEqual(ColorMath.hex(of: picked.color), "FF0000", "the swatch's colour")
+        XCTAssertEqual(dismissed, 1, "and the panel closes for the pen to paint")
+    }
+
+    func testThePaletteKeepsWhatThePainterAddsAndDrops() {
+        let prefs = AppPreferences.shared
+        let before = prefs.paletteColors
+        defer { prefs.paletteColors = before }
+        prefs.paletteColors = ["000000", "FFFFFF"]
+        let red = StrokeColor(red: 1, green: 0, blue: 0, alpha: 1)
+        ColorPanelActions.add(red, to: prefs)
+        XCTAssertEqual(prefs.paletteColors, ["000000", "FFFFFF", "FF0000"])
+        ColorPanelActions.add(red, to: prefs)
+        XCTAssertEqual(prefs.paletteColors.count, 3, "once")
+        ColorPanelActions.replace(at: 1, with: StrokeColor(red: 0, green: 1, blue: 0, alpha: 1), in: prefs)
+        XCTAssertEqual(prefs.paletteColors[1], "00FF00")
+        ColorPanelActions.remove(at: 0, in: prefs)
+        XCTAssertEqual(prefs.paletteColors, ["00FF00", "FF0000"])
+        ColorPanelActions.remove(at: 9, in: prefs)
+        XCTAssertEqual(prefs.paletteColors.count, 2, "nothing to remove there")
+        XCTAssertEqual(AppPreferences.startingPalette.count, 16)
+    }
+
+    func testTheColourMathsRoundTrips() {
+        let colour = StrokeColor(red: 0.85, green: 0.55, blue: 0.15, alpha: 1)
+        XCTAssertEqual(ColorMath.hex(of: colour), "D98C26")
+        let back = ColorMath.color(fromHex: "d98c26")!
+        XCTAssertEqual(back.red, colour.red, accuracy: 0.003)
+        XCTAssertEqual(back.blue, colour.blue, accuracy: 0.003)
+        let (h, s, b) = ColorMath.hsb(of: colour)
+        let again = ColorMath.color(hue: h, saturation: s, brightness: b)
+        XCTAssertEqual(again.green, colour.green, accuracy: 0.003)
+        var hue = 0.0
+        XCTAssertTrue(ColorMath.applying(hue: "390", to: &hue))
+        XCTAssertEqual(hue, 30.0 / 360, accuracy: 1e-6, "degrees wrap")
+        XCTAssertFalse(ColorMath.applying(hue: "red", to: &hue))
+        var value = 0.0
+        XCTAssertTrue(ColorMath.applying(percent: "250", to: &value))
+        XCTAssertEqual(value, 1, "percentages are clamped")
+    }
+
+    private final class Picked {
+        var color: StrokeColor
+        init(color: StrokeColor) { self.color = color }
+    }
+
     /// A click through the window's dispatch, which is the only way a SwiftUI view takes one.
     private func click(at point: NSPoint) {
         for type in [NSEvent.EventType.leftMouseDown, .leftMouseUp] {
