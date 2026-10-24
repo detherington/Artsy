@@ -15,10 +15,13 @@ final class DocumentGoldenTests: XCTestCase {
         let viewModel = harness.viewModel
 
         // Layer 1: a watercolor wash, oil over it, smudged
+        harness.dryingTime = 20
         harness.select(.watercolor)
         viewModel.brushSize = 50
         viewModel.currentColor = StrokeColor(red: 0.2, green: 0.5, blue: 0.85, alpha: 1)
         harness.draw(StrokeFixtures.wave(from: CGPoint(x: 30, y: 200), length: 450, amplitude: 30, cycles: 1.5))
+        // The wash dries before anything else is painted over it
+        harness.letWaterRun(seconds: 70)
         harness.select(.oil)
         viewModel.brushSize = 36
         viewModel.currentColor = StrokeColor(red: 0.9, green: 0.6, blue: 0.15, alpha: 1)

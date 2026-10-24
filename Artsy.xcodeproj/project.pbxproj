@@ -7,6 +7,8 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		4C6191F508EFA01F3D483EAA /* WaterTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6BB0C198CA3F458657968930 /* WaterTests.swift */; };
+		C91BD2982D55DEBEF3C7A1C9 /* WaterRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0FD3C2494DE10DA9C89BB07 /* WaterRenderer.swift */; };
 		08CEC73C9C2CFFB22535AC10 /* WetDryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A264135A219CBD8F095C7728 /* WetDryTests.swift */; };
 		11FF17D167E255BBA2CE55C3 /* ThickPaintTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8B475347F7AFA1FA7BFDE240 /* ThickPaintTests.swift */; };
 		21E40D20D4828AC77F525E8C /* PaintRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 85E9B1C7AC5ADBED86BB86FF /* PaintRenderer.swift */; };
@@ -134,6 +136,8 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		6BB0C198CA3F458657968930 /* WaterTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WaterTests.swift; sourceTree = "<group>"; };
+		B0FD3C2494DE10DA9C89BB07 /* WaterRenderer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WaterRenderer.swift; sourceTree = "<group>"; };
 		A264135A219CBD8F095C7728 /* WetDryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WetDryTests.swift; sourceTree = "<group>"; };
 		8B475347F7AFA1FA7BFDE240 /* ThickPaintTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThickPaintTests.swift; sourceTree = "<group>"; };
 		85E9B1C7AC5ADBED86BB86FF /* PaintRenderer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PaintRenderer.swift; sourceTree = "<group>"; };
@@ -406,6 +410,7 @@
 		B48AF066E85C8962CFFD499C /* ArtsyTests */ = {
 			isa = PBXGroup;
 			children = (
+				6BB0C198CA3F458657968930 /* WaterTests.swift */,
 				A264135A219CBD8F095C7728 /* WetDryTests.swift */,
 				8B475347F7AFA1FA7BFDE240 /* ThickPaintTests.swift */,
 				70F6185F614C4D7996976002 /* LoadedBrushTests.swift */,
@@ -487,6 +492,7 @@
 		D144A5F7E552DC1AE9ED79EC /* Metal */ = {
 			isa = PBXGroup;
 			children = (
+				B0FD3C2494DE10DA9C89BB07 /* WaterRenderer.swift */,
 				85E9B1C7AC5ADBED86BB86FF /* PaintRenderer.swift */,
 				7864208A72AA1D379DC90B77 /* Spectral.h */,
 				A49F88C8AEA2D1CC2C459AE0 /* SmudgeRenderer.swift */,
@@ -666,6 +672,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				C91BD2982D55DEBEF3C7A1C9 /* WaterRenderer.swift in Sources */,
 				21E40D20D4828AC77F525E8C /* PaintRenderer.swift in Sources */,
 				A5479C02D33743B19C871090 /* MainLayout.swift in Sources */,
 				B7942EA18B3F4F3B9087A5B1 /* LayersDockView.swift in Sources */,
@@ -750,6 +757,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				4C6191F508EFA01F3D483EAA /* WaterTests.swift in Sources */,
 				08CEC73C9C2CFFB22535AC10 /* WetDryTests.swift in Sources */,
 				11FF17D167E255BBA2CE55C3 /* ThickPaintTests.swift in Sources */,
 				CA2C7706E9ED42ED92F18BA7 /* LoadedBrushTests.swift in Sources */,

@@ -7,6 +7,16 @@ final class CanvasRenderer: NSObject, MTKViewDelegate {
     let strokeRenderer: StrokeRenderer
     let smudgeRenderer: SmudgeRenderer
     let paintRenderer: PaintRenderer
+    let waterRenderer: WaterRenderer
+    /// The canvas tilt water runs with: the setting, unless a test says otherwise. Positive
+    /// x runs the water to the right, positive y down the screen.
+    var tiltOverride: SIMD2<Float>?
+    var tilt: SIMD2<Float> {
+        tiltOverride ?? SIMD2(Float(AppPreferences.shared.canvasTiltX), Float(AppPreferences.shared.canvasTiltY))
+    }
+    /// The content version the last stroke commit made: a change past it was made by
+    /// something other than a stroke, and settles any water (see `runWater`).
+    private var strokeContentVersion = -1
     /// The time wet paint is laid and read at: system uptime, as the pen's events are
     /// stamped. Tests set their own.
     var clock: () -> TimeInterval = { ProcessInfo.processInfo.systemUptime }
@@ -105,6 +115,7 @@ final class CanvasRenderer: NSObject, MTKViewDelegate {
         self.smudgeRenderer = SmudgeRenderer(context: context)
         self.paintRenderer = PaintRenderer(context: context)
         self.compositor = CompositorPipeline(context: context)
+        self.waterRenderer = WaterRenderer(context: context, compositor: compositor)
 
         super.init()
 
@@ -248,6 +259,51 @@ final class CanvasRenderer: NSObject, MTKViewDelegate {
         lastFrameDisplayed = true
     }
 
+    /// Run the steps of flow the clock owes on every layer with water, up to a few a frame,
+    /// and have their regions recomposited. Water on a layer whose pixels were written by
+    /// something other than a stroke since the last step is settled first.
+    private func runWater(into commandBuffer: MTLCommandBuffer, capped: Bool = true) {
+        guard let viewModel, let layerStack = viewModel.layerStack else { return }
+        let now = clock()
+        let written = viewModel.contentVersion != strokeContentVersion && viewModel.contentVersion != compositedContentVersion
+        for layer in layerStack.layers {
+            guard let water = layer.water else { continue }
+            if written { layer.settleWater(); continue }
+            let owed = (now - water.began) - water.simulated
+            var steps = Int((owed * WaterRenderer.stepsPerSecond).rounded(.down))
+            if capped { steps = min(steps, WaterRenderer.maxStepsPerFrame) }
+            if steps > 0 {
+                pendingRegions.append(waterRenderer.step(water, steps: steps, on: layer, settings: water.settings, tilt: tilt,
+                                                         dryingTime: dryingTime, commandBuffer: commandBuffer))
+            }
+            if !water.isActive {
+                layer.settleWater()
+                updateThumbnail(for: layer)
+            }
+        }
+    }
+
+    /// Run `seconds` of flow on every layer with water now, however long the clock says
+    /// has passed (tests, and the preview pad, dry a wash at once). The frames that follow
+    /// owe nothing until the clock catches up.
+    func runWater(for seconds: TimeInterval) {
+        guard let viewModel, let layerStack = viewModel.layerStack else { return }
+        let steps = Int((seconds * WaterRenderer.stepsPerSecond).rounded())
+        var done = 0
+        while done < steps {
+            let batch = min(64, steps - done)
+            guard let commandBuffer = context.commandQueue.makeCommandBuffer() else { return }
+            for layer in layerStack.layers {
+                guard let water = layer.water else { continue }
+                pendingRegions.append(waterRenderer.step(water, steps: batch, on: layer, settings: water.settings, tilt: tilt,
+                                                         dryingTime: dryingTime, commandBuffer: commandBuffer))
+                if !water.isActive { layer.settleWater() }
+            }
+            commandBuffer.commit()
+            done += batch
+        }
+    }
+
     /// The active layer's wet map for the display, while wet paint is shown and there is any.
     private func wetDisplay(at now: TimeInterval) -> CompositorPipeline.WetDisplay? {
         guard let viewModel, viewModel.showsWetPaint, let layer = viewModel.layerStack?.activeLayer,
@@ -276,6 +332,7 @@ final class CanvasRenderer: NSObject, MTKViewDelegate {
         guard let viewModel = viewModel, let layerStack = viewModel.layerStack else { return }
 
         encodeActiveStroke(into: commandBuffer)
+        runWater(into: commandBuffer)
 
         // With the same scene and content as last time, the composite still stands. (It
         // used to be rebuilt once a second regardless, in case a change went unnoted; at
@@ -287,7 +344,7 @@ final class CanvasRenderer: NSObject, MTKViewDelegate {
         let idle = !viewModel.isDrawing && !preview
         let sceneChanged = signature != compositedSignature || compositedWithPreview
         let contentChanged = viewModel.contentVersion != compositedContentVersion
-        if idle, !sceneChanged, !contentChanged {
+        if idle, !sceneChanged, !contentChanged, pendingRegions.isEmpty {
             lastFrameRecomposited = false
             lastFrameRegions = nil
             return
@@ -598,7 +655,7 @@ final class CanvasRenderer: NSObject, MTKViewDelegate {
         var overlay = CompositorPipeline.StrokeOverlay(
             committed: activeStrokeTexture, tail: strokeTailTexture,
             opacity: opacity, erase: brush.category == .utility, accumulates: accumulates,
-            mixing: brush.mixing, wet: brush.category == .utility ? nil : brush.wet
+            mixing: brush.mixing, wet: brush.category == .utility || brush.water != nil ? nil : brush.wet
         )
         // A wash meets the paint under it wet or dry
         if let layer = viewModel.layerStack?.activeLayer, let wetMap = layer.wetTexture {
@@ -1193,6 +1250,12 @@ final class CanvasRenderer: NSObject, MTKViewDelegate {
         }
         compositor.clear(strokeTailTexture, regions: tailRegions, commandBuffer: commandBuffer)
 
+        // Any brush but one that lays water writes the layer's pixels itself (at pen-up, or as
+        // it goes), so water on the layer stops where it is first
+        if viewModel?.currentBrush.water == nil || viewModel?.currentBrush.category == .utility,
+           let layer = viewModel?.layerStack?.activeLayer {
+            layer.settleWater()
+        }
         // A smudge brush changes the layer as it goes, so keep a copy of it for the undo step.
         if viewModel?.currentBrush.smudgeSettings != nil, let layer = viewModel?.layerStack?.activeLayer {
             if layerBeforeStroke == nil {
@@ -1305,9 +1368,20 @@ final class CanvasRenderer: NSObject, MTKViewDelegate {
                 commandBuffer: commandBuffer
             )
             viewModel.markDirty()
+            strokeContentVersion = viewModel.contentVersion
 
             let overlay = strokeOverlay(for: viewModel)
-            if isSmudging {
+            if let settings = viewModel.currentBrush.water, !isErasing, !isSmudging {
+                // Water that moves: the stroke goes into the layer's water, which rewrites
+                // the layer's pixels as it flows and dries
+                if let region = waterRenderer.inject(
+                    stroke: activeStrokeTexture, region: strokeRegion, brush: viewModel.currentBrush, settings: settings,
+                    opacity: overlay?.opacity ?? 1, on: activeLayer, dryingTime: dryingTime, textureManager: textureManager,
+                    now: clock(), commandBuffer: commandBuffer
+                ) {
+                    pendingRegions.append(region)
+                }
+            } else if isSmudging {
                 // Already in the layer
             } else if isErasing {
                 compositor.erase(

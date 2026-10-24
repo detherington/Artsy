@@ -213,6 +213,16 @@ and tilt from a control (not the Mac's orientation). At half the canvas resoluti
 condition and goes away. This is the Rebelle-class feature and the one that most
 changes what the pen feels; it is also the one to tune by hand longest.
 
+**Done** (`drawing-engine-plan.md`, step 10), as far as a first slice goes. What is
+there: free water and paper wetness, pigment in the water and settled, flow downhill
+by the paper's height and the tilt, paper drawing water into itself, drying, settling,
+lifting, granulation from the paper's relief; edge darkening and blooms fall out. The
+layer's pixels show the look throughout. What was left out of the plan: velocity (the
+flow is a surface-difference diffusion, stable at a fifth per step, 120 steps a
+second), a capillary layer that spreads by itself, and drips; and tilt comes from
+Settings rather than a bar control. The merge-time wash did not go away: brushes with
+`wet` and no `water` still use it.
+
 ### 5. Bristles (medium)
 
 The tip as a bundle: N bristle sub-dabs whose positions fan out with pressure, separate

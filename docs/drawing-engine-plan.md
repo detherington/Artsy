@@ -556,6 +556,88 @@ whether it was wet or dry, and Oil picked up whatever it crossed, ink included.
   glazing it hard-edged; the acrylic's crossings pick up a little less from its
   faster-drying paint.
 
+### 10. Water that moves (large) — done, untested by hand
+
+The fourth step of `paint-media-research.md`: a wash as water on the paper that spreads,
+runs, pools and dries, carrying its pigment. Curtis et al. 1997, bounded to a rectangle
+of the layer and to what a laptop can run every frame.
+
+- **The water on a layer** (`LayerWater`, run by `WaterRenderer`): on the rectangle of
+  the layer that water has been laid on, grown as strokes land and with a margin the
+  water may bloom into, textures at the canvas's resolution (half above 4096²): free
+  water and how wet the paper is (rg16), the pigment in the water and the pigment
+  settled since the water came (rgba16, premultiplied), and, at the layer's own
+  resolution, the dry paint that was there before. The layer's own pixels always show
+  the look — settled pigment glazed over the dry paint, suspended pigment over that,
+  rewritten every frame the water moves — so the composite, thumbnails, saving, export
+  and undo see what the painter sees and know nothing of the water.
+- **A step** (120 a second; a frame runs what the clock owes, up to 16): a flux kernel
+  works out what leaves each texel for its four neighbours — downhill, the surface being
+  the water on the paper's height tilted by the canvas tilt, and into paper that is not
+  yet wet, which draws water from a wet neighbour — never more than most of what is
+  there, so the step is stable; a gather kernel moves the water and its pigment, wets
+  the paper under free water, dries the free water off (five times faster where it is
+  thin, so a wash dries from its edge in and the water behind flows out to the edge) and
+  the paper's wetness over the drying time, settles pigment out (a share per step in
+  deep water, much more as the water thins, all of it when it is gone, more in the
+  paper's valleys) and lifts a little settled pigment back up where there is free water.
+  Pigment moves at four tenths of the water's rate (the paper hinders it) and cannot
+  enter paper that is not yet half wet through, which is what pins a wash's edge: the
+  water wets the paper ahead, the pigment follows to the line and piles up as the water
+  there thins. The paper's relief, read at a coarser scale than the stamps' grain so the
+  granulation is blotches rather than speckle, is scaled by the brush's granulation: at 0
+  the paper is flat; at 1 the last water, and the pigment with it, sits in the valleys.
+- **A stroke** (a brush with `BrushDescriptor.water`; Watercolor, and a new **Water**
+  brush that lays no colour) goes into the water at pen-up instead of merging: its
+  pigment into the suspended pigment, mixed in as pigment where there is some, and water
+  over the whole footprint the brush touched (nearly as much at a soft edge as in the
+  middle; it is the pigment that thins), by the brush's *amount*. The undo step holds
+  the layer's pixels from before, as for any stroke; an undo during the flow puts them
+  back and settles the water. Any other brush at pen-down, and any writing of the
+  layer's pixels outside a stroke (a fill, a paste, a transform, an undo, Dry Layer),
+  settles the water: the look stands, the water is forgotten. The water is forgotten
+  too once it has had three drying times to dry.
+- **Settings.** Brush Studio → Water: amount, flow (how readily it spreads), settling
+  (low lets the pigment travel to the edges, high keeps it where the stroke put it),
+  granulation. Settings → Wet Paint: the drying time (which the water shares with the
+  wet map), and the canvas tilt, two sliders and Level, which the water runs with. The
+  preview pad dries its wash at once (a ten-second drying time, run to completion), so
+  the tile shows how a wash ends up; the Water brush's tile gets wet Watercolor bands to
+  push about, as Smudge gets bands of paint.
+- **What did not survive contact.** Water the paper took up as a sink: the thin edge of
+  a soft stroke drank what would have carried the front on, and nothing bloomed. The
+  paper's wetness is now a state the free water sets, not a quantity it consumes, as
+  Curtis's capillary layer is the wet-area mask. Thin-water evaporation strong enough
+  to darken the edge killed the advancing front; the edge darkens instead because the
+  paper at the front is drinking and the pigment arriving there settles as the water
+  thins. Settled pigment that could never move again made a water drop into a wash do
+  nothing; lifting fixed it and let the per-step deposit pass go. Explicit diffusion on
+  a grid spreads as the square root of time and cannot exceed a fifth of a difference
+  per step and stay stable, so the bloom is modest — half a dozen pixels past a wet
+  stroke in a few seconds — and more comes from more steps, not a bigger coefficient.
+  Pigment that moved as freely as the water smeared every wash into a blur; the
+  mobility and the wetting-front gate are what keep a body and an edge. The edge is
+  still the weak point: it is there in the numbers (the rim test) and only just to the
+  eye at the defaults; a lower Settling makes more of it, and it wants the pen.
+- **Not done.** The region's edge is a wall (a margin of 64 layer pixels beyond the
+  strokes). Smudge and the knife on a flowing layer settle it. The merge-time wash of
+  step 5 stays for brushes with `wet` and no `water`. Watercolor no longer has `wet`:
+  its edges come from the water. Velocity, backruns as Curtis has them (a capillary
+  layer that spreads on its own), and drips wait.
+- **Cost.** A canvas-spanning Watercolor stroke on 2048² (a 1.1 Mtexel region, two
+  steps a frame at 60 frames a second): 1.3 ms a frame while it flows
+  (`testWaterFrameCost`), nothing once it has dried. Memory while a layer's water is
+  on it: 40 bytes a texel of the region plus 8 a layer pixel for the dry paint, at the
+  canvas's resolution up to 4096² and half beyond, freed when the water is forgotten.
+- **Tests** (`WaterTests`): a wet stroke's water spreads beyond it, with pigment, and
+  dries off, after which nothing moves; pigment is moved, not made or lost; pigment
+  rides out to the edge, more the more the water moves; more settles in the paper's
+  valleys with granulation and none without; a wash runs downhill with the tilt; clean
+  water into a drying wash lightens where it lands; undo during the flow puts the layer
+  back and stops it; another brush settles the water and stays; Dry Layer stops it;
+  the settings survive the brush file. The watercolor tile, the Water tile, the soft
+  brushes over dark paint and the everything document were re-recorded after viewing.
+
 ## At the limits: 8192² with 12 layers
 
 Measured after step 6 opened these limits up (`testLargeCanvasCosts`, debug build, M4 Pro):

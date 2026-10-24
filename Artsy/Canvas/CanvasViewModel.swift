@@ -145,6 +145,10 @@ final class CanvasViewModel: ObservableObject {
         var bytes = 0
         for layer in layerStack?.layers ?? [] {
             bytes += pixels * (8 + (layer.heightTexture == nil ? 0 : 2) + (layer.wetTexture == nil ? 0 : 2))
+            if let water = layer.water {
+                let region = water.region.width * water.region.height
+                bytes += region * 8 + region / (water.scale * water.scale) * 40
+            }
         }
         // Composite and its height map, each with mip levels (a third again), blend
         // scratch and two stroke textures

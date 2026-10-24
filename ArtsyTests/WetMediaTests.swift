@@ -10,6 +10,7 @@ final class WetMediaTests: XCTestCase {
         var brush = BrushDescriptor.watercolor
         brush.wet = BrushDescriptor.Wet(edges: edges, granulation: granulation, grainScale: 1)
         brush.mixing = mixing
+        brush.water = nil   // the wash that dries at the merge, not the water that moves
         return brush
     }
 

@@ -37,6 +37,7 @@ final class EngineHarness {
         let clock = clock
         renderer.clock = { clock.now }
         renderer.dryingTimeOverride = 60
+        renderer.tiltOverride = .zero
         try renderer.setupLayerStack(for: viewModel)
         // Known settings, whatever the host app's saved preferences say.
         select(.hardRound)
@@ -61,6 +62,54 @@ final class EngineHarness {
     var dryingTime: TimeInterval {
         get { renderer.dryingTimeOverride ?? 60 }
         set { renderer.dryingTimeOverride = newValue }
+    }
+
+    /// Let `seconds` pass with the water on every layer flowing and drying through them,
+    /// and recomposite what it changed.
+    func letWaterRun(seconds: TimeInterval) {
+        renderer.runWater(for: seconds)
+        advance(by: seconds)
+        renderFrame()
+    }
+
+    /// The water still on a layer, 0...cap in each pixel's `.x`, and the pigment still in it
+    /// in `pigment`; zero everywhere once the water has dried.
+    func water(of layer: Layer) -> (water: PixelGrid, pigment: PixelGrid) {
+        guard let water = layer.water else {
+            let none = PixelGrid(width: width, height: height, values: [Float](repeating: 0, count: width * height * 4))
+            return (none, none)
+        }
+        // The region's textures, read back and laid into canvas-sized grids
+        func grid(_ texture: MTLTexture, channels: Int) -> PixelGrid {
+            var values = [Float](repeating: 0, count: width * height * 4)
+            let w = texture.width, h = texture.height
+            let desc = MTLTextureDescriptor.texture2DDescriptor(pixelFormat: texture.pixelFormat, width: w, height: h, mipmapped: false)
+            desc.storageMode = .shared
+            desc.usage = [.shaderRead]
+            let readable = context.device.makeTexture(descriptor: desc)!
+            let commandBuffer = context.commandQueue.makeCommandBuffer()!
+            let blit = commandBuffer.makeBlitCommandEncoder()!
+            blit.copy(from: texture, to: readable)
+            blit.endEncoding()
+            commandBuffer.commit()
+            commandBuffer.waitUntilCompleted()
+            var half = [UInt16](repeating: 0, count: w * h * channels)
+            half.withUnsafeMutableBytes {
+                readable.getBytes($0.baseAddress!, bytesPerRow: w * 2 * channels, from: MTLRegionMake2D(0, 0, w, h), mipmapLevel: 0)
+            }
+            for ty in 0..<h { for tx in 0..<w {
+                for c in 0..<channels {
+                    let v = Float(Float16(bitPattern: half[(ty * w + tx) * channels + c]))
+                    // Every layer pixel the texel covers
+                    for dy in 0..<water.scale { for dx in 0..<water.scale {
+                        let x = water.region.x + tx * water.scale + dx, y = water.region.y + ty * water.scale + dy
+                        if x < width, y < height { values[(y * width + x) * 4 + c] = v }
+                    } }
+                }
+            } }
+            return PixelGrid(width: width, height: height, values: values)
+        }
+        return (grid(water.water[water.current], channels: 2), grid(water.pigment[water.current], channels: 4))
     }
 
     // MARK: - Setup

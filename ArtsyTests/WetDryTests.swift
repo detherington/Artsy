@@ -101,6 +101,7 @@ final class WetDryTests: XCTestCase {
             harness.dryingTime = 10
             var wash = BrushDescriptor.watercolor
             wash.wet = BrushDescriptor.Wet(edges: 0.8, granulation: 0, grainScale: 1, blendsWhenWet: 1)
+            wash.water = nil   // the wash that dries at the merge
             harness.select(wash)
             harness.viewModel.brushSize = 120
             harness.viewModel.currentColor = yellow
@@ -187,7 +188,7 @@ final class WetDryTests: XCTestCase {
         XCTAssertEqual(back.wetness, 0.7)
         XCTAssertEqual(back.wet?.blendsWhenWet, 0.3)
         // A file from before wetness: dry at once, and a wash that blends fully
-        var json = try JSONSerialization.jsonObject(with: JSONEncoder().encode(BrushDescriptor.watercolor)) as! [String: Any]
+        var json = try JSONSerialization.jsonObject(with: JSONEncoder().encode(brush)) as! [String: Any]
         json["wetness"] = nil
         var wet = json["wet"] as! [String: Any]
         wet["blendsWhenWet"] = nil

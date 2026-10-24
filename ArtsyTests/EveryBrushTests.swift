@@ -4,7 +4,8 @@ import XCTest
 /// Properties every built-in brush has to have, run over all of them: the sort of thing
 /// that is easy to prove for one brush and then quietly lost on another.
 final class EveryBrushTests: XCTestCase {
-    private var everyBrush: [BrushDescriptor] { BrushDescriptor.allDefaults + [.eraser] }
+    /// Every built-in that lays colour (Water lays none, by design), and the eraser.
+    private var everyBrush: [BrushDescriptor] { BrushDescriptor.allDefaults.filter { $0.opacity > 0 } + [.eraser] }
 
     private func worst(_ a: PixelGrid, _ b: PixelGrid) -> Float {
         var worst: Float = 0
