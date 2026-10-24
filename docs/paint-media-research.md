@@ -232,6 +232,13 @@ leaves the valleys of the paper untouched. Rebelle 8's headline; our scatter and
 second-tip machinery is most of the way to it, and the carry of step 1 gives each
 bristle its own paint.
 
+**Done** (`drawing-engine-plan.md`, step 11). The bundle is drawn in the fragment
+rather than as sub-dabs — clumps as streaks along the dab, fanning with pressure,
+parting with speed, each reading the carry at its own home — which costs a loop per
+pixel and no new instances. Dry-brushing is the height-grain rule applied to paint
+brushes over the canvas's paper. Not done: loading two colours (a picker feature) and
+bristles that bend with tilt beyond the stretch the dab already gets.
+
 ### What stays, and small things
 
 - Pigment mixing stays spectral.js (MIT). Expose tinting strength per colour (black is

@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		3C0FC76DDFC70BA93D60B293 /* BristleTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2A39BDB3A66ACC9CD8FE8318 /* BristleTests.swift */; };
 		4C6191F508EFA01F3D483EAA /* WaterTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6BB0C198CA3F458657968930 /* WaterTests.swift */; };
 		C91BD2982D55DEBEF3C7A1C9 /* WaterRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0FD3C2494DE10DA9C89BB07 /* WaterRenderer.swift */; };
 		08CEC73C9C2CFFB22535AC10 /* WetDryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A264135A219CBD8F095C7728 /* WetDryTests.swift */; };
@@ -136,6 +137,7 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		2A39BDB3A66ACC9CD8FE8318 /* BristleTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BristleTests.swift; sourceTree = "<group>"; };
 		6BB0C198CA3F458657968930 /* WaterTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WaterTests.swift; sourceTree = "<group>"; };
 		B0FD3C2494DE10DA9C89BB07 /* WaterRenderer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WaterRenderer.swift; sourceTree = "<group>"; };
 		A264135A219CBD8F095C7728 /* WetDryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WetDryTests.swift; sourceTree = "<group>"; };
@@ -410,6 +412,7 @@
 		B48AF066E85C8962CFFD499C /* ArtsyTests */ = {
 			isa = PBXGroup;
 			children = (
+				2A39BDB3A66ACC9CD8FE8318 /* BristleTests.swift */,
 				6BB0C198CA3F458657968930 /* WaterTests.swift */,
 				A264135A219CBD8F095C7728 /* WetDryTests.swift */,
 				8B475347F7AFA1FA7BFDE240 /* ThickPaintTests.swift */,
@@ -757,6 +760,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				3C0FC76DDFC70BA93D60B293 /* BristleTests.swift in Sources */,
 				4C6191F508EFA01F3D483EAA /* WaterTests.swift in Sources */,
 				08CEC73C9C2CFFB22535AC10 /* WetDryTests.swift in Sources */,
 				11FF17D167E255BBA2CE55C3 /* ThickPaintTests.swift in Sources */,

@@ -123,7 +123,7 @@ final class SmudgeRenderer {
                 // One `StampInstance`, as `StrokeRenderer.encode(dabs:…)` lays them out
                 var instance: [Float] = [Float(center.x), Float(center.y), dab.size, angle,
                                          dab.opacity * opacityScale * fraction, dab.seed, dab.reach, dab.aspect,
-                                         dab.pathDistance, dab.secondAngle]
+                                         dab.pathDistance, dab.secondAngle, 1, 0]
                 func deposit(onto target: MTLTexture, from carry: MTLTexture, through scratch: inout MTLTexture?,
                              texels: SIMD2<Float>, pipeline: MTLRenderPipelineState) {
                     guard let patch = layerPatch(around: center, reach: reach, layer: target, backdrop: &scratch,
