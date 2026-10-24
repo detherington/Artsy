@@ -835,6 +835,21 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     /// Copies images into the library's textures folder. A brush file refers to one as
     /// "image:<file name>" for its tip or grain.
+    /// An image file onto the canvas as a new layer, from the Add panel.
+    @objc private func handleImportImage() {
+        guard let store = activeStore else { return }
+        let panel = NSOpenPanel()
+        panel.canChooseDirectories = false
+        panel.allowsMultipleSelection = false
+        panel.allowedContentTypes = [.image]
+        panel.message = "Choose an image to place as a new layer"
+        let canvasView = store.canvasView
+        panel.begin { [weak canvasView] response in
+            guard response == .OK, let url = panel.url, let canvasView, let image = NSImage(contentsOf: url) else { return }
+            canvasView.placeImage(image, named: url.deletingPathExtension().lastPathComponent)
+        }
+    }
+
     @objc private func handleImportTexture() {
         let panel = NSOpenPanel()
         panel.allowedContentTypes = [.image, UTType(filenameExtension: "gbr") ?? .data]

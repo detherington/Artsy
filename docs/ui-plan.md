@@ -187,6 +187,14 @@ come first.
    and a drag anywhere else still scrolls. The panel's actions live in `LayerActions`,
    each with its undo step, apart from the views.
 5. **Adjust and Add.** Small to medium; mostly moving existing views into pop-ups.
+   Done: the first slice had moved the views; this step finished them. Adjust: symmetry
+   as pen-sized buttons (`SymmetryButtons`: off, mirror, up-down, quad, and radial 3 to
+   12 as pills) in place of the old Inspector control, and a Reset view row (fit,
+   upright, unflipped: `CanvasViewModel.resetView`) above the view rows. Add: an Import
+   an image row that places a file as a new layer the way a paste does, beside the brush
+   and texture imports, and the AI and stock views in the panel's type (13 pt text, 12 pt
+   labels, the chrome's greys) without touching their layout. The old symmetry control
+   file is gone.
 6. **Studio and Settings** restyled; a shortcut sheet (⌘/). Small.
 7. **The small-display breakpoint**, with the pen display in hand. Small to medium.
 

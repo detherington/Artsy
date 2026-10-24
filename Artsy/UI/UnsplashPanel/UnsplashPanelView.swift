@@ -11,7 +11,7 @@ struct UnsplashPanelView: View {
                     Image(systemName: "exclamationmark.triangle.fill")
                         .foregroundColor(.orange)
                     Text("Set Unsplash key in Settings")
-                        .font(.system(size: 10))
+                        .font(.system(size: 12))
                         .foregroundColor(.orange)
                 }
             }
@@ -19,18 +19,18 @@ struct UnsplashPanelView: View {
             // Search field
             HStack(spacing: 6) {
                 Image(systemName: "magnifyingglass")
-                    .font(.system(size: 11))
-                    .foregroundColor(Color(white: 0.6))
+                    .font(.system(size: 13))
+                    .foregroundColor(Chrome.secondaryText)
                 TextField("Search photos", text: $manager.query, onCommit: {
                     Task { await manager.search() }
                 })
                 .textFieldStyle(.plain)
-                .font(.system(size: 11))
+                .font(.system(size: 13))
                 if !manager.query.isEmpty {
                     Button(action: { manager.query = ""; manager.results = [] }) {
                         Image(systemName: "xmark.circle.fill")
-                            .font(.system(size: 11))
-                            .foregroundColor(Color(white: 0.5))
+                            .font(.system(size: 13))
+                            .foregroundColor(Chrome.secondaryText)
                     }
                     .buttonStyle(.plain)
                 }
@@ -43,8 +43,8 @@ struct UnsplashPanelView: View {
             // Download size picker
             HStack {
                 Text("Size")
-                    .font(.system(size: 11))
-                    .foregroundColor(Color(white: 0.75))
+                    .font(.system(size: 13))
+                    .foregroundColor(Chrome.text)
                 Picker("", selection: $manager.downloadSize) {
                     ForEach(UnsplashDownloadSize.allCases) { size in
                         Text(size.rawValue).tag(size)
@@ -60,8 +60,8 @@ struct UnsplashPanelView: View {
                     ProgressView()
                         .controlSize(.small)
                     Text("Searching...")
-                        .font(.system(size: 11))
-                        .foregroundColor(.gray)
+                        .font(.system(size: 13))
+                        .foregroundColor(Chrome.secondaryText)
                     Spacer()
                 }
                 .padding(.vertical, 4)
@@ -69,7 +69,7 @@ struct UnsplashPanelView: View {
 
             if let error = manager.error {
                 Text(error)
-                    .font(.system(size: 10))
+                    .font(.system(size: 12))
                     .foregroundColor(.red)
                     .lineLimit(3)
                     .padding(6)
@@ -96,7 +96,7 @@ struct UnsplashPanelView: View {
                         .font(.system(size: 28))
                         .foregroundColor(Color(white: 0.3))
                     Text("Search Unsplash for stock photos")
-                        .font(.system(size: 10))
+                        .font(.system(size: 12))
                         .foregroundColor(Color(white: 0.55))
                         .multilineTextAlignment(.center)
                 }
@@ -108,15 +108,15 @@ struct UnsplashPanelView: View {
             if !manager.results.isEmpty {
                 HStack(spacing: 2) {
                     Text("Photos from")
-                        .font(.system(size: 9))
-                        .foregroundColor(Color(white: 0.5))
+                        .font(.system(size: 12))
+                        .foregroundColor(Chrome.secondaryText)
                     Button("Unsplash") {
                         if let url = URL(string: "https://unsplash.com/?utm_source=artsy&utm_medium=referral") {
                             NSWorkspace.shared.open(url)
                         }
                     }
                     .buttonStyle(.plain)
-                    .font(.system(size: 9, weight: .medium))
+                    .font(.system(size: 12, weight: .medium))
                     .foregroundColor(.accentColor)
                 }
                 .padding(.top, 4)
@@ -185,7 +185,7 @@ struct UnsplashResultCell: View {
                 }
             }) {
                 Text(photo.user.name)
-                    .font(.system(size: 9))
+                    .font(.system(size: 12))
                     .foregroundColor(Color(white: 0.7))
                     .lineLimit(1)
                     .truncationMode(.tail)

@@ -137,6 +137,10 @@ final class MainLayout: NSView {
             guard let canvasView else { return }
             viewModel?.flipView(viewSize: canvasView.bounds.size)
         }
+        actions.resetView = { [weak canvasView, weak viewModel] in
+            guard let canvasView, let viewModel else { return }
+            viewModel.resetView(viewSize: canvasView.bounds.size)
+        }
         actions.changeGuides = { [weak canvasView, weak viewModel] change in
             viewModel?.changeGuides(change)
             canvasView?.redrawOverlays()

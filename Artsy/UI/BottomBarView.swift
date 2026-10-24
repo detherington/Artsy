@@ -303,11 +303,10 @@ struct AdjustPanelView: View {
             DragScroll {
                 VStack(spacing: 0) {
                     PanelSectionLabel("Symmetry")
-                    SymmetryControlView(viewModel: viewModel)
-                        .padding(.horizontal, 14)
-                        .padding(.bottom, 6)
+                    SymmetryButtons(viewModel: viewModel)
 
                     PanelSectionLabel("View")
+                    PanelRow(systemImage: "arrow.counterclockwise.circle", label: "Reset view", note: "fit, upright", action: actions.resetView)
                     PanelRow(systemImage: "arrow.up.left.and.down.right.magnifyingglass", label: "Zoom to fit", note: "⌘0", action: actions.zoomToFit)
                     PanelRow(systemImage: "1.magnifyingglass", label: "Actual size", note: "⌘1", action: actions.actualSize)
                     PanelRow(systemImage: "rotate.left", label: "Rotate left", note: "⌥⌘[") { actions.rotate(1) }
@@ -370,6 +369,68 @@ struct AdjustPanelView: View {
     }
 }
 
+/// Symmetry as buttons a pen can hit: off, the mirrors, and radial by how many ways.
+struct SymmetryButtons: View {
+    @ObservedObject var viewModel: CanvasViewModel
+
+    static let radialChoices = [3, 4, 6, 8, 12]
+
+    var body: some View {
+        VStack(spacing: 6) {
+            HStack(spacing: 6) {
+                mode("Off", systemImage: "nosign", .off)
+                mode("Mirror", systemImage: "align.vertical.center.fill", .horizontal)
+                mode("Up-down", systemImage: "align.horizontal.center.fill", .vertical)
+                mode("Quad", systemImage: "square.grid.2x2.fill", .quad)
+            }
+            HStack(spacing: 6) {
+                Text("Radial")
+                    .font(Chrome.font)
+                    .foregroundColor(Chrome.secondaryText)
+                    .frame(width: 60, alignment: .leading)
+                ForEach(Self.radialChoices, id: \.self) { n in
+                    let selected = viewModel.symmetryMode == .radial(n)
+                    Button(action: { viewModel.symmetryMode = .radial(n) }) {
+                        Text("\(n)")
+                            .font(Chrome.valueFont)
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 40)
+                            .background(RoundedRectangle(cornerRadius: 8).fill(selected ? Chrome.selected : Chrome.control))
+                            .contentShape(RoundedRectangle(cornerRadius: 8))
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundColor(selected ? Chrome.text : Chrome.secondaryText)
+                    .help("Strokes repeat \(n) ways around the centre")
+                }
+            }
+        }
+        .padding(.horizontal, 14)
+        .padding(.bottom, 8)
+    }
+
+    static let modeHeight: CGFloat = 52
+
+    private func mode(_ label: String, systemImage: String, _ mode: SymmetryMode) -> some View {
+        let selected = viewModel.symmetryMode == mode
+        return Button(action: { viewModel.symmetryMode = mode }) {
+            VStack(spacing: 3) {
+                Image(systemName: systemImage)
+                    .font(.system(size: 18))
+                Text(label)
+                    .font(Chrome.labelFont)
+                    .lineLimit(1)
+            }
+            .frame(maxWidth: .infinity)
+            .frame(height: Self.modeHeight)
+            .background(RoundedRectangle(cornerRadius: 8).fill(selected ? Chrome.selected : Chrome.control))
+            .contentShape(RoundedRectangle(cornerRadius: 8))
+        }
+        .buttonStyle(.plain)
+        .foregroundColor(selected ? Chrome.text : Chrome.secondaryText)
+        .help(mode == .off ? "No symmetry" : "Strokes mirror across the canvas")
+    }
+}
+
 /// Things that put something on the canvas now and then: AI, stock images, imports.
 struct AddPanelView: View {
     @ObservedObject var viewModel: CanvasViewModel
@@ -399,6 +460,10 @@ struct AddPanelView: View {
                         UnsplashPanelView(manager: unsplashManager)
                     }
                     Divider().overlay(Chrome.hairline).padding(.vertical, 8)
+                    PanelRow(systemImage: "photo.on.rectangle", label: "Import an image…", note: "as a layer") {
+                        dismiss()
+                        actions.app("handleImportImage")
+                    }
                     PanelRow(systemImage: "paintbrush", label: "Import brushes…") {
                         dismiss()
                         actions.app("handleImportBrush")

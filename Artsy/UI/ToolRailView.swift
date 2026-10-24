@@ -92,6 +92,8 @@ struct ChromeActions {
     /// +1 turns counter-clockwise, −1 clockwise.
     var rotate: (CGFloat) -> Void = { _ in }
     var resetRotation: () -> Void = {}
+    /// Fit the canvas to the window, upright and unflipped.
+    var resetView: () -> Void = {}
     var flip: () -> Void = {}
     var changeGuides: ((inout CanvasGuides) -> Void) -> Void = { _ in }
     /// A guide through the middle of the view: horizontal if true.

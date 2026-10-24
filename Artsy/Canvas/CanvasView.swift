@@ -723,42 +723,47 @@ class CanvasView: MTKView {
     /// pasted image at the origin stored on the pasteboard (or centers if
     /// none). When false, always centers.
     private func performPaste(inPlace: Bool) {
-        guard let viewModel = viewModel, let renderer = renderer,
-              let layerStack = viewModel.layerStack else { return }
-
         // Cheap pasteboard-availability check (no decode).
         let pb = NSPasteboard.general
         let imageTypes: [NSPasteboard.PasteboardType] = [.png, .tiff, .fileURL]
         guard pb.availableType(from: imageTypes) != nil else { return }
 
-        if viewModel.transformSession != nil { commitTransformIfNeeded() }
-
         // Paste in place uses the origin stored on the pasteboard by a prior
         // Artsy copy. For content from other apps (or whole-layer copies at
         // origin (0,0)), falls back to centered placement.
-        let origin: CGPoint? = inPlace ? ClipboardManager.readOrigin() : nil
+        place(origin: inPlace ? ClipboardManager.readOrigin() : nil, named: "Pasted",
+              description: inPlace ? "Paste in Place" : "Paste") { ClipboardManager.readImage() }
+    }
 
+    /// An image file as a new layer above the current one, centred, the way a paste is.
+    func placeImage(_ image: NSImage, named name: String) {
+        place(origin: nil, named: name, description: "Import Image") { image }
+    }
+
+    /// A new layer above the current one holding an image, read off the main thread by
+    /// `load` and uploaded into the layer's rectangle; nil from `load` takes the layer and
+    /// its undo step back.
+    private func place(origin: CGPoint?, named name: String, description: String, load: @escaping () -> NSImage?) {
+        guard let viewModel = viewModel, let renderer = renderer,
+              let layerStack = viewModel.layerStack else { return }
+        if viewModel.transformSession != nil { commitTransformIfNeeded() }
         guard layerStack.layers.count < layerStack.layerLimit else { NSSound.beep(); return }
 
         let W = Int(viewModel.canvasSize.width)
         let H = Int(viewModel.canvasSize.height)
 
         guard let texture = try? renderer.textureManager.makeCanvasTexture(
-            width: W, height: H, label: "Pasted"
+            width: W, height: H, label: name
         ), let clear = renderer.context.commandQueue.makeCommandBuffer() else { return }
         // The upload writes only the image's rectangle; the rest must be empty
         renderer.textureManager.clearTexture(texture, commandBuffer: clear)
         clear.commit()
 
-        // Pasting adds a layer; nothing already there changes
-        viewModel.saveUndoSnapshot(
-            renderer: renderer,
-            description: inPlace ? "Paste in Place" : "Paste",
-            changing: .nothing
-        )
+        // Placing adds a layer; nothing already there changes
+        viewModel.saveUndoSnapshot(renderer: renderer, description: description, changing: .nothing)
         let pasteStep = viewModel.undoManager.lastStepToken
 
-        let pasted = Layer(name: "Pasted", texture: texture)
+        let pasted = Layer(name: name, texture: texture)
         layerStack.layers.insert(pasted, at: layerStack.activeLayerIndex + 1)
         layerStack.activeLayerIndex += 1
 
@@ -766,7 +771,7 @@ class CanvasView: MTKView {
         let canvasSize = viewModel.canvasSize
         let textureManager = renderer.textureManager
         DispatchQueue.global(qos: .userInitiated).async { [weak renderer, weak pasted, weak viewModel] in
-            guard let image = ClipboardManager.readImage() else {
+            guard let image = load() else {
                 // Nothing to paste after all: take the empty layer and its step back
                 DispatchQueue.main.async { [weak viewModel, weak pasted] in
                     guard let viewModel, let layerStack = viewModel.layerStack, let pasted,

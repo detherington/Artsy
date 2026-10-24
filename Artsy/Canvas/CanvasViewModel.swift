@@ -440,6 +440,13 @@ final class CanvasViewModel: ObservableObject {
         transform.flip(at: Self.centre(of: viewSize), viewSize: viewSize)
     }
 
+    /// The view as it starts: upright, unflipped, the canvas fitted to the window.
+    func resetView(viewSize: CGSize) {
+        if transform.isFlipped { flipView(viewSize: viewSize) }
+        resetRotation(viewSize: viewSize)
+        zoomToFit(viewSize: viewSize)
+    }
+
     func changeGuides(_ change: (inout CanvasGuides) -> Void) {
         change(&guides)
         markDirty()
