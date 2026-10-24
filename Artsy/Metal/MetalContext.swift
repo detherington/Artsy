@@ -28,6 +28,12 @@ final class MetalContext {
     let compositeStrokeMergePipelineState: MTLRenderPipelineState
     /// A finished wet stroke onto its layer's wet map, keeping whatever is wetter
     let wetStrokePipelineState: MTLRenderPipelineState
+    /// Water that moves: how much leaves each texel, then moving it and settling pigment
+    let waterFluxPipelineState: MTLComputePipelineState
+    let waterGatherPipelineState: MTLComputePipelineState
+    /// A finished stroke into the water and its pigment, and pigment glazed over dry paint
+    let waterInjectPipelineState: MTLRenderPipelineState
+    let waterGlazePipelineState: MTLRenderPipelineState
     /// Mixes colours as pigments, for tests and tools
     let mixPigmentsPipelineState: MTLComputePipelineState
     /// Tips and paper grain for stamp brushes.
@@ -223,6 +229,21 @@ final class MetalContext {
             device: device, library: library, vertexDescriptor: compVD,
             fragmentFunction: "wetStrokeFragment", blending: .max, pixelFormat: .r16Float
         )
+        self.waterFluxPipelineState = try device.makeComputePipelineState(function: Self.function("waterFluxKernel", in: library))
+        self.waterGatherPipelineState = try device.makeComputePipelineState(function: Self.function("waterGatherKernel", in: library))
+        self.waterGlazePipelineState = try MetalContext.makeCompositePipeline(
+            device: device, library: library, vertexDescriptor: compVD,
+            fragmentFunction: "waterGlazeFragment", blending: .replace
+        )
+        do {
+            let desc = MTLRenderPipelineDescriptor()
+            desc.vertexFunction = try Self.function("compositeVertex", in: library)
+            desc.fragmentFunction = try Self.function("waterInjectFragment", in: library)
+            desc.vertexDescriptor = compVD
+            desc.colorAttachments[0].pixelFormat = .rg16Float
+            desc.colorAttachments[1].pixelFormat = .rgba16Float
+            self.waterInjectPipelineState = try device.makeRenderPipelineState(descriptor: desc)
+        }
 
         self.heightAccumulatePipelineState = try MetalContext.makeCompositePipeline(
             device: device, library: library, vertexDescriptor: compVD,

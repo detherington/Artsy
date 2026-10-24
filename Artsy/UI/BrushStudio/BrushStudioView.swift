@@ -23,6 +23,7 @@ struct BrushStudioView: View {
                     jitterSection
                 }
                 wetSection
+                waterSection
                 pressureSection
                 tiltSection
                 speedSection
@@ -315,7 +316,36 @@ struct BrushStudioView: View {
         }
     }
 
+    private var waterSection: some View {
+        Section("Water") {
+            Toggle("Flows: lays water that spreads, runs with the canvas tilt and dries from the edges in", isOn: Binding(
+                get: { model.brush.water != nil },
+                set: { on in model.apply { $0.water = on ? BrushDescriptor.Water() : nil } }
+            ))
+            if let water = model.brush.water {
+                slider("Amount", waterBinding(\.amount, water), in: 0...1, percent: true)
+                slider("Flow", waterBinding(\.flow, water), in: 0...1, percent: true)
+                slider("Settling", waterBinding(\.settling, water), in: 0...1, percent: true)
+                slider("Granulation", waterBinding(\.granulation, water), in: 0...1, percent: true)
+            }
+        }
+    }
+
     // MARK: - Bindings into nested settings
+
+    private func waterBinding<Value>(_ keyPath: WritableKeyPath<BrushDescriptor.Water, Value>,
+                                     _ current: BrushDescriptor.Water) -> Binding<Value> {
+        Binding(
+            get: { (model.brush.water ?? current)[keyPath: keyPath] },
+            set: { value in
+                model.apply { brush in
+                    var water = brush.water ?? current
+                    water[keyPath: keyPath] = value
+                    brush.water = water
+                }
+            }
+        )
+    }
 
     private func grainBinding<Value>(_ keyPath: WritableKeyPath<StampSettings.Grain, Value>,
                                      _ current: StampSettings.Grain) -> Binding<Value> {

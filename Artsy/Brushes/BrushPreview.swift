@@ -20,6 +20,8 @@ final class BrushPreview {
         renderer = try CanvasRenderer(context: context, canvasSize: size)
         renderer.viewModel = viewModel
         try renderer.setupLayerStack(for: viewModel)
+        // A wash on the pad dries at once, to show how it ends up
+        renderer.dryingTimeOverride = 10
         readback = try renderer.textureManager.makeSharedTexture(width: Int(size.width), height: Int(size.height),
                                                                  label: "Brush Preview")
     }
@@ -38,9 +40,11 @@ final class BrushPreview {
         let w = size.width, h = size.height
         viewModel.brushOpacity = 1
 
-        // A smudge brush shows nothing on a blank pad: give it bands of paint to drag.
-        if brush.smudgeSettings != nil {
-            viewModel.currentBrush = .hardRound
+        // A smudge brush shows nothing on a blank pad: give it bands of paint to drag. Nor
+        // does clean water: give it wet bands to push about.
+        let clearsWater = brush.water != nil && brush.opacity <= 0.01
+        if brush.smudgeSettings != nil || clearsWater {
+            viewModel.currentBrush = clearsWater ? .watercolor : .hardRound
             viewModel.brushSize = Float(h) * 0.5
             for (index, band) in Self.paintBands.enumerated() {
                 viewModel.currentColor = band
@@ -61,6 +65,10 @@ final class BrushPreview {
         draw(samples(count: 50, duration: 0.25) { t in
             (CGPoint(x: w * (0.6 + 0.3 * t), y: h * (0.25 + 0.5 * t)), 0.6)
         })
+        // Water on the pad runs its course, so the tile shows the wash dried
+        if layerStack.layers.contains(where: { $0.water != nil }) {
+            renderer.runWater(for: Double(WaterRenderer.cap) * 10 + 2)
+        }
 
         guard let commandBuffer = renderer.context.commandQueue.makeCommandBuffer() else { return nil }
         renderer.encodeFrame(into: commandBuffer)

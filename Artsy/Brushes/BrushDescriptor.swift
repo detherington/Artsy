@@ -42,6 +42,42 @@ struct BrushDescriptor: Codable, Identifiable, Equatable {
     /// 0 dries at once. While it is wet, a loaded brush crossing it picks it up, and a wash
     /// laid into it blends and feathers instead of glazing over it.
     var wetness: Float = 0
+    /// Set for a brush whose strokes lay water that moves; nil for paint that stays put.
+    var water: Water? = nil
+
+    /// Paint that flows: a stroke lays water and pigment on the layer, and the water moves
+    /// — spreading into dry paper, running downhill with the canvas tilt, pooling in the
+    /// paper's valleys — and dries off over the drying time in Settings, leaving the
+    /// pigment where it went. Edges darken as the pigment rides out to the receding water;
+    /// a wet stroke into a drying wash shoves its pigment outward.
+    struct Water: Codable, Equatable {
+        /// How much water a stroke lays, 0...1: more spreads further and takes longer to dry.
+        var amount: Float = 0.6
+        /// How readily the water spreads, 0...1.
+        var flow: Float = 0.5
+        /// How fast the pigment settles out of the water, 0...1: low leaves it travelling
+        /// to the edges, high keeps it where the stroke put it.
+        var settling: Float = 0.4
+        /// How much more pigment settles in the paper's valleys than on its peaks, 0...1.
+        var granulation: Float = 0.5
+
+        init(amount: Float = 0.6, flow: Float = 0.5, settling: Float = 0.4, granulation: Float = 0.5) {
+            self.amount = amount
+            self.flow = flow
+            self.settling = settling
+            self.granulation = granulation
+        }
+
+        private enum CodingKeys: String, CodingKey { case amount, flow, settling, granulation }
+
+        init(from decoder: Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            amount = try c.decodeIfPresent(Float.self, forKey: .amount) ?? 0.6
+            flow = try c.decodeIfPresent(Float.self, forKey: .flow) ?? 0.5
+            settling = try c.decodeIfPresent(Float.self, forKey: .settling) ?? 0.4
+            granulation = try c.decodeIfPresent(Float.self, forKey: .granulation) ?? 0.5
+        }
+    }
 
     /// A stroke that dries as a wash: how a watercolour behaves once it is on the paper.
     struct Wet: Codable, Equatable {
@@ -77,7 +113,7 @@ struct BrushDescriptor: Codable, Identifiable, Equatable {
 
     enum CodingKeys: String, CodingKey {
         case id, name, category, hardness, baseSize, pressureDynamics, opacity, smoothing, fixedNibAngle
-        case rendering, tiltDynamics, velocityDynamics, mixing, wet, wetness
+        case rendering, tiltDynamics, velocityDynamics, mixing, wet, wetness, water
     }
 }
 
@@ -131,6 +167,7 @@ extension BrushDescriptor {
         }
         wet = try c.decodeIfPresent(Wet.self, forKey: .wet)
         wetness = Self.unit(try c.decodeIfPresent(Float.self, forKey: .wetness) ?? 0)
+        water = try c.decodeIfPresent(Water.self, forKey: .water)
     }
 }
 
@@ -503,9 +540,32 @@ extension BrushDescriptor {
         // Fast strokes are drier
         velocityDynamics: VelocityDynamics(referenceSpeed: 1500, sizeScale: 0.85, opacityScale: 0.6),
         mixing: .glaze,
-        wet: Wet(edges: 0.6, granulation: 0.5, grainScale: 1, blendsWhenWet: 1),
         // Stays wet the whole drying time: a second wash into it blends and feathers
-        wetness: 1
+        wetness: 1,
+        // The wash is water that moves: it spreads, dries from the edges in, and leaves the
+        // pigment where the water took it, so the edges darken and the grain shows
+        water: Water(amount: 0.6, flow: 0.5, settling: 0.4, granulation: 0.5)
+    )
+
+    /// Clean water: lays no colour, only water, so a wash can be started into wet paper,
+    /// softened, or pushed about after it is down.
+    static let water = BrushDescriptor(
+        id: UUID(uuidString: "00000000-0017-0000-0000-000000000017")!,
+        name: "Water",
+        category: .painting,
+        hardness: 0.3,
+        baseSize: 40,
+        pressureDynamics: PressureDynamics(
+            sizeRange: 0.5...1.0,
+            opacityRange: 1.0...1.0
+        ),
+        opacity: 0,
+        smoothing: 0.4,
+        fixedNibAngle: nil,
+        rendering: .stamp(StampSettings(spacing: 0.1, flow: 0.5, accumulation: .wash)),
+        mixing: .glaze,
+        wetness: 1,
+        water: Water(amount: 1, flow: 0.6, settling: 0.4, granulation: 0.5)
     )
 
     static let acrylic = BrushDescriptor(
@@ -829,7 +889,7 @@ extension BrushDescriptor {
         .hardRound, .inkBrush, .sumiE, .calligraphy,
         .technicalPen, .fineliner, .ballpointPen, .gelPen,
         // Painting
-        .softRound, .airbrush, .marker, .watercolor, .acrylic, .oil, .smudge, .paletteKnife
+        .softRound, .airbrush, .marker, .watercolor, .water, .acrylic, .oil, .smudge, .paletteKnife
     ]
 
     /// Look up a built-in brush (including the eraser) by its display name.

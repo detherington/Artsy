@@ -1079,3 +1079,235 @@ kernel void impastoPushKernel(
     }
     height.write(float4(max(0.0, h - lost + gained), 0.0, 0.0, 1.0), pixel);
 }
+
+// --- Water that moves ---
+//
+// A bounded shallow-water model after Curtis et al. 1997, on a rectangle of the layer that
+// has had water laid on it (the wet region), at the canvas's resolution or half of it.
+// Per texel: free water and how wet the paper under it is (r and g), pigment suspended in
+// the water and pigment settled on the paper since the water came (both premultiplied),
+// and, at the layer's own resolution, the dry paint that was there before. Each step water
+// moves to where the surface is lower — the surface being the water on top of the paper's
+// height, tilted by the canvas tilt — and dry paper beside wet draws water into itself,
+// which is what makes a wash bloom outward; suspended pigment goes with the water. Water
+// dries off, the paper's share more slowly. Pigment settles out, faster where the free
+// water is thin and in the paper's valleys, and free water lifts settled pigment back up,
+// so in deep water it stays on the move and only comes to rest as the water goes. So the
+// pigment rides out to the advancing edge of a wash, where the paper is drinking the
+// water, and darkens it; pools in the grain; and a wet stroke into a wash lifts and shoves
+// its pigment outward.
+
+struct WaterParams {
+    uint2  size;          // texels of the region
+    uint2  origin;        // the region's top-left, in layer pixels
+    float  scale;         // layer pixels per texel
+    float  layerHeight;   // layer pixels, for the paper's canvas coordinates
+    float  paperScale;    // paper texels per layer pixel
+    float  flow;          // share of a surface difference that moves between texels per step
+    float  paperWeight;   // how much the paper's height tilts the surface
+    float2 tilt;          // canvas tilt: surface drop per texel across and down
+    float  evaporation;   // water lost per step
+    float  settling;      // share of suspended pigment settling per step in deep water
+    float  granulation;   // how much more settles in the valleys than on the peaks
+    float  wick;          // how much water dry paper draws from a wet neighbour per step
+    float  capacity;      // free water that wets the paper through at once
+    float  lift;          // share of settled pigment free water lifts back up per step
+    float  mobility;      // how freely pigment moves with the water, 0...1: less than freely
+};
+
+// The paper is fixed to the canvas, as every brush's grain sees it (origin bottom-left).
+static inline float paperHeightAt(texture2d<float> paper, sampler s, float2 layerPx, constant WaterParams &p) {
+    float2 canvas = float2(layerPx.x, p.layerHeight - layerPx.y);
+    return paper.sample(s, canvas * p.paperScale / float(paper.get_width())).r;
+}
+
+static inline float waterSurface(float w, float h, float2 texel, constant WaterParams &p) {
+    return w + p.paperWeight * (h - 0.5) + dot(p.tilt, texel);
+}
+
+// How far pigment may pass into paper this wet: not at all until it is half wet through.
+static inline float waterGate(float soaked) {
+    return saturate((soaked - 0.4) / 0.4);
+}
+
+// How much water leaves each texel for its four neighbours (left, right, up, down).
+kernel void waterFluxKernel(
+    texture2d<float> water [[texture(0)]],
+    texture2d<float> paper [[texture(1)]],
+    texture2d<float, access::write> flux [[texture(2)]],
+    sampler paperSampler [[sampler(0)]],
+    constant WaterParams &p [[buffer(0)]],
+    uint2 gid [[thread_position_in_grid]]
+) {
+    if (gid.x >= p.size.x || gid.y >= p.size.y) return;
+    float w = water.read(gid).r;
+    if (w <= 1e-5) { flux.write(float4(0.0), gid); return; }
+    float2 layerPx = (float2(gid) + 0.5) * p.scale + float2(p.origin);
+    float s = waterSurface(w, paperHeightAt(paper, paperSampler, layerPx, p), float2(gid), p);
+    const int2 dirs[4] = { int2(-1, 0), int2(1, 0), int2(0, -1), int2(0, 1) };
+    float4 out = float4(0.0);
+    for (int k = 0; k < 4; k++) {
+        int2 n = int2(gid) + dirs[k];
+        // The region's edge is a wall
+        if (n.x < 0 || n.y < 0 || n.x >= int(p.size.x) || n.y >= int(p.size.y)) continue;
+        float2 wet = water.read(uint2(n)).rg;
+        float2 npx = (float2(n) + 0.5) * p.scale + float2(p.origin);
+        float sn = waterSurface(wet.r, paperHeightAt(paper, paperSampler, npx, p), float2(n), p);
+        // Downhill, and into paper that is not yet wet through, which draws it
+        out[k] = p.flow * max(0.0, s - sn) + p.wick * (1.0 - saturate(wet.g)) * min(w, 0.2);
+    }
+    // Never more than most of what is here, so the step stays stable
+    float total = out.x + out.y + out.z + out.w;
+    if (total > w * 0.8) out *= w * 0.8 / total;
+    flux.write(out, gid);
+}
+
+// Move the water and its pigment, dry some off, settle some pigment and lift some.
+kernel void waterGatherKernel(
+    texture2d<float> water [[texture(0)]],
+    texture2d<float> pigment [[texture(1)]],
+    texture2d<float> flux [[texture(2)]],
+    texture2d<float> paper [[texture(3)]],
+    texture2d<float, access::write> waterOut [[texture(4)]],
+    texture2d<float, access::write> pigmentOut [[texture(5)]],
+    texture2d<float, access::read_write> settled [[texture(6)]],
+    sampler paperSampler [[sampler(0)]],
+    constant WaterParams &p [[buffer(0)]],
+    uint2 gid [[thread_position_in_grid]]
+) {
+    if (gid.x >= p.size.x || gid.y >= p.size.y) return;
+    float2 wet = water.read(gid).rg;
+    float w = wet.r, soaked = wet.g;
+    float4 g = pigment.read(gid);
+    float4 out = flux.read(gid);
+    float outTotal = out.x + out.y + out.z + out.w;
+    float wNew = w - outTotal;
+    // Pigment leaves in the water's proportion, but not as freely: it is hindered by the
+    // paper, so it drifts with the flow without smearing as far as the water spreads; and
+    // it cannot enter paper that is not yet wet through, which is what pins the hard edge
+    // of a wash and piles pigment up there as the water wets the paper ahead of it
+    const int2 dirs[4] = { int2(-1, 0), int2(1, 0), int2(0, -1), int2(0, 1) };
+    float gOut = 0.0;
+    for (int k = 0; k < 4; k++) {
+        int2 n = int2(gid) + dirs[k];
+        if (out[k] <= 0.0 || n.x < 0 || n.y < 0 || n.x >= int(p.size.x) || n.y >= int(p.size.y)) continue;
+        gOut += out[k] * waterGate(water.read(uint2(n)).g);
+    }
+    float4 gNew = w > 1e-6 ? g * max(0.0, 1.0 - p.mobility * gOut / w) : g;
+    float gate = waterGate(soaked);
+    // What the neighbours sent this way: the left one's rightward share, and so on
+    if (gid.x > 0) {
+        uint2 n = uint2(gid.x - 1, gid.y); float f = flux.read(n).y;
+        if (f > 0.0) { float wn = water.read(n).r; wNew += f; gNew += pigment.read(n) * (p.mobility * gate * f / wn); }
+    }
+    if (gid.x + 1 < p.size.x) {
+        uint2 n = uint2(gid.x + 1, gid.y); float f = flux.read(n).x;
+        if (f > 0.0) { float wn = water.read(n).r; wNew += f; gNew += pigment.read(n) * (p.mobility * gate * f / wn); }
+    }
+    if (gid.y > 0) {
+        uint2 n = uint2(gid.x, gid.y - 1); float f = flux.read(n).w;
+        if (f > 0.0) { float wn = water.read(n).r; wNew += f; gNew += pigment.read(n) * (p.mobility * gate * f / wn); }
+    }
+    if (gid.y + 1 < p.size.y) {
+        uint2 n = uint2(gid.x, gid.y + 1); float f = flux.read(n).z;
+        if (f > 0.0) { float wn = water.read(n).r; wNew += f; gNew += pigment.read(n) * (p.mobility * gate * f / wn); }
+    }
+    // The paper under free water wets through, quickly where there is much and slowly
+    // where there is little; what it takes up is not lost to the flow (the paper's own
+    // water is counted as the wet-area mask, not as a sink), so the thin edge of a wash
+    // does not drink the water that would carry it on
+    soaked = min(1.0, soaked + min(wNew, p.capacity) / p.capacity * 0.3);
+    // Drying off: the free water, much faster where it is thin — the edge of a wash dries
+    // first and the water behind flows out to replace it, carrying pigment to the edge —
+    // and the paper's wetness over the whole drying time
+    wNew = max(0.0, wNew - p.evaporation * (1.0 + 4.0 * (1.0 - saturate(wNew / 0.2))));
+    soaked = max(0.0, soaked - p.evaporation * 0.6);
+    // Settling: all of it once the free water has gone; otherwise a share per step, more
+    // where the water is thin and in the paper's valleys. Free water lifts settled pigment
+    // back up, so pigment in deep water stays on the move.
+    float4 rest = settled.read(gid);
+    float dep, up;
+    if (wNew < 1e-4) {
+        dep = 1.0;
+        up = 0.0;
+    } else {
+        float2 layerPx = (float2(gid) + 0.5) * p.scale + float2(p.origin);
+        float h = paperHeightAt(paper, paperSampler, layerPx, p);
+        dep = saturate(p.settling * (1.0 + 12.0 * (1.0 - saturate(wNew / 0.03))) * max(0.1, 1.0 + p.granulation * (0.5 - h) * 1.5));
+        up = p.lift * saturate(wNew / 0.1);
+    }
+    float4 down = gNew * dep, lifted = rest * up;
+    waterOut.write(float4(wNew, soaked, 0.0, 1.0), gid);
+    pigmentOut.write(gNew - down + lifted, gid);
+    settled.write(rest + down - lifted, gid);
+}
+
+// A finished stroke onto the region: its pigment into the suspended pigment, mixed in as
+// pigment where there is some already, and its coverage as water. Reads the old state and
+// writes the new (two targets), since a pass cannot read its own target.
+struct WaterInjectParams {
+    uint2  size;
+    uint2  origin;
+    float  scale;
+    float2 layerSize;
+    float  opacity;      // the stroke's, on its pigment
+    float  amount;       // water per unit of coverage
+    float  cap;          // most water a texel holds
+    int    mixPigments;
+};
+
+struct WaterInjectOut {
+    float4 water [[color(0)]];
+    float4 pigment [[color(1)]];
+};
+
+fragment WaterInjectOut waterInjectFragment(
+    CompositeVertexOut in [[stage_in]],
+    texture2d<float> stroke [[texture(0)]],
+    texture2d<float> water [[texture(1)]],
+    texture2d<float> pigment [[texture(2)]],
+    sampler s [[sampler(0)]],
+    constant WaterInjectParams &p [[buffer(0)]]
+) {
+    float2 layerPx = in.texCoord * float2(p.size) * p.scale + float2(p.origin);
+    float4 laid = stroke.sample(s, layerPx / p.layerSize);
+    float4 was = pigment.sample(s, in.texCoord);
+    float4 fresh = laid * p.opacity;
+    float4 mixed;
+    if (fresh.a <= 1e-5) mixed = was;
+    else if (was.a <= 1e-5) mixed = fresh;
+    else mixed = p.mixPigments != 0 ? pigmentOver(fresh, was) : fresh + was * (1.0 - fresh.a);
+    WaterInjectOut out;
+    float2 wet = water.sample(s, in.texCoord).rg;
+    // Water goes down wherever the brush touched, nearly as much at its soft edge as in its
+    // middle; it is the pigment that thins towards the edge
+    out.water = float4(min(p.cap, wet.r + p.amount * saturate(laid.a * 3.0)), wet.g, 0.0, 1.0);
+    out.pigment = mixed;
+    return out;
+}
+
+// The look of the region for the layer: the settled pigment glazed over the dry paint
+// that was there, and the pigment still in the water glazed over that.
+struct WaterGlazeParams {
+    uint2  size;
+    uint2  origin;
+    float  scale;
+    float2 layerSize;
+};
+
+fragment float4 waterGlazeFragment(
+    CompositeVertexOut in [[stage_in]],
+    texture2d<float> pigment [[texture(0)]],
+    texture2d<float> settled [[texture(1)]],
+    texture2d<float> dry [[texture(2)]],
+    sampler s [[sampler(0)]],
+    constant WaterGlazeParams &p [[buffer(0)]]
+) {
+    float2 layerPx = in.texCoord * p.layerSize;
+    float2 uv = (layerPx - float2(p.origin)) / (float2(p.size) * p.scale);
+    float4 d = dry.sample(s, uv);   // kept for the region alone, at the layer's resolution
+    float4 r = settled.sample(s, uv);
+    if (r.a > 1e-5) d = blendOver(r, d, 1);
+    float4 g = pigment.sample(s, uv);
+    return g.a > 1e-5 ? blendOver(g, d, 1) : d;
+}

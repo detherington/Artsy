@@ -79,8 +79,16 @@ final class CompositorPipeline {
         }
     }
 
+    /// Bind the full-target quad with no transform, for a pass of another renderer's that
+    /// uses the composite vertex function.
+    func bindQuad(_ encoder: MTLRenderCommandEncoder) {
+        var identity = float4x4(diagonal: SIMD4<Float>(1, 1, 1, 1))
+        encoder.setVertexBuffer(quadVertexBuffer, offset: 0, index: 0)
+        encoder.setVertexBytes(&identity, length: MemoryLayout<float4x4>.size, index: 1)
+    }
+
     /// Draw the full-canvas quad once, or once per scissor rect when `regions` is given.
-    private func drawQuad(_ encoder: MTLRenderCommandEncoder, regions: [MTLScissorRect]?) {
+    func drawQuad(_ encoder: MTLRenderCommandEncoder, regions: [MTLScissorRect]?) {
         guard let regions else {
             encoder.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: 6)
             return

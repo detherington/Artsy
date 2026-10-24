@@ -20,7 +20,7 @@ final class BrushGoldenTests: XCTestCase {
     }
 
     func testEveryBrush() throws {
-        for brush in BrushDescriptor.allDefaults {
+        for brush in BrushDescriptor.allDefaults where brush.opacity > 0 {
             let harness = try EngineHarness()
             // A smudge brush shows nothing on a blank layer: give it bands of paint to drag.
             if brush.smudgeSettings != nil {
@@ -34,7 +34,10 @@ final class BrushGoldenTests: XCTestCase {
             }
             harness.select(brush)
             harness.viewModel.currentColor = ink
+            harness.dryingTime = 20
             StrokeFixtures.brushSheet.forEach { harness.draw($0) }
+            // A wash dries before it is judged
+            harness.letWaterRun(seconds: 70)
             Golden.assertMatches(harness.displayed(), named: "brush-\(slug(brush.name))")
         }
     }
@@ -80,11 +83,13 @@ final class BrushGoldenTests: XCTestCase {
         let harness = try EngineHarness()
         harness.fill(harness.backgroundLayer, red: 0.08, green: 0.08, blue: 0.10)
         harness.viewModel.currentColor = StrokeColor(red: 1.0, green: 0.93, blue: 0.75, alpha: 1)
+        harness.dryingTime = 20
         for (row, brush) in [BrushDescriptor.softRound, .airbrush, .watercolor].enumerated() {
             harness.select(brush)
             let y = CGFloat(230 - row * 85)
             harness.draw(StrokeFixtures.line(from: CGPoint(x: 40, y: y), to: CGPoint(x: 470, y: y), pressure: 0.2...1.0))
         }
+        harness.letWaterRun(seconds: 70)
         Golden.assertMatches(harness.displayed(), named: "soft-brushes-over-dark")
     }
 

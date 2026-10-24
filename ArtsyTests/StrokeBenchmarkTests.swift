@@ -116,6 +116,32 @@ final class StrokeBenchmarkTests: XCTestCase {
         }
     }
 
+    /// What a wash on the move costs a frame: a canvas-spanning Watercolor stroke on 2048²,
+    /// then frames at 60 a second while the water flows (two steps of it a frame).
+    func testWaterFrameCost() throws {
+        let harness = try EngineHarness(width: 2048, height: 2048)
+        harness.select(.watercolor)
+        harness.viewModel.brushSize = 300
+        harness.draw(StrokeFixtures.line(from: CGPoint(x: 150, y: 1024), to: CGPoint(x: 1900, y: 1024), pressure: 1...1))
+        let water = try XCTUnwrap(harness.drawingLayer.water)
+        let texels = water.texels.width * water.texels.height
+        var cpu: [Double] = []
+        var frame: [Double] = []
+        for _ in 0..<40 {
+            harness.advance(by: 1.0 / 60)
+            let commandBuffer = harness.context.commandQueue.makeCommandBuffer()!
+            var encode = 0.0
+            frame.append(milliseconds {
+                encode = milliseconds { harness.renderer.encodeFrame(into: commandBuffer) }
+                commandBuffer.commit()
+                commandBuffer.waitUntilCompleted()
+            })
+            cpu.append(encode)
+        }
+        print(String(format: "BENCHMARK water-frame (%@) | %.1f Mtexel region, 2 steps a frame | cpu %5.2f ms | frame %5.2f ms",
+                     build, Double(texels) / 1e6, median(cpu), median(frame)))
+    }
+
     /// What committing one stroke costs at pen-up: time until the GPU has merged it, and the
     /// undo memory it adds. A 600 px stroke with Soft Round.
     func testStrokeCommit() throws {

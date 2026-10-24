@@ -47,6 +47,9 @@ final class Layer: Identifiable, ObservableObject {
     /// The latest time written into the wet map, seconds since `wetEpoch`: past it the
     /// layer is dry all over.
     var wetUntil: TimeInterval = 0
+    /// Water on the move, while a wash is spreading and drying; nil otherwise. See
+    /// `LayerWater`: the layer's pixels show the look throughout.
+    var water: LayerWater?
     @Published var thumbnail: NSImage?
 
     /// Whether any paint on the layer may still be wet at `now` (the renderer's clock).
@@ -54,10 +57,17 @@ final class Layer: Identifiable, ObservableObject {
         wetTexture != nil && now - wetEpoch < wetUntil
     }
 
-    /// Dry the layer all over, at once.
+    /// Dry the layer all over, at once: the paint stays where it is.
     func dry() {
         wetTexture = nil
         wetUntil = 0
+        settleWater()
+    }
+
+    /// Stop the water where it is. Call before writing the layer's pixels by any other
+    /// means, so the flow does not write over them: the look the pixels hold stands.
+    func settleWater() {
+        water = nil
     }
 
     init(id: UUID = UUID(), name: String, texture: MTLTexture) {
