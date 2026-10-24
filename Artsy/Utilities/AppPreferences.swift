@@ -16,6 +16,7 @@ final class AppPreferences: ObservableObject {
         static let defaultBrushSize = "defaultBrushSize"
         static let defaultCanvasBackground = "defaultCanvasBackground" // hex string
         static let recentColors = "recentColors" // [hex string]
+        static let paletteColors = "paletteColors" // [hex string]
         static let smoothingMode = "smoothingMode" // SmoothingMode raw value
         static let pressureCurves = "pressureCurves" // JSON: [pen key: PressureCurve]
         static let easeStrokesWithoutPressure = "easeStrokesWithoutPressure"
@@ -59,6 +60,15 @@ final class AppPreferences: ObservableObject {
     @Published var recentColors: [String] {
         didSet { defaults.set(recentColors, forKey: Key.recentColors) }
     }
+
+    /// The palette the painter keeps in the colour panel, hex strings; starts with a few.
+    @Published var paletteColors: [String] {
+        didSet { defaults.set(paletteColors, forKey: Key.paletteColors) }
+    }
+    static let startingPalette = [
+        "000000", "4D4D4D", "999999", "FFFFFF", "C0392B", "E67E22", "F1C40F", "27AE60",
+        "16A085", "2980B9", "8E44AD", "D35400", "F5CBA7", "7F8C8D", "2C3E50", "FADBD8",
+    ]
 
     /// Stroke smoothing algorithm. Starts on Adaptive: steady when slow, out of the way when fast.
     @Published var smoothingMode: SmoothingMode {
@@ -136,6 +146,7 @@ final class AppPreferences: ObservableObject {
         self.defaultCanvasBackground = defaults.string(forKey: Key.defaultCanvasBackground) ?? "#FFFFFF"
 
         self.recentColors = (defaults.array(forKey: Key.recentColors) as? [String]) ?? []
+        self.paletteColors = (defaults.array(forKey: Key.paletteColors) as? [String]) ?? Self.startingPalette
 
         self.smoothingMode = defaults.string(forKey: Key.smoothingMode).flatMap(SmoothingMode.init(rawValue:)) ?? .oneEuro
         self.easeStrokesWithoutPressure = (defaults.object(forKey: Key.easeStrokesWithoutPressure) as? Bool) ?? true

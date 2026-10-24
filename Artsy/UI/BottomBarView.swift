@@ -251,9 +251,9 @@ struct ColorSwatchButton: View {
             .buttonStyle(.plain)
             .help("Background colour")
             .popover(isPresented: $showingBackground, arrowEdge: .top) {
-                CustomColorPickerView(
+                ColorPanelView(
                     color: Binding(get: { viewModel.swapBackgroundColor }, set: { viewModel.swapBackgroundColor = $0 }),
-                    onCommit: { showingBackground = false }
+                    viewModel: viewModel, dismiss: { showingBackground = false }
                 )
             }
             Button(action: { showingForeground = true }) {
@@ -265,10 +265,10 @@ struct ColorSwatchButton: View {
             .buttonStyle(.plain)
             .help("Colour (X swaps the two)")
             .popover(isPresented: $showingForeground, arrowEdge: .top) {
-                CustomColorPickerView(
+                ColorPanelView(
                     color: Binding(get: { viewModel.foregroundColor },
                                    set: { viewModel.foregroundColor = $0; viewModel.currentColor = $0 }),
-                    onCommit: { showingForeground = false }
+                    viewModel: viewModel, dismiss: { showingForeground = false }
                 )
             }
         }

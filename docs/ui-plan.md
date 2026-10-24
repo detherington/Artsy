@@ -165,7 +165,17 @@ come first.
    and delete for the user's own with a confirmation. The previews are the bar's
    cache, rendered once per brush at one size and kept in memory; on disk and per size
    can wait until there are enough brushes to need it.
-3. **The colour panel.** Medium.
+3. **The colour panel.** Medium. Done: `ColorPanelView` — a 260 pt saturation square
+   with a hue strip beside it, the colour being made next to the one the panel opened
+   with (a tap goes back to it), H, S, B and hex fields for the keyboard, the recent
+   colours and a palette the painter keeps (32 pt swatches; + keeps the current colour;
+   a long press on a swatch replaces or removes it; sixteen to start, kept across
+   launches). A swatch or a sampled colour picks and closes so the pen can paint; the
+   square and the strip keep it open, and whatever the pen settled on goes into the
+   recent colours when it closes. The eyedropper button hands the pen the eyedropper
+   tool; a second button samples anywhere on the screen. The bar's two swatches open it
+   for the colour and for the background colour. The old picker stays behind the fill
+   and shape tools' small swatches for now.
 4. **The layers panel** and its docked form. Medium.
 5. **Adjust and Add.** Small to medium; mostly moving existing views into pop-ups.
 6. **Studio and Settings** restyled; a shortcut sheet (⌘/). Small.
