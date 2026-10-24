@@ -128,6 +128,33 @@ final class LayerStack: ObservableObject {
         return true
     }
 
+    /// A copy of the layer at `index` just above it, selected: its pixels, its thickness
+    /// and its settings, named after it. The copy is dry.
+    @discardableResult
+    func duplicateLayer(at index: Int, renderer: CanvasRenderer) throws -> Int {
+        guard index >= 0, index < layers.count else { throw LayerError.duplicateFailed }
+        guard layers.count < layerLimit else { throw LayerError.maxLayersReached(layerLimit) }
+        let source = layers[index]
+        let copy = try makeLayer(name: "\(source.name) copy")
+        copy.isVisible = source.isVisible
+        copy.isLocked = source.isLocked
+        copy.opacity = source.opacity
+        copy.blendMode = source.blendMode
+        guard let commandBuffer = renderer.context.commandQueue.makeCommandBuffer() else { throw LayerError.duplicateFailed }
+        let copyHeight = source.heightTexture == nil ? nil : renderer.heightTexture(for: copy, commandBuffer: commandBuffer)
+        guard let blit = commandBuffer.makeBlitCommandEncoder() else { throw LayerError.duplicateFailed }
+        blit.copy(from: source.texture, to: copy.texture)
+        if let height = source.heightTexture, let copyHeight { blit.copy(from: height, to: copyHeight) }
+        blit.endEncoding()
+        commandBuffer.commit()
+        commandBuffer.waitUntilCompleted()
+        layers.insert(copy, at: index + 1)
+        activeLayerIndex = index + 1
+        renderer.viewModel?.noteContentChanged()
+        renderer.updateThumbnail(for: copy)
+        return index + 1
+    }
+
     func flattenAll(renderer: CanvasRenderer) throws -> Layer {
         let result = try makeLayer(name: "Flattened")
         guard let commandBuffer = renderer.context.commandQueue.makeCommandBuffer() else {
@@ -179,6 +206,7 @@ final class LayerStack: ObservableObject {
 enum LayerError: LocalizedError {
     case maxLayersReached(Int)
     case flattenFailed
+    case duplicateFailed
 
     var errorDescription: String? {
         switch self {
@@ -187,6 +215,8 @@ enum LayerError: LocalizedError {
                 ? "A canvas this size can have \(limit) layers in this Mac's memory"
                 : "Maximum of \(limit) layers reached"
         case .flattenFailed: return "Failed to flatten layers"
+        case .duplicateFailed:
+            return "The layer could not be copied."
         }
     }
 }

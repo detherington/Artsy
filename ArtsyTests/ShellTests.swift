@@ -291,6 +291,96 @@ final class ShellTests: XCTestCase {
         init(color: StrokeColor) { self.color = color }
     }
 
+    /// The layers panel: its buttons add, copy, merge and delete; a tap on a row selects
+    /// it, its eye hides it and its lock locks it.
+    func testTheLayersPanelAddsCopiesMergesDeletesAndItsRowsTakeTaps() throws {
+        let (view, viewModel) = try canvas()
+        let layerStack = try XCTUnwrap(viewModel.layerStack)
+        let panel = LayersPanelView(viewModel: viewModel, renderer: view.renderer, dockAvailable: false)
+        let host = NSHostingView(rootView: panel)
+        show(host, size: NSSize(width: Chrome.panelWidth, height: 520))
+        settle(host)
+        if ProcessInfo.processInfo.environment["ARTSY_SNAPSHOT_DIR"] != nil { snapshot(host, named: "layers-panel") }
+        XCTAssertEqual(layerStack.layers.map(\.name), ["Background", "Layer 1"])
+
+        // The buttons sit under the header (44), the blend row (44) and the opacity row
+        // (44): a 52 pt row with four buttons spread across it
+        let buttonsY: CGFloat = 520 - (44 + 88 + 26)
+        func button(_ n: CGFloat) -> NSPoint { NSPoint(x: Chrome.panelWidth / 8 * (2 * n + 1), y: buttonsY) }
+        click(at: button(0))
+        XCTAssertEqual(layerStack.layers.map(\.name), ["Background", "Layer 1", "Layer 2"], "Add")
+        XCTAssertEqual(layerStack.activeLayerIndex, 2)
+        click(at: button(1))
+        XCTAssertEqual(layerStack.layers.map(\.name), ["Background", "Layer 1", "Layer 2", "Layer 2 copy"], "Copy")
+        XCTAssertEqual(layerStack.activeLayerIndex, 3)
+        click(at: button(2))
+        XCTAssertEqual(layerStack.layers.map(\.name), ["Background", "Layer 1", "Layer 2"], "Merge")
+        click(at: button(3))
+        XCTAssertEqual(layerStack.layers.map(\.name), ["Background", "Layer 1"], "Delete")
+        settle(host)
+
+        // The rows, the top layer first, start under the buttons' divider; a tap on the
+        // second row (Paper) selects it
+        let rowsTop: CGFloat = 44 + 88 + 52 + 6
+        let row = LayersPanelContent.rowHeight + 2
+        func rowY(_ n: CGFloat) -> CGFloat { 520 - (rowsTop + row * n + LayersPanelContent.rowHeight / 2) }
+        send(.leftMouseDown, at: NSPoint(x: 150, y: rowY(1)), time: 1)
+        send(.leftMouseUp, at: NSPoint(x: 150, y: rowY(1)), time: 1.1)
+        RunLoop.main.run(until: Date().addingTimeInterval(0.1))
+        XCTAssertEqual(layerStack.activeLayerIndex, 0, "Paper selected")
+
+        // The eye and the lock at the right end of the top row (Layer 1)
+        let layer1 = layerStack.layers[1]
+        let eyeX = Chrome.panelWidth - 12 - 36 - 8 - 18, lockX = Chrome.panelWidth - 12 - 18
+        send(.leftMouseDown, at: NSPoint(x: eyeX, y: rowY(0)), time: 2)
+        send(.leftMouseUp, at: NSPoint(x: eyeX, y: rowY(0)), time: 2.1)
+        RunLoop.main.run(until: Date().addingTimeInterval(0.1))
+        XCTAssertFalse(layer1.isVisible, "hidden")
+        send(.leftMouseDown, at: NSPoint(x: lockX, y: rowY(0)), time: 3)
+        send(.leftMouseUp, at: NSPoint(x: lockX, y: rowY(0)), time: 3.1)
+        RunLoop.main.run(until: Date().addingTimeInterval(0.1))
+        XCTAssertTrue(layer1.isLocked, "locked")
+        XCTAssertEqual(layerStack.activeLayerIndex, 0, "neither button selected the row")
+    }
+
+    func testDuplicatingALayerCopiesItsPaintAndThickness() throws {
+        let harness = try EngineHarness(width: 64, height: 64)
+        harness.select(.oil)
+        harness.viewModel.currentColor = StrokeColor(red: 0.9, green: 0.2, blue: 0.1, alpha: 1)
+        harness.draw(StrokeFixtures.line(from: CGPoint(x: 10, y: 32), to: CGPoint(x: 54, y: 32), pressure: 1...1))
+        let layerStack = harness.layerStack
+        let actions = LayerActions(viewModel: harness.viewModel, layerStack: layerStack, renderer: harness.renderer)
+        actions.duplicate(at: 1)
+        XCTAssertEqual(layerStack.layers.map(\.name), ["Background", "Layer 1", "Layer 1 copy"])
+        let copy = layerStack.layers[2]
+        XCTAssertEqual(harness.pixels(of: copy.texture).values, harness.pixels(of: harness.drawingLayer.texture).values, "the paint")
+        XCTAssertEqual(harness.heights(of: copy).values, harness.heights(of: harness.drawingLayer).values, "and the thickness")
+        XCTAssertNil(copy.wetTexture, "the copy is dry")
+        XCTAssertTrue(harness.viewModel.undoManager.canUndo, "a step to undo")
+        harness.viewModel.performUndo(renderer: harness.renderer)
+        XCTAssertEqual(layerStack.layers.count, 2, "and it undoes")
+    }
+
+    /// A drag that starts on a row's handle is the row's (to reorder); elsewhere it scrolls.
+    func testADragFromTheHandleIsNotAScroll() throws {
+        let host = NSHostingView(rootView: DragScroll(dragHandleWidth: 40) {
+            VStack(spacing: 0) {
+                ForEach(0..<30, id: \.self) { row in
+                    Text("Row \(row)").frame(maxWidth: .infinity, minHeight: 44)
+                }
+            }
+        })
+        show(host, size: NSSize(width: 300, height: 220))
+        let scroll = try XCTUnwrap(host.firstDescendant(of: PenScrollView.self))
+        XCTAssertFalse(scroll.hitTest(NSPoint(x: 20, y: 100)) === scroll, "the handle strip is the content's")
+        XCTAssertTrue(scroll.hitTest(NSPoint(x: 150, y: 100)) === scroll, "the rest is the scroll view's")
+        send(.leftMouseDown, at: NSPoint(x: 150, y: 60), time: 1)
+        send(.leftMouseDragged, at: NSPoint(x: 150, y: 140), time: 3)
+        send(.leftMouseUp, at: NSPoint(x: 150, y: 140), time: 5)
+        RunLoop.main.run(until: Date().addingTimeInterval(0.05))
+        XCTAssertEqual(scroll.contentView.bounds.origin.y, 80, accuracy: 1, "a drag on the row scrolls")
+    }
+
     /// A click through the window's dispatch, which is the only way a SwiftUI view takes one.
     private func click(at point: NSPoint) {
         for type in [NSEvent.EventType.leftMouseDown, .leftMouseUp] {

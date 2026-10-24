@@ -34,7 +34,7 @@ final class MainLayout: NSView {
         let actions = Self.actions(for: canvasView, viewModel: viewModel)
         rail = NSHostingView(rootView: ToolRailView(viewModel: viewModel, actions: actions))
         bar = NSHostingView(rootView: BottomBarView(viewModel: viewModel, chrome: chrome, previews: previews, actions: actions))
-        dock = NSHostingView(rootView: LayersDockView(viewModel: viewModel))
+        dock = NSHostingView(rootView: LayersDockView(viewModel: viewModel, renderer: canvasView.renderer))
         pill = NSHostingView(rootView: ChromePillView(viewModel: viewModel, previews: previews, actions: actions))
         zoomHUD = NSHostingView(rootView: ZoomHUDView(viewModel: viewModel))
         layersDocked = viewModel.isLayersDocked
@@ -117,6 +117,7 @@ final class MainLayout: NSView {
     /// view and guides. Weak, so the chrome keeps nothing alive.
     private static func actions(for canvasView: CanvasView, viewModel: CanvasViewModel) -> ChromeActions {
         var actions = ChromeActions()
+        actions.renderer = { [weak canvasView] in canvasView?.renderer }
         actions.undo = { [weak canvasView] in canvasView?.performUndoAction() }
         actions.redo = { [weak canvasView] in canvasView?.performRedoAction() }
         actions.zoomToFit = { [weak canvasView, weak viewModel] in

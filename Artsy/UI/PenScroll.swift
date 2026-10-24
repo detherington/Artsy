@@ -13,6 +13,10 @@ final class PenScrollView: NSScrollView {
     static let dragThreshold: CGFloat = 6
     static let holdDuration: TimeInterval = 0.5
 
+    /// Content within this many points of the left edge takes the pen's drag itself (a
+    /// row's drag handle, for reordering), rather than scrolling.
+    var passThroughWidth: CGFloat = 0
+
     private var pressed: (down: NSEvent, moves: [NSEvent])?
     private var hold: Timer?
     private var dragging = false
@@ -47,7 +51,9 @@ final class PenScrollView: NSScrollView {
         guard let hit = super.hitTest(point) else { return nil }
         if forwarding { return hit }
         if let scroller = verticalScroller, hit === scroller || hit.isDescendant(of: scroller) { return hit }
-        return hit.isDescendant(of: contentView) ? self : hit
+        guard hit.isDescendant(of: contentView) else { return hit }
+        if passThroughWidth > 0, convert(point, from: superview).x < passThroughWidth { return hit }
+        return self
     }
 
     // While a tap is being forwarded, the view under it may hand an event it has no use
@@ -170,13 +176,17 @@ final class PenScrollView: NSScrollView {
 /// given; its height is the content's.
 struct DragScroll<Content: View>: NSViewRepresentable {
     let content: Content
+    /// Points at the left edge where a drag is the content's, not a scroll: a drag handle.
+    var dragHandleWidth: CGFloat = 0
 
-    init(@ViewBuilder content: () -> Content) {
+    init(dragHandleWidth: CGFloat = 0, @ViewBuilder content: () -> Content) {
+        self.dragHandleWidth = dragHandleWidth
         self.content = content()
     }
 
     func makeNSView(context: Context) -> PenScrollView {
         let scroll = PenScrollView()
+        scroll.passThroughWidth = dragHandleWidth
         let host = NSHostingView(rootView: content)
         host.sizingOptions = [.intrinsicContentSize]
         host.translatesAutoresizingMaskIntoConstraints = false

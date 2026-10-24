@@ -4,6 +4,7 @@ import SwiftUI
 /// title and a way to put it back in the bar.
 struct LayersDockView: View {
     @ObservedObject var viewModel: CanvasViewModel
+    let renderer: CanvasRenderer?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -14,10 +15,7 @@ struct LayersDockView: View {
             }
             Divider().overlay(Chrome.hairline)
             if let layerStack = viewModel.layerStack {
-                DragScroll {
-                    LayerPanelView(viewModel: viewModel, layerStack: layerStack)
-                        .padding(.vertical, 8)
-                }
+                LayersPanelContent(viewModel: viewModel, layerStack: layerStack, renderer: renderer)
             }
         }
         .frame(width: Chrome.dockWidth)
@@ -29,6 +27,7 @@ struct LayersDockView: View {
 /// The layers as a pop-up from the bar, for a window too narrow for the dock.
 struct LayersPanelView: View {
     @ObservedObject var viewModel: CanvasViewModel
+    let renderer: CanvasRenderer?
     let dockAvailable: Bool
 
     var body: some View {
@@ -42,10 +41,7 @@ struct LayersPanelView: View {
             }
             Divider().overlay(Chrome.hairline)
             if let layerStack = viewModel.layerStack {
-                DragScroll {
-                    LayerPanelView(viewModel: viewModel, layerStack: layerStack)
-                        .padding(.vertical, 8)
-                }
+                LayersPanelContent(viewModel: viewModel, layerStack: layerStack, renderer: renderer)
             }
         }
         .frame(width: Chrome.panelWidth, height: 520)

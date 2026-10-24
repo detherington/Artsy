@@ -176,7 +176,16 @@ come first.
    tool; a second button samples anywhere on the screen. The bar's two swatches open it
    for the colour and for the background colour. The old picker stays behind the fill
    and shape tools' small swatches for now.
-4. **The layers panel** and its docked form. Medium.
+4. **The layers panel** and its docked form. Medium. Done: `LayersPanelContent`, shared
+   by the dock and the pop-up — the selected layer's blend mode and opacity above the
+   list; Add, Copy, Merge and Delete as pen-sized buttons; 48 pt rows with a drag
+   handle, thumbnail, name, eye and lock; a long press on a row for duplicate, merge
+   down and delete. Duplicate is new (`LayerStack.duplicateLayer`: pixels, thickness
+   and settings; the copy is dry). The old panel wrapped in the pen scroll view could
+   not be reordered at all, since every drag scrolled: the scroll view now lets a drag
+   that starts in the rows' handle strip through to the row (`DragScroll(dragHandleWidth:)`),
+   and a drag anywhere else still scrolls. The panel's actions live in `LayerActions`,
+   each with its undo step, apart from the views.
 5. **Adjust and Add.** Small to medium; mostly moving existing views into pop-ups.
 6. **Studio and Settings** restyled; a shortcut sheet (⌘/). Small.
 7. **The small-display breakpoint**, with the pen display in hand. Small to medium.

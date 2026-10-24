@@ -61,7 +61,7 @@ struct BottomBarView: View {
                 }
             }
             .popover(isPresented: $showingLayers, arrowEdge: .top) {
-                LayersPanelView(viewModel: viewModel, dockAvailable: chrome.isWide)
+                LayersPanelView(viewModel: viewModel, renderer: actions.renderer(), dockAvailable: chrome.isWide)
             }
             ChromeButton(systemImage: "slider.horizontal.3", label: "Adjust", help: "Symmetry, guides and the view") {
                 showingAdjust = true
