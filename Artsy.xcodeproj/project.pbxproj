@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		0548AFCFA70E6B3F09AE3D59 /* ShortcutsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6266D6BE05C68A98A0E75B5E /* ShortcutsView.swift */; };
 		D508B298D35A46C37562E077 /* LayersPanelView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3C27E4B2E1BC810375AA172E /* LayersPanelView.swift */; };
 		3454411F03DD1CD6E8987411 /* ColorPanelView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 072C5A7F74E21642A32FB18E /* ColorPanelView.swift */; };
 		750742F2DD62C40B161AF72D /* BrushPanelView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4AB0672375E9A4AB68BD81EE /* BrushPanelView.swift */; };
@@ -138,6 +139,7 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		6266D6BE05C68A98A0E75B5E /* ShortcutsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShortcutsView.swift; sourceTree = "<group>"; };
 		3C27E4B2E1BC810375AA172E /* LayersPanelView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LayersPanelView.swift; sourceTree = "<group>"; };
 		072C5A7F74E21642A32FB18E /* ColorPanelView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ColorPanelView.swift; sourceTree = "<group>"; };
 		4AB0672375E9A4AB68BD81EE /* BrushPanelView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrushPanelView.swift; sourceTree = "<group>"; };
@@ -296,6 +298,7 @@
 		30F8CBE1AC0CF03D0DA0FDA3 /* UI */ = {
 			isa = PBXGroup;
 			children = (
+				6266D6BE05C68A98A0E75B5E /* ShortcutsView.swift */,
 				3C27E4B2E1BC810375AA172E /* LayersPanelView.swift */,
 				072C5A7F74E21642A32FB18E /* ColorPanelView.swift */,
 				4AB0672375E9A4AB68BD81EE /* BrushPanelView.swift */,
@@ -678,6 +681,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				0548AFCFA70E6B3F09AE3D59 /* ShortcutsView.swift in Sources */,
 				D508B298D35A46C37562E077 /* LayersPanelView.swift in Sources */,
 				3454411F03DD1CD6E8987411 /* ColorPanelView.swift in Sources */,
 				750742F2DD62C40B161AF72D /* BrushPanelView.swift in Sources */,

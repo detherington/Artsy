@@ -195,7 +195,13 @@ come first.
    and texture imports, and the AI and stock views in the panel's type (13 pt text, 12 pt
    labels, the chrome's greys) without touching their layout. The old symmetry control
    file is gone.
-6. **Studio and Settings** restyled; a shortcut sheet (⌘/). Small.
+6. **Studio and Settings** restyled; a shortcut sheet (⌘/). Small. Done: both windows
+   take the chrome's dark appearance and its type (13 pt text, 12 pt labels and values),
+   their layouts as they were. Help → Keyboard Shortcuts (⌘/) opens a sheet of every key
+   the app answers to, grouped, read from one table (`Shortcuts.groups`) so the sheet
+   and the tests agree. Writing it turned up that the number keys picked five fixed
+   brushes while the brush panel numbered the library's first nine; they now pick what
+   the panel shows.
 7. **The small-display breakpoint**, with the pen display in hand. Small to medium.
 
 Each step is its own branch and PR, with the view tests extended: the existing

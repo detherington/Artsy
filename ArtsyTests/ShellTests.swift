@@ -434,6 +434,32 @@ final class ShellTests: XCTestCase {
         XCTAssertEqual(viewModel.transform.scale, fitted.scale, accuracy: 1e-6, "fitted")
     }
 
+    /// The shortcut sheet lists what the keys do, and the number keys do what it says.
+    func testTheShortcutSheetAndTheNumberKeysAgreeWithTheBrushPanel() throws {
+        let host = NSHostingView(rootView: ShortcutsView())
+        show(host, size: NSSize(width: 420, height: 640))
+        settle(host)
+        if ProcessInfo.processInfo.environment["ARTSY_SNAPSHOT_DIR"] != nil { snapshot(host, named: "shortcuts") }
+        let keys = Shortcuts.groups.flatMap(\.entries).map(\.keys)
+        XCTAssertEqual(Set(keys).count, keys.count, "no key listed twice")
+        XCTAssertTrue(keys.contains("1 – 9"))
+
+        let (view, viewModel) = try canvas()
+        let library = BrushLibrary.shared.all
+        func press(_ character: String, code: UInt16) {
+            view.keyDown(with: NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: [], timestamp: 0,
+                                                windowNumber: 0, context: nil, characters: character,
+                                                charactersIgnoringModifiers: character, isARepeat: false, keyCode: code)!)
+        }
+        press("3", code: 20)
+        XCTAssertEqual(viewModel.currentBrush.id, library[2].id, "3 is the third brush in the panel: \(viewModel.currentBrush.name)")
+        XCTAssertEqual(viewModel.currentTool, .brush)
+        press("9", code: 25)
+        XCTAssertEqual(viewModel.currentBrush.id, library[8].id, "9 the ninth: \(viewModel.currentBrush.name)")
+        press("b", code: 11)
+        XCTAssertEqual(viewModel.currentBrush.id, BrushDescriptor.hardRound.id, "B is still Hard Round")
+    }
+
     /// A click through the window's dispatch, which is the only way a SwiftUI view takes one.
     private func click(at point: NSPoint) {
         for type in [NSEvent.EventType.leftMouseDown, .leftMouseUp] {
@@ -534,4 +560,3 @@ extension NSView {
         return nil
     }
 }
-

@@ -545,6 +545,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         diagnosticsMenu.addItem(withTitle: "Export Diagnostics…", action: #selector(exportDiagnostics), keyEquivalent: "")
         let diagnosticsItem = NSMenuItem(title: "Diagnostics", action: nil, keyEquivalent: "")
         diagnosticsItem.submenu = diagnosticsMenu
+        helpMenu.addItem(withTitle: "Keyboard Shortcuts", action: #selector(showShortcuts), keyEquivalent: "/")
+        helpMenu.addItem(NSMenuItem.separator())
         helpMenu.addItem(diagnosticsItem)
         helpMenuItem.submenu = helpMenu
         NSApp.helpMenu = helpMenu
@@ -724,6 +726,23 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     // MARK: - Brush menu
 
     private var brushStudioWindow: NSWindow?
+    private var shortcutsWindow: NSWindow?
+
+    /// Every key the app answers to, in one sheet.
+    @objc private func showShortcuts() {
+        let window = shortcutsWindow ?? {
+            let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 420, height: 640),
+                                  styleMask: [.titled, .closable], backing: .buffered, defer: false)
+            window.title = "Keyboard Shortcuts"
+            window.isReleasedWhenClosed = false
+            window.appearance = NSAppearance(named: .darkAqua)
+            window.contentView = NSHostingView(rootView: ShortcutsView())
+            window.center()
+            return window
+        }()
+        shortcutsWindow = window
+        window.makeKeyAndOrderFront(nil)
+    }
     private var brushStudioModel: BrushStudioModel?
 
     /// Opens the studio on the active canvas's current brush. Reopening it binds it to
@@ -746,6 +765,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             )
             window.title = "Brush Studio"
             window.isReleasedWhenClosed = false
+            window.appearance = NSAppearance(named: .darkAqua)   // the chrome's one look
             window.center()
             return window
         }()
@@ -1059,6 +1079,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             defer: false
         )
         settingsWindow.title = "Artsy Settings"
+        settingsWindow.appearance = NSAppearance(named: .darkAqua)
         settingsWindow.contentView = NSHostingView(rootView: SettingsView())
         settingsWindow.center()
         settingsWindow.isReleasedWhenClosed = false

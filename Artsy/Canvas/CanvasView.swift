@@ -1393,21 +1393,14 @@ class CanvasView: MTKView {
             viewModel.resetColors()
         case "x", "X":
             viewModel.swapColors()
-        case "1":
-            viewModel.currentTool = .brush
-            viewModel.currentBrush = .hardRound
-        case "2":
-            viewModel.currentTool = .brush
-            viewModel.currentBrush = .softRound
-        case "3":
-            viewModel.currentTool = .brush
-            viewModel.currentBrush = .pencil
-        case "4":
-            viewModel.currentTool = .brush
-            viewModel.currentBrush = .inkBrush
-        case "5":
-            viewModel.currentTool = .brush
-            viewModel.currentBrush = .marker
+        case "1", "2", "3", "4", "5", "6", "7", "8", "9":
+            // The first nine brushes of the library, as the brush panel numbers them
+            let library = BrushLibrary.shared.all
+            if let digit = Int(event.charactersIgnoringModifiers ?? ""), digit - 1 < library.count {
+                let brush = library[digit - 1]
+                viewModel.currentBrush = brush
+                viewModel.currentTool = brush.id == BrushDescriptor.eraser.id ? .eraser : .brush
+            }
         default:
             super.keyDown(with: event)
         }
