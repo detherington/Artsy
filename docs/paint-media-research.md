@@ -219,9 +219,9 @@ by the paper's height and the tilt, paper drawing water into itself, drying, set
 lifting, granulation from the paper's relief; edge darkening and blooms fall out. The
 layer's pixels show the look throughout. What was left out of the plan: velocity (the
 flow is a surface-difference diffusion, stable at a fifth per step, 120 steps a
-second), a capillary layer that spreads by itself, and drips; and tilt comes from
-Settings rather than a bar control. The merge-time wash did not go away: brushes with
-`wet` and no `water` still use it.
+second), a capillary layer that spreads by itself, and drips. Tilt began in Settings
+and is now a pad under Adjust (0.8.12), level when a window opens. The merge-time
+wash did not go away: brushes with `wet` and no `water` still use it.
 
 ### 5. Bristles (medium)
 

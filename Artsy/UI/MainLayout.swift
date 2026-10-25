@@ -31,6 +31,8 @@ final class MainLayout: NSView {
         let chrome = ChromeState()
         self.chrome = chrome
         let previews = BrushPreviewCache(renderer: previewRenderer)
+        // The panel's tiles, ready before its first open; never under a stroke
+        previews.warm(BrushLibrary.shared.all) { viewModel.isDrawing }
         let actions = Self.actions(for: canvasView, viewModel: viewModel)
         rail = NSHostingView(rootView: ToolRailView(viewModel: viewModel, actions: actions))
         bar = NSHostingView(rootView: BottomBarView(viewModel: viewModel, chrome: chrome, previews: previews, actions: actions))

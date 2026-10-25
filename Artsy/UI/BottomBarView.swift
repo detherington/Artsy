@@ -7,29 +7,6 @@ final class ChromeState: ObservableObject {
     @Published var isWide = false
 }
 
-/// Stroke previews, one per brush, for the bar and the brush panel: rendered the first
-/// time a brush is asked for, and again when it has been edited.
-final class BrushPreviewCache {
-    static let size = CGSize(width: 180, height: 60)
-    private let renderer: BrushPreview?
-    private var rendered: [UUID: (brush: BrushDescriptor, image: NSImage)] = [:]
-
-    init(renderer: BrushPreview?) {
-        self.renderer = renderer
-    }
-
-    func image(for brush: BrushDescriptor) -> NSImage? {
-        if let hit = rendered[brush.id], hit.brush == brush { return hit.image }
-        // White strokes with their transparency, for the dark bar and panel
-        guard let renderer,
-              let cg = renderer.render(brush: brush, color: StrokeColor(red: 1, green: 1, blue: 1, alpha: 1), size: 16, onPaper: false)
-        else { return nil }
-        let image = NSImage(cgImage: cg, size: Self.size)
-        rendered[brush.id] = (brush, image)
-        return image
-    }
-}
-
 /// The bar along the bottom of the window: the document, then the four things a painter
 /// changes every minute — brush, size, opacity, colour — as controls a pen can drag, then
 /// Layers, Adjust, Add and the way to hide it all.
@@ -304,6 +281,9 @@ struct AdjustPanelView: View {
                 VStack(spacing: 0) {
                     PanelSectionLabel("Symmetry")
                     SymmetryButtons(viewModel: viewModel)
+
+                    PanelSectionLabel("Tilt")
+                    TiltControl(viewModel: viewModel)
 
                     PanelSectionLabel("View")
                     PanelRow(systemImage: "arrow.counterclockwise.circle", label: "Reset view", note: "fit, upright", action: actions.resetView)

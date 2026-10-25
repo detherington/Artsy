@@ -7,6 +7,8 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		D969D0FF0B1D76D63007CB5C /* BrushPreviewCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = A829962E610F7D639904DC5C /* BrushPreviewCache.swift */; };
+		1717E7277AF27D67DD22DCBB /* TiltPad.swift in Sources */ = {isa = PBXBuildFile; fileRef = CF83B64FDBB106B70676B892 /* TiltPad.swift */; };
 		0548AFCFA70E6B3F09AE3D59 /* ShortcutsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6266D6BE05C68A98A0E75B5E /* ShortcutsView.swift */; };
 		D508B298D35A46C37562E077 /* LayersPanelView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3C27E4B2E1BC810375AA172E /* LayersPanelView.swift */; };
 		3454411F03DD1CD6E8987411 /* ColorPanelView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 072C5A7F74E21642A32FB18E /* ColorPanelView.swift */; };
@@ -139,6 +141,8 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		A829962E610F7D639904DC5C /* BrushPreviewCache.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrushPreviewCache.swift; sourceTree = "<group>"; };
+		CF83B64FDBB106B70676B892 /* TiltPad.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TiltPad.swift; sourceTree = "<group>"; };
 		6266D6BE05C68A98A0E75B5E /* ShortcutsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShortcutsView.swift; sourceTree = "<group>"; };
 		3C27E4B2E1BC810375AA172E /* LayersPanelView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LayersPanelView.swift; sourceTree = "<group>"; };
 		072C5A7F74E21642A32FB18E /* ColorPanelView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ColorPanelView.swift; sourceTree = "<group>"; };
@@ -298,6 +302,8 @@
 		30F8CBE1AC0CF03D0DA0FDA3 /* UI */ = {
 			isa = PBXGroup;
 			children = (
+				A829962E610F7D639904DC5C /* BrushPreviewCache.swift */,
+				CF83B64FDBB106B70676B892 /* TiltPad.swift */,
 				6266D6BE05C68A98A0E75B5E /* ShortcutsView.swift */,
 				3C27E4B2E1BC810375AA172E /* LayersPanelView.swift */,
 				072C5A7F74E21642A32FB18E /* ColorPanelView.swift */,
@@ -681,6 +687,8 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				D969D0FF0B1D76D63007CB5C /* BrushPreviewCache.swift in Sources */,
+				1717E7277AF27D67DD22DCBB /* TiltPad.swift in Sources */,
 				0548AFCFA70E6B3F09AE3D59 /* ShortcutsView.swift in Sources */,
 				D508B298D35A46C37562E077 /* LayersPanelView.swift in Sources */,
 				3454411F03DD1CD6E8987411 /* ColorPanelView.swift in Sources */,

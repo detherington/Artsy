@@ -114,7 +114,8 @@ final class WaterTests: XCTestCase {
     func testTheWashRunsDownhillWithTheTilt() throws {
         func centroidX(tilt: Float) throws -> Float {
             let harness = try canvasWithAWash(wash(flow: 0.6, settling: 0.3), width: 300, height: 140, size: 40)
-            harness.renderer.tiltOverride = SIMD2(tilt, 0)
+            harness.renderer.tiltOverride = nil
+            harness.viewModel.canvasTilt = SIMD2(tilt, 0)
             harness.letWaterRun(seconds: 40)
             let layer = harness.pixels(of: harness.drawingLayer.texture)
             var sum: Float = 0, weight: Float = 0

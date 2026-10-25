@@ -8,11 +8,11 @@ final class CanvasRenderer: NSObject, MTKViewDelegate {
     let smudgeRenderer: SmudgeRenderer
     let paintRenderer: PaintRenderer
     let waterRenderer: WaterRenderer
-    /// The canvas tilt water runs with: the setting, unless a test says otherwise. Positive
-    /// x runs the water to the right, positive y down the screen.
+    /// The canvas tilt water runs with: the window's (Adjust → Tilt), unless a test says
+    /// otherwise. Positive x runs the water to the right, positive y down the screen.
     var tiltOverride: SIMD2<Float>?
     var tilt: SIMD2<Float> {
-        tiltOverride ?? SIMD2(Float(AppPreferences.shared.canvasTiltX), Float(AppPreferences.shared.canvasTiltY))
+        tiltOverride ?? viewModel?.canvasTilt ?? .zero
     }
     /// The content version the last stroke commit made: a change past it was made by
     /// something other than a stroke, and settles any water (see `runWater`).

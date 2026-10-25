@@ -8,7 +8,8 @@ import SwiftUI
 /// `dragThreshold` scrolls instead, and after the pen lifts the content keeps the pen's
 /// speed for a moment. A pen held still for `holdDuration` is a right-click on what is
 /// under it, so a context menu opens for a pen with no second button. The wheel and the
-/// scroller work as ever.
+/// scroller work as ever, and so does a slider or a pad in the content (`PenDragTarget`):
+/// its drags are its own.
 final class PenScrollView: NSScrollView {
     static let dragThreshold: CGFloat = 6
     static let holdDuration: TimeInterval = 0.5
@@ -53,7 +54,18 @@ final class PenScrollView: NSScrollView {
         if let scroller = verticalScroller, hit === scroller || hit.isDescendant(of: scroller) { return hit }
         guard hit.isDescendant(of: contentView) else { return hit }
         if passThroughWidth > 0, convert(point, from: superview).x < passThroughWidth { return hit }
+        if takesDrags(hit) { return hit }
         return self
+    }
+
+    /// Whether `view`, or a view it is inside, takes the pen's drags itself.
+    private func takesDrags(_ view: NSView) -> Bool {
+        var view: NSView? = view
+        while let v = view, v !== contentView {
+            if v is PenDragTarget { return true }
+            view = v.superview
+        }
+        return false
     }
 
     // While a tap is being forwarded, the view under it may hand an event it has no use
@@ -171,6 +183,11 @@ final class PenScrollView: NSScrollView {
         momentum = nil
     }
 }
+
+/// A view in a `PenScrollView` whose drags are its own, not scrolls: a slider, a pad.
+protocol PenDragTarget: AnyObject {}
+/// SwiftUI's slider on the Mac is one of these underneath.
+extension NSSlider: PenDragTarget {}
 
 /// SwiftUI content in a `PenScrollView`: a list a pen can scroll. Takes the width it is
 /// given; its height is the content's.

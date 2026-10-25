@@ -147,7 +147,8 @@ final class ShellTests: XCTestCase {
         viewModel.currentBrush = .hardRound
         // Real previews only for a look at the panel; the taps do not need them
         let snapshotting = ProcessInfo.processInfo.environment["ARTSY_SNAPSHOT_DIR"] != nil
-        let previews = BrushPreviewCache(renderer: snapshotting ? try? BrushPreview(context: EngineHarness.sharedContext, size: BrushPreviewCache.size) : nil)
+        let previews = BrushPreviewCache(renderer: snapshotting ? try? BrushPreview(context: EngineHarness.sharedContext, size: BrushPreviewCache.size) : nil,
+                                          directory: nil)
         let panel = BrushPanelView(viewModel: viewModel, previews: previews, actions: ChromeActions(), dismiss: {})
         let host = NSHostingView(rootView: panel)
         show(host, size: NSSize(width: Chrome.panelWidth, height: 600))
@@ -413,10 +414,58 @@ final class ShellTests: XCTestCase {
         tap(inset + slot * 0.5, modesY, 4)
         XCTAssertEqual(viewModel.symmetryMode, .off)
 
+        // The Tilt section follows, its label and the pad with Level beside it; a drag on
+        // the pad is the pad's, not a scroll, and lands the lean where the pen is
+        let padTop: CGFloat = radialY + 20 + 8 + 30
+        let padCentre = NSPoint(x: 14 + TiltPadView.side / 2, y: padTop + TiltPadView.side / 2)
+        let reach = TiltPadView.side / 2 - TiltPadView.inset
+        send(.leftMouseDown, at: NSPoint(x: padCentre.x, y: 640 - padCentre.y), time: 5)
+        send(.leftMouseDragged, at: NSPoint(x: padCentre.x + reach * 0.5, y: 640 - padCentre.y - reach * 0.25), time: 5.1)
+        send(.leftMouseUp, at: NSPoint(x: padCentre.x + reach * 0.5, y: 640 - padCentre.y - reach * 0.25), time: 5.2)
+        RunLoop.main.run(until: Date().addingTimeInterval(0.1))
+        XCTAssertEqual(viewModel.canvasTilt.x, 0.5, accuracy: 0.05, "leaning right")
+        XCTAssertEqual(viewModel.canvasTilt.y, 0.25, accuracy: 0.05, "and down")
+        XCTAssertEqual(TiltControl.words(for: SIMD2(0.5, -0.25)), "→ 50%  ↑ 25%")
+        XCTAssertEqual(TiltControl.words(for: .zero), "Level")
+        let scroll = try XCTUnwrap(host.firstDescendant(of: PenScrollView.self))
+        XCTAssertEqual(scroll.contentView.bounds.origin.y, 0, "the list did not scroll")
+        // Level, at the bottom of the column beside the pad
+        tap(14 + TiltPadView.side + 12 + (Chrome.panelWidth - 28 - TiltPadView.side - 12) / 2, padTop + TiltPadView.side - 22, 6)
+        XCTAssertEqual(viewModel.canvasTilt, .zero, "level again")
+
         // Reset view: the first row of the View section
-        let resetY: CGFloat = radialY + 20 + 8 + 30 + 22
-        tap(150, resetY, 5)
+        let resetY: CGFloat = padTop + TiltControl.height + 30 + 22
+        tap(150, resetY, 7)
         XCTAssertEqual(resets, 1, "Reset view asked the window to reset")
+    }
+
+    /// A slider in a panel's list is an AppKit slider underneath, and the pen on it is the
+    /// slider's, not the scroll view's: the brush panel's Size slider takes the press and
+    /// the drag after it rather than scrolling the list.
+    func testAPanelSliderTakesThePenItself() throws {
+        let (_, viewModel) = try canvas()
+        viewModel.currentBrush = .hardRound
+        viewModel.brushSize = 20
+        let panel = BrushPanelView(viewModel: viewModel, previews: BrushPreviewCache(renderer: nil), actions: ChromeActions(), dismiss: {})
+        let host = NSHostingView(rootView: panel)
+        show(host, size: NSSize(width: Chrome.panelWidth, height: 700))
+        settle(host)
+        let slider = try XCTUnwrap(host.firstDescendant(of: NSSlider.self), "the quick settings' Size slider")
+        let frame = slider.convert(slider.bounds, to: nil)
+        XCTAssertTrue(window.contentView?.hitTest(NSPoint(x: frame.midX, y: frame.midY)) === slider, "the slider is hit, not the scroll view")
+
+        // The press puts the knob under the pen, as the Mac's sliders do. The drag after it
+        // is AppKit's own tracking, which looks at the real button and so cannot be fed
+        // synthetic events here: two presses stand in for a drag from one end to the other.
+        let low = NSPoint(x: frame.minX + 20, y: frame.midY), high = NSPoint(x: frame.maxX - 20, y: frame.midY)
+        send(.leftMouseDown, at: low, time: 1)
+        send(.leftMouseUp, at: low, time: 1.1)
+        RunLoop.main.run(until: Date().addingTimeInterval(0.1))
+        XCTAssertLessThan(viewModel.brushSize, 10, "the knob went to the pen at the low end: \(viewModel.brushSize)")
+        send(.leftMouseDown, at: high, time: 2)
+        send(.leftMouseUp, at: high, time: 2.1)
+        RunLoop.main.run(until: Date().addingTimeInterval(0.1))
+        XCTAssertGreaterThan(viewModel.brushSize, 30, "and at the high end: \(viewModel.brushSize)")
     }
 
     func testResettingTheViewMakesItUprightUnflippedAndFitted() throws {

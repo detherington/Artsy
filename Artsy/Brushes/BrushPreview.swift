@@ -22,6 +22,9 @@ final class BrushPreview {
         try renderer.setupLayerStack(for: viewModel)
         // A wash on the pad dries at once, to show how it ends up
         renderer.dryingTimeOverride = 10
+        // No shape snapping (a preference), and the pad's own view model keeps it level: a
+        // tile then depends on the brush and the build alone, which is what the cache keys on
+        viewModel.snapsShapesOnHold = false
         readback = try renderer.textureManager.makeSharedTexture(width: Int(size.width), height: Int(size.height),
                                                                  label: "Brush Preview")
     }
