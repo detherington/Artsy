@@ -23,8 +23,6 @@ final class AppPreferences: ObservableObject {
         static let paintRelief = "paintRelief"
         static let paintGloss = "paintGloss"
         static let dryingTime = "dryingTime"
-        static let canvasTiltX = "canvasTiltX"
-        static let canvasTiltY = "canvasTiltY"
         static let snapShapesOnHold = "snapShapesOnHold"
         static let layersDocked = "layersDocked"
     }
@@ -96,15 +94,6 @@ final class AppPreferences: ObservableObject {
         didSet { defaults.set(dryingTime, forKey: Key.dryingTime) }
     }
 
-    /// The canvas tilt water runs with, -1...1 each way: positive x runs it to the right,
-    /// positive y down the screen.
-    @Published var canvasTiltX: Double {
-        didSet { defaults.set(canvasTiltX, forKey: Key.canvasTiltX) }
-    }
-    @Published var canvasTiltY: Double {
-        didSet { defaults.set(canvasTiltY, forKey: Key.canvasTiltY) }
-    }
-
     /// Hold the pen still at the end of a stroke to snap it to the shape it was going for.
     @Published var snapShapesOnHold: Bool {
         didSet { defaults.set(snapShapesOnHold, forKey: Key.snapShapesOnHold) }
@@ -153,8 +142,6 @@ final class AppPreferences: ObservableObject {
         self.paintRelief = min(max((defaults.object(forKey: Key.paintRelief) as? Double) ?? 1.0, 0), 2)
         self.paintGloss = min(max((defaults.object(forKey: Key.paintGloss) as? Double) ?? 0.5, 0), 1)
         self.dryingTime = min(max((defaults.object(forKey: Key.dryingTime) as? Double) ?? 60, 5), 600)
-        self.canvasTiltX = min(max((defaults.object(forKey: Key.canvasTiltX) as? Double) ?? 0, -1), 1)
-        self.canvasTiltY = min(max((defaults.object(forKey: Key.canvasTiltY) as? Double) ?? 0, -1), 1)
         self.snapShapesOnHold = (defaults.object(forKey: Key.snapShapesOnHold) as? Bool) ?? true
         self.layersDocked = (defaults.object(forKey: Key.layersDocked) as? Bool) ?? true
         self.pressureCurves = defaults.data(forKey: Key.pressureCurves)

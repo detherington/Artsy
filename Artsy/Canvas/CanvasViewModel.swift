@@ -115,6 +115,9 @@ final class CanvasViewModel: ObservableObject {
 
     // Symmetry — mirrors each stroke around the canvas center.
     @Published var symmetryMode: SymmetryMode = .off
+    /// The paper's lean, which water runs with: positive x to the right, positive y down
+    /// the screen, each at most 1. Level when the window opens.
+    @Published var canvasTilt: SIMD2<Float> = .zero
 
     /// A grid and guide lines over the canvas, which the pen snaps to.
     @Published var guides = CanvasGuides()

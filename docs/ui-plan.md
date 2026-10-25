@@ -203,6 +203,12 @@ come first.
    brushes while the brush panel numbered the library's first nine; they now pick what
    the panel shows.
 7. **The small-display breakpoint**, with the pen display in hand. Small to medium.
+8. **Tilt under Adjust.** Small. Done: the paper's lean is a pad in the Adjust panel
+   (`TiltControl`), with a word on where it is and a Level button, in place of the two
+   sliders in Settings. It is the window's state (`CanvasViewModel.canvasTilt`), level
+   when a window opens, not a preference that would surprise the next session. Building
+   it turned up that a slider inside a panel's drag-scroll could be tapped but never
+   dragged (below).
 
 Each step is its own branch and PR, with the view tests extended: the existing
 `CanvasViewTests` drive a real `CanvasView` with synthetic pen events, and the same
@@ -232,6 +238,11 @@ pick a brush — so the pen path is tested, not just the mouse path.
   view again: it lets such events past while it is forwarding.
 - **The chrome's animation lands its frames after the run loop turns**, so a test of the
   layout waits a third of a second after a toggle; the app does not care.
+- **A slider in the drag-scroll never got a drag.** The scroll view took every drag in
+  its content as a scroll, so the brush panel's Size, Opacity and Smoothing sliders moved
+  only on a tap. SwiftUI's slider is an AppKit `NSSlider` underneath, so the scroll view
+  now hands the hit to any view that is a `PenDragTarget` (every `NSSlider`, the tilt
+  pad), and that view tracks the pen itself.
 - **A pen has no right button, and SwiftUI's context menu wants one.** Rather than teach
   every card a long-press gesture (which the scroll view, holding the press to tell a tap
   from a drag, would never let through), the scroll view itself turns a pen held still

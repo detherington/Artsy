@@ -305,6 +305,9 @@ struct AdjustPanelView: View {
                     PanelSectionLabel("Symmetry")
                     SymmetryButtons(viewModel: viewModel)
 
+                    PanelSectionLabel("Tilt")
+                    TiltControl(viewModel: viewModel)
+
                     PanelSectionLabel("View")
                     PanelRow(systemImage: "arrow.counterclockwise.circle", label: "Reset view", note: "fit, upright", action: actions.resetView)
                     PanelRow(systemImage: "arrow.up.left.and.down.right.magnifyingglass", label: "Zoom to fit", note: "⌘0", action: actions.zoomToFit)

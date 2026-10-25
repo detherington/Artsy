@@ -333,20 +333,6 @@ struct GeneralSettingsView: View {
                         Text("How long Oil and Watercolor stay wet. A brush crossing wet paint picks it up, and a wash into wet paint blends and feathers; dry paint is glazed or covered. Edit → Dry Layer dries a layer at once, and View → Show Wet Paint shows what is still wet.")
                             .font(.system(size: 12))
                             .foregroundColor(.secondary)
-                        HStack {
-                            Text("Tilt")
-                                .font(.system(size: 13, weight: .medium))
-                                .frame(width: 80, alignment: .leading)
-                            Text("←→").font(.system(size: 12)).foregroundColor(.secondary)
-                            Slider(value: $prefs.canvasTiltX, in: -1...1)
-                            Text("↑↓").font(.system(size: 12)).foregroundColor(.secondary)
-                            Slider(value: $prefs.canvasTiltY, in: -1...1)
-                            Button("Level") { prefs.canvasTiltX = 0; prefs.canvasTiltY = 0 }
-                                .font(.system(size: 12))
-                        }
-                        Text("Which way water runs on the canvas: a Watercolor wash spreads, runs downhill and dries from the edges in.")
-                            .font(.system(size: 12))
-                            .foregroundColor(.secondary)
                     }
                     .padding(4)
                 }
