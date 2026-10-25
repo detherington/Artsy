@@ -109,7 +109,10 @@ final class ImpastoTests: XCTestCase {
         let left = painted.filter { $0 < centre }.map(ratio), right = painted.filter { $0 > centre }.map(ratio)
         XCTAssertGreaterThan(left.max()!, 1.06, "lit on the left: \(left.map { String(format: "%.2f", $0) })")
         XCTAssertLessThan(right.min()!, 0.94, "shaded on the right: \(right.map { String(format: "%.2f", $0) })")
-        XCTAssertGreaterThan(left.min()!, right.min()!, "and less shaded on the left than the right")
+        // On the whole: a groove's own shadow can make one column on the lit side as dark
+        // as the shaded edge, now that the grooves are laid out per stroke
+        let leftAverage = left.reduce(0, +) / Float(left.count), rightAverage = right.reduce(0, +) / Float(right.count)
+        XCTAssertGreaterThan(leftAverage, rightAverage + 0.03, "and lighter on the left than the right on the whole: \(leftAverage) against \(rightAverage)")
 
         XCTAssertEqual(brightness(lit.at(x: 20, y: 60)), 1, accuracy: 0.005, "the paper is still white")
         XCTAssertLessThan(worst(flat, harness.displayed()), 0.02, "at zero relief the display is the plain composite")

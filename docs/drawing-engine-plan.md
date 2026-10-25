@@ -644,8 +644,8 @@ The fifth and last step of `paint-media-research.md`: the tip as a bundle of bri
 
 - **The bundle** (`StampSettings.Bristles`; `bristleBundle` in Shaders.metal): clumps of
   bristles across the dab, each a streak along it with its own width and length, at
-  fixed homes in the dab's space — evenly spaced, each a little off its place, the same
-  every stroke like the brush's grain — within the tip's disc, so a stroke's ends are
+  homes in the dab's space — evenly spaced, each a little off its place; the same every
+  stroke until step 12 laid them out afresh — within the tip's disc, so a stroke's ends are
   round if ragged. A clump is soft at its sides and just wider than the spacing, so a
   stroke pressed normally is solid with the tone dipping where clumps meet. Nothing
   about dab placement changed: the bundle is drawn in the fragment, a pixel taking the
@@ -688,6 +688,55 @@ The fifth and last step of `paint-media-research.md`: the tip as a bundle of bri
   have none. The impasto tests use a bristle-free Oil, since they are about thickness
   carrying through. The oil and acrylic tiles, the relief scene and the everything
   document were re-recorded after viewing.
+
+### 12. Living marks (small) — done, untested by hand
+
+The first two of the six options in `paint-media-research.md`, "Living marks": the pen
+found oil and acrylic reading as pre-baked stamps. What made them so: twelve clumps at
+the same homes in every stroke, a bristle-streak image that tiled along the path, and
+grooves that pressed the same image into the height, so two strokes were copies and a
+straight stroke one texture extruded.
+
+- **Variation in the bundle** (`bristleBundle`): the clump homes are hashed with the
+  stroke's seed, so no two strokes share a layout; along a stroke the tuft sways as a
+  whole (7% of the dab, over six and a half diameters) and each clump a little on its
+  own (2.5%), so now and then two cross or part, and each swells and thins (±15%); two
+  stray hairs sit at the bundle's full width whatever the touch, there for a stretch
+  and gone for one, so they stand apart when a light touch narrows the bundle. A clump
+  is always wide enough to reach three quarters of the way to its neighbour, wherever
+  both have got to, so a gap through the stroke comes from parting at speed and never
+  from the wandering: the first version let clumps wander on their own by an eighth of
+  the dab, and oil read as a comb. The carry is read at a clump's home, not where it
+  has wandered to, so each clump keeps its paint. The push kernel sees the bundle where
+  it is at that dab; the carry's home layout has no wander and no strays. The seed
+  rides on the dab (`Dab.strokeSeed`, a thirteenth float on the stamp instance), the
+  same one the placer's jitter uses, so a replay and the goldens get the same marks.
+- **Splay with memory** (`DabPlacer`): the fan follows the pressure up at once and down
+  slowly, decaying over about a diameter of travel, so a bundle pressed hard stays
+  splayed for a moment after the touch eases.
+- **Procedural streaks** (`bristleStreaks`): the bristle grain is value noise on a hashed
+  lattice, fine across the stroke and slow along it with breaks, drifting sideways as
+  the stroke goes on, seeded per stroke, streakier the faster the stroke (by the parting)
+  — in place of the image, which tiled. The grooves in thick paint come from the same
+  function at the brush's grain scale, so colour streaks and grooves line up. Its spread
+  is calibrated to the image's ranked heights (0.26 against 0.29, 6% at the ends). The
+  image stays for the loaded brush's dip pattern only.
+- **Cost.** A 3000 px oil stroke at 60 px through the harness: 184 ms before, 190
+  after (acrylic 186). The loop runs per pixel, per clump, under twenty overlapping
+  dabs at a spacing of 0.05, so what it does counts: one hash per clump split into
+  bytes rather than seven, three sines, and no arrays — a version that kept the clumps'
+  positions in per-pixel arrays, so each could see its neighbour, spilled and doubled
+  the stroke's cost (392 ms); carrying the neighbour over in registers costs nothing.
+- **Tests** (`BristleTests`): the profile across the stroke has changed a little a
+  diameter on (0.10 mean difference), twice that many diameters on, and another
+  stroke's is its own from the start; stray hairs show in 66 of 160 columns at a light
+  touch while the bundle stays narrow; the splay holds at three quarters of its width
+  a fifth of a diameter after the touch eases and is under 70% three diameters on; the
+  streaks average 0.52 with a spread of 0.25 and three quarters of their pixels differ
+  between strokes. The older bundle test now asks for mostly the same streaks two dabs
+  on, and the light-touch test measures the bundle's own band rather than the stray
+  beside it. The relief test compares the lit and shaded halves on average, since a
+  groove can make one column on the lit side as dark as the shaded edge.
 
 ## At the limits: 8192² with 12 layers
 

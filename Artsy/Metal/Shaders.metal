@@ -121,6 +121,7 @@ struct StampInstance {
     float secondAngle;      // rotation of the second tip, radians
     float fan;              // how wide a bristle bundle is here, 0...1 of its full width
     float gap;              // how far its clumps have parted, 0...1
+    float strokeSeed;       // the stroke's, 0...65535: marks are laid out afresh each stroke
 };
 
 struct StampVertexOut {
@@ -134,6 +135,8 @@ struct StampVertexOut {
     float  secondAngle;
     float  fan;
     float  gap;
+    float  size;        // the dab's diameter, canvas pixels
+    float  strokeSeed;
 };
 
 struct StampParams {
@@ -152,60 +155,156 @@ struct StampParams {
     float  grooves;          // grooves along the stroke cut into the height a dab leaves, 0...1
     int    bristleCount;     // above 0, the tip is a bundle of this many clumps (see bristleBundle)
     float  dryBrush;         // how much a light touch skips the paper's valleys, 0...1
+    int    grainProcedural;  // 1: the grain is bristleStreaks, not the grain texture
 };
+
+// --- Noise for the marks ---
+//
+// Value noise on a hashed lattice: the same wherever a mark is drawn again (undo, replay,
+// the goldens), and never tiling. `seed` is the stroke's, so no two strokes share a layout.
+
+static inline float latticeHash(int2 p, uint seed) {
+    uint h = uint(p.x) * 374761393u + uint(p.y) * 668265263u + seed * 2246822519u;
+    h = (h ^ (h >> 13)) * 1274126177u;
+    return float((h ^ (h >> 16)) & 0xFFFFFFu) / 16777216.0;
+}
+
+static inline float valueNoise(float2 p, uint seed) {
+    float2 i = floor(p), f = p - i;
+    float2 u = f * f * (3.0 - 2.0 * f);
+    int2 c = int2(i);
+    float a = latticeHash(c, seed), b = latticeHash(c + int2(1, 0), seed);
+    float d = latticeHash(c + int2(0, 1), seed), e = latticeHash(c + int2(1, 1), seed);
+    return mix(mix(a, b, u.x), mix(d, e, u.x), u.y);
+}
+
+// The marks a loaded brush's bristles leave, as a height 0...1: streaks fine across the
+// stroke and slowly varying along it, with breaks, that slide sideways as the stroke goes on
+// rather than running dead straight, laid out afresh for every stroke. In place of the
+// bristle grain image, which tiled and was the same stripes in every stroke. `along` is
+// canvas pixels along and across the stroke; `scale` the brush's grain scale.
+static inline float bristleStreaks(float2 along, float scale, uint seed) {
+    float2 p = along * scale;
+    float drift = 3.0 * sin(p.x / 60.0 + float(seed & 0xFFu) * 0.1);
+    float stripe = valueNoise(float2(p.x / 73.0, (p.y + drift) / 4.6), seed) * 0.65
+                 + valueNoise(float2(p.x / 36.0, (p.y + drift) / 2.3), seed ^ 0xA7u) * 0.35;
+    float breaks = valueNoise(p / 18.0, seed ^ 0x3Cu);
+    float h = stripe * 0.8 + breaks * 0.2;
+    // Spread over 0...1 nearly as widely as the image's ranked heights were (a spread of
+    // 0.26 against 0.29, with 6% at the ends rather than none)
+    return saturate((h - 0.5) * 2.0 + 0.5);
+}
 
 // --- Bristles ---
 //
 // The tip as a bundle: clumps of bristles across the dab, each a streak along it with its
-// own width and length, at fixed homes in the dab's space (the same every stroke, like the
-// brush's grain), within the tip's disc. At a light touch the bundle narrows about its
-// middle (`fan` below 1); at speed the clumps thin apart (`gap` above 0), so the stroke
-// breaks into streaks. A pixel takes the clump that covers it most, and reads a loaded
-// brush's carry at that clump's home, so each clump keeps its own paint wherever the
-// bundle has put it.
+// own width and length, at homes in the dab's space that are laid out afresh for every
+// stroke and wander as the stroke goes on, crossing and parting, swelling and thinning; two
+// stray hairs beyond the bundle come and go. All within the tip's disc. At a light touch
+// the bundle narrows about its middle (`fan` below 1); at speed the clumps thin apart
+// (`gap` above 0), so the stroke breaks into streaks. A pixel takes the clump that covers
+// it most, and reads a loaded brush's carry at that clump's home (its home, not where it
+// has wandered to), so each clump keeps its own paint wherever the bundle has put it.
 
-static inline float bristleHash(int k, int salt) {
-    uint h = uint(k + 1) * 2654435761u ^ uint(salt) * 2246822519u;
+// Four random bytes for a clump from one hash: the loop below runs per pixel, per clump,
+// under twenty overlapping dabs, so every hash and sine in it counts.
+static inline uint bristleBits(int k, int salt, uint seed) {
+    uint h = uint(k + 1) * 2654435761u ^ (uint(salt) + seed * 7919u) * 2246822519u;
     h ^= h >> 13; h *= 3266489917u; h ^= h >> 16;
-    return float(h & 0xFFFFFFu) / 16777216.0;
+    return h;
 }
+static inline float byteUnit(uint h, int byte) { return float((h >> (8 * byte)) & 0xFFu) / 255.0; }
 
 struct Bundle {
     float coverage;
     float2 carryUV;    // where in the carry this pixel's clump keeps its paint
 };
 
-// `edge` is the antialiasing width in dab units (a pixel's, or a constant in a kernel).
-static inline Bundle bristleBundle(float2 uv, float fan, float gap, int count, float edge) {
+// One clump of the bundle at a point of the stroke: its home across the dab, where it is
+// now, and its own width and length.
+struct Clump {
+    float home;
+    float pos;
+    float halfWidth;
+    float halfLength;
+};
+
+static inline Clump clumpAt(int k, int count, float fan, float along, float swayPhase, uint seed) {
+    uint bits = bristleBits(k, 1, seed), more = bristleBits(k, 2, seed);
+    Clump c;
+    // Evenly across the dab, each a little off its place
+    c.home = 0.05 + 0.9 * (float(k) + 0.5 + (byteUnit(bits, 0) - 0.5) * 0.4) / float(count);
+    // Wandering as the stroke goes on: the tuft sways as a whole (over six and a half
+    // diameters), and each clump a little on its own, so now and then two cross or part
+    float phase = byteUnit(bits, 1) * 6.2832;
+    float sway = 0.07 * sin(along * 0.9666 + swayPhase + c.home * 2.5);
+    float own = 0.025 * sin(along * 6.2832 / (4.0 + 5.0 * byteUnit(bits, 2)) + phase);
+    c.pos = 0.5 + (c.home - 0.5 + sway + own) * fan;
+    // Swelling and thinning along the way
+    float swell = 1.0 + 0.15 * sin(along * 6.2832 / (2.0 + 3.0 * byteUnit(more, 0)) + phase * 2.3);
+    c.halfWidth = (0.6 / float(count)) * (0.8 + 0.6 * byteUnit(bits, 3)) * swell;
+    c.halfLength = 0.5 * (0.6 + 0.4 * byteUnit(more, 1));
+    return c;
+}
+
+// `edge` is the antialiasing width in dab units (a pixel's, or a constant in a kernel);
+// `along` how far along the stroke this pixel is, in diameters; `seed` the stroke's.
+// `strays` lays the stray hairs: not for the carry's home layout, which has no use for them.
+static inline Bundle bristleBundle(float2 uv, float fan, float gap, int count, float edge, float along, uint seed, bool strays) {
     Bundle b;
     b.coverage = 0.0;
     b.carryUV = uv;
     // The bundle sits in the tip's disc, so the stroke's ends are round, if ragged
     float disc = 1.0 - smoothstep(0.8, 1.0, distance(uv, float2(0.5)) * 2.0);
     if (disc <= 0.0) return b;
+    float swayPhase = byteUnit(bristleBits(0, 8, seed), 0) * 6.2832;
+    // Each clump once, its neighbour carried over (no arrays: a fragment spills those)
+    Clump next = clumpAt(0, count, fan, along, swayPhase, seed);
+    float toNext = 0.0;
     for (int k = 0; k < count; k++) {
-        // Evenly across the dab, each a little off its place, and wide enough to overlap
-        // its neighbours until the bundle parts
-        float home = 0.05 + 0.9 * (float(k) + 0.5 + (bristleHash(k, 1) - 0.5) * 0.4) / float(count);
-        float pos = 0.5 + (home - 0.5) * fan;
-        float halfWidth = (0.6 / float(count)) * (0.8 + 0.6 * bristleHash(k, 3)) * (1.0 - 0.65 * gap);
-        float halfLength = 0.5 * (0.6 + 0.4 * bristleHash(k, 2));
-        float2 d = abs(uv - float2(0.5, pos));
+        Clump c = next;
+        if (k + 1 < count) {
+            next = clumpAt(k + 1, count, fan, along, swayPhase, seed);
+            toNext = abs(next.pos - c.pos);
+        }
+        // Wide enough to overlap the next clump, wherever both have got to (three quarters
+        // of the way to it: the sides are soft, so the tone still dips where clumps meet),
+        // until the bundle parts: a gap through the stroke comes from speed, not wandering
+        float halfWidth = max(c.halfWidth, toNext * 0.75) * (1.0 - 0.65 * gap);
+        float2 d = abs(uv - float2(0.5, c.pos));
         // A rounded bristle: soft at its sides, so where clumps meet the tone dips
         float soft = max(edge, halfWidth * 0.6);
-        float c = (1.0 - smoothstep(max(0.0, halfWidth - soft), halfWidth, d.y))
-                * (1.0 - smoothstep(max(0.0, halfLength - 0.06), halfLength, d.x));
-        if (c > b.coverage) {
-            b.coverage = c;
-            b.carryUV = float2(uv.x, home + (uv.y - pos));
+        float cov = (1.0 - smoothstep(max(0.0, halfWidth - soft), halfWidth, d.y))
+                  * (1.0 - smoothstep(max(0.0, c.halfLength - 0.06), c.halfLength, d.x));
+        if (cov > b.coverage) {
+            b.coverage = cov;
+            b.carryUV = float2(uv.x, c.home + (uv.y - c.pos));
+        }
+    }
+    if (strays) {
+        // Two stray hairs: out at the bundle's full width whatever the touch, so they stand
+        // apart when the bundle narrows, there for a stretch of the stroke and gone for one
+        for (int k = 0; k < 2; k++) {
+            float home = k == 0 ? 0.06 : 0.94;
+            float there = valueNoise(float2(along * 0.35 + byteUnit(bristleBits(count + k, 5, seed), 0) * 50.0, 0.5), seed ^ 0x5742u);
+            if (there < 0.62) continue;
+            float halfWidth = 0.012 * (1.0 - 0.5 * gap), halfLength = 0.4;
+            float2 d = abs(uv - float2(0.5, home));
+            float soft = max(edge, halfWidth * 0.6);
+            float cov = (1.0 - smoothstep(max(0.0, halfWidth - soft), halfWidth, d.y))
+                      * (1.0 - smoothstep(max(0.0, halfLength - 0.06), halfLength, d.x));
+            if (cov > b.coverage) {
+                b.coverage = cov;
+                b.carryUV = float2(uv.x, home + (uv.y - home));
+            }
         }
     }
     b.coverage *= disc;
     return b;
 }
 
-static inline float bristleCoverageFlat(float2 uv, float fan, float gap, int count) {
-    return bristleBundle(uv, fan, gap, count, 0.02).coverage;
+static inline float bristleCoverageFlat(float2 uv, float fan, float gap, int count, float along, uint seed, bool strays) {
+    return bristleBundle(uv, fan, gap, count, 0.02, along, seed, strays).coverage;
 }
 
 /// The paint a loaded brush's carry holds under this fragment: premultiplied, its alpha
@@ -244,6 +343,8 @@ vertex StampVertexOut stampVertex(
     out.secondAngle = dab.secondAngle;
     out.fan = dab.fan;
     out.gap = dab.gap;
+    out.size = dab.size;
+    out.strokeSeed = dab.strokeSeed;
     return out;
 }
 
@@ -258,7 +359,8 @@ static inline float stampCoverage(
     float coverage;
     carryUV = in.uv;
     if (params.bristleCount > 0) {
-        Bundle bundle = bristleBundle(in.uv, in.fan, in.gap, params.bristleCount, fwidth(in.uv.x));
+        Bundle bundle = bristleBundle(in.uv, in.fan, in.gap, params.bristleCount, fwidth(in.uv.x),
+                                      in.along.x / max(in.size, 1.0), uint(in.strokeSeed), true);
         coverage = bundle.coverage;
         carryUV = bundle.carryUV;
     } else if (params.tipIsTexture != 0) {
@@ -289,7 +391,14 @@ static inline float stampCoverage(
         // Paper is fixed to the canvas, so every stroke meets the same tooth; bristle
         // streaks run along the stroke and bend with it.
         float2 where = params.grainOnStroke != 0 ? in.along : in.canvas;
-        float height = grain.sample(grainSampler, where * params.grainScale / float(grain.get_width())).r;
+        float height;
+        if (params.grainProcedural != 0) {
+            // Bristle streaks, laid out for this stroke; streakier the faster the stroke
+            height = bristleStreaks(where, params.grainScale, uint(in.strokeSeed));
+            height = saturate((height - 0.5) * (1.0 + 0.4 * in.gap) + 0.5);
+        } else {
+            height = grain.sample(grainSampler, where * params.grainScale / float(grain.get_width())).r;
+        }
         if (params.grainMode == 1) {
             alpha *= mix(1.0, height, params.grainDepth);
         } else {
@@ -339,7 +448,6 @@ fragment float4 stampHeightFragment(
     texture2d<float> grain [[texture(1)]],
     texture2d<float> secondTip [[texture(2)]],
     texture2d<float> carry [[texture(3)]],
-    texture2d<float> bristles [[texture(4)]],
     texture2d<float> paper [[texture(5)]],
     sampler tipSampler [[sampler(0)]],
     sampler grainSampler [[sampler(1)]],
@@ -350,11 +458,11 @@ fragment float4 stampHeightFragment(
     float alpha = stampCoverage(in, params, tip, grain, secondTip, paper, tipSampler, grainSampler, carryUV);
     // Less paint on the bristle, less thickness left behind
     float load = params.usesCarry != 0 ? carriedPaint(saturate(carryUV), params, carry, carrySampler).a : 1.0;
-    // The bristles leave grooves along the stroke, cut into the height: the bristle grain,
+    // The bristles leave grooves along the stroke, cut into the height: the bristle streaks,
     // attached to the stroke, so they run with it and bend with it, and line up with the
-    // bristle streaks a brush grained the same way has in its colour
+    // streaks a brush grained with them has in its colour (at that brush's grain scale)
     float groove = params.grooves > 0.0
-        ? 1.0 - params.grooves * (1.0 - bristles.sample(grainSampler, in.along / float(bristles.get_width())).r) : 1.0;
+        ? 1.0 - params.grooves * (1.0 - bristleStreaks(in.along, params.grainProcedural != 0 ? params.grainScale : 1.0, uint(in.strokeSeed))) : 1.0;
     return float4(alpha * params.thickness * load * groove, 0.0, 0.0, 1.0);
 }
 
@@ -1012,6 +1120,7 @@ struct LoadedBrushParams {
     float  wetNow;          // seconds since the layer's wet epoch
     float  dryingTime;
     int    bristleCount;    // above 0, the tip is a bundle: a carry texel touches where its clump is
+    uint   strokeSeed;      // the stroke's: the bundle's homes are laid out by it
 };
 
 // A tip's coverage without the antialiasing a fragment can do (no derivatives in a kernel).
@@ -1052,7 +1161,7 @@ kernel void loadedBrushTransferKernel(
     float2 uv = (float2(gid) + 0.5) / p.carryTexels;
     // This bristle's touch: the tip's coverage here (the bundle's, at its home layout), by
     // how firmly the dab was pressed
-    float k = (p.bristleCount > 0 ? bristleCoverageFlat(uv, 1.0, 0.0, p.bristleCount)
+    float k = (p.bristleCount > 0 ? bristleCoverageFlat(uv, 1.0, 0.0, p.bristleCount, 0.0, p.strokeSeed, false)
                                   : tipCoverageFlat(uv, p.hardness, p.tipIsTexture, tip, tipSampler)) * p.press;
     float4 paint = carry.read(gid);
 
@@ -1112,11 +1221,13 @@ struct ImpastoPushParams {
     int    bristleCount;   // above 0, the tip is a bundle of this many clumps
     float  fan;            // the bundle's width and parting at this dab
     float  gap;
+    float  along;          // how far along the stroke the dab sits, in diameters
+    uint   strokeSeed;
 };
 
-// The tip's coverage for the push: the bundle's, or the one shape's.
+// The tip's coverage for the push: the bundle's, where it is at this dab, or the one shape's.
 static inline float pushCoverage(float2 uv, constant ImpastoPushParams &p, texture2d<float> tip, sampler tipSampler) {
-    return p.bristleCount > 0 ? bristleCoverageFlat(uv, p.fan, p.gap, p.bristleCount)
+    return p.bristleCount > 0 ? bristleCoverageFlat(uv, p.fan, p.gap, p.bristleCount, p.along, p.strokeSeed, true)
                               : tipCoverageFlat(uv, p.hardness, p.tipIsTexture, tip, tipSampler);
 }
 

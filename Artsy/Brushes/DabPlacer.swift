@@ -25,6 +25,9 @@ struct Dab {
     var fan: Float = 1
     /// How far the bundle's clumps have parted here, 0...1: further at speed.
     var gap: Float = 0
+    /// The stroke's seed, 0...65535: the shaders lay the bristles and the streaks out by it,
+    /// so no two strokes share a layout and a replay gets the same one.
+    var strokeSeed: Float = 0
 }
 
 /// Walks a stroke's path and lays dabs along it at the brush's spacing.
@@ -42,6 +45,9 @@ struct DabPlacer {
     /// Where in the point array to resume searching.
     private var cursor = 0
     private let strokeSeed: UInt64
+    /// How far a bristle bundle is splayed: up with the pressure at once, down slowly.
+    private var splay: Float = 0
+    private var splayDistance: CGFloat = 0
 
     /// - Parameter strokeSeed: varies the jitter from stroke to stroke. Derive it from the
     ///   stroke itself so a replay gets the same dabs.
@@ -77,10 +83,14 @@ struct DabPlacer {
             let pressed = a.opacity + (b.opacity - a.opacity) * t
             let usesReach = settings.grain?.mode == .height
             var opacity = usesReach ? settings.flow : pressed * settings.flow
-            // A bundle of bristles: narrower the lighter the touch, parted the faster the pen
+            // A bundle of bristles: narrower the lighter the touch, parted the faster the pen.
+            // Pressed hard it splays, and holds the splay for about a diameter after the
+            // touch eases, as bristles do: the fan follows the pressure up at once, down slowly.
             let press = a.pressure + (b.pressure - a.pressure) * t
             let speed = a.speed + (b.speed - a.speed) * t
-            let fan = settings.bristles.map { 1 - $0.fan * (1 - press) } ?? 1
+            splay = max(press, splay * exp(-Float(nextDistance - splayDistance) / max(width, 1)))
+            splayDistance = nextDistance
+            let fan = settings.bristles.map { 1 - $0.fan * (1 - splay) } ?? 1
             let gap = settings.bristles.map { $0.parting * min(1, speed / Self.partingSpeed) } ?? 0
             var center = CGPoint(x: a.position.x + (b.position.x - a.position.x) * CGFloat(t),
                                  y: a.position.y + (b.position.y - a.position.y) * CGFloat(t))
@@ -118,7 +128,7 @@ struct DabPlacer {
                               // How firmly the dab is pressed: the paper's tooth, and dry-brushing
                               reach: usesReach ? pressed : (settings.bristles != nil ? press : 1),
                               pathDistance: Float(nextDistance), secondAngle: secondAngle, heading: direction,
-                              fan: fan, gap: gap))
+                              fan: fan, gap: gap, strokeSeed: Float(strokeSeed & 0xFFFF)))
             index += 1
 
             // Each copy of a tap's dab gets its own index, and so its own jitter.
@@ -157,7 +167,8 @@ struct DabPlacer {
                        opacity: opacity, seed: restingRandom(0),
                        reach: usesReach ? point.opacity : (settings.bristles != nil ? point.pressure : 1),
                        pathDistance: Float(point.distance), secondAngle: secondAngle, heading: point.angle,
-                       fan: settings.bristles.map { 1 - $0.fan * (1 - point.pressure) } ?? 1, gap: 0)
+                       fan: settings.bristles.map { 1 - $0.fan * (1 - point.pressure) } ?? 1, gap: 0,
+                       strokeSeed: Float(strokeSeed & 0xFFFF))
         }
     }
 

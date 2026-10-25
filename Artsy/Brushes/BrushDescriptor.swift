@@ -409,8 +409,8 @@ struct StampSettings: Codable, Equatable {
     /// The tip as a bundle: clumps of bristles across the brush that fan out with pressure
     /// and come to a point at a light touch, part at speed so a fast stroke breaks into
     /// streaks, skip the paper's valleys at a light touch (dry-brushing), and each carry
-    /// their own share of a loaded brush's paint. The bundle is the same every stroke, like
-    /// the brush's grain.
+    /// their own share of a loaded brush's paint. The bundle is laid out afresh for every
+    /// stroke, and its clumps wander as the stroke goes on; a replay gets the same marks.
     struct Bristles: Codable, Equatable {
         /// Clumps of bristles across the brush.
         var count: Int = 10

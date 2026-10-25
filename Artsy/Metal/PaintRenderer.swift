@@ -67,6 +67,7 @@ final class PaintRenderer {
         var wetNow: Float
         var dryingTime: Float
         var bristleCount: Int32
+        var strokeSeed: UInt32
     }
 
     /// Draw settled `dabs`, in order, one copy per entry in `mirrors`: the colour into
@@ -121,7 +122,8 @@ final class PaintRenderer {
             // The loading pattern belongs to the brush, like its grain: the same every stroke
             variation: load?.variation ?? 0, seed: 0.37, mixPigments: brush.mixing == .pigment ? 1 : 0,
             usesWet: wet == nil ? 0 : 1, wetNow: wetNow, dryingTime: dryingTime,
-            bristleCount: Int32(settings.bristles?.count ?? 0)
+            bristleCount: Int32(settings.bristles?.count ?? 0),
+            strokeSeed: UInt32(dabs.first?.strokeSeed ?? 0)
         )
 
         if let load, !filled {
@@ -306,6 +308,8 @@ final class ImpastoPusher {
         var bristleCount: Int32
         var fan: Float
         var gap: Float
+        var along: Float
+        var strokeSeed: UInt32
     }
 
     /// Push the paint under `dab`, one copy per entry in `mirrors`.
@@ -319,7 +323,8 @@ final class ImpastoPusher {
             patchOrigin: .zero, patchSize: .zero,
             hardness: brush.hardness, tipIsTexture: tipIsTexture, press: min(press, 1), squeeze: min(squeeze, 1),
             heading: .zero, forward: Self.forward, band: Self.band,
-            bristleCount: Int32(bristleCount), fan: dab.fan, gap: dab.gap
+            bristleCount: Int32(bristleCount), fan: dab.fan, gap: dab.gap,
+            along: dab.pathDistance / max(dab.size, 1), strokeSeed: UInt32(dab.strokeSeed)
         )
         let reach = CGFloat(dab.size * max(dab.aspect, 1)) * 0.7072 * CGFloat(1 + 2 * Self.band) + 2
         for mirror in mirrors {
