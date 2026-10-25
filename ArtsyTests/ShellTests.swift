@@ -147,7 +147,8 @@ final class ShellTests: XCTestCase {
         viewModel.currentBrush = .hardRound
         // Real previews only for a look at the panel; the taps do not need them
         let snapshotting = ProcessInfo.processInfo.environment["ARTSY_SNAPSHOT_DIR"] != nil
-        let previews = BrushPreviewCache(renderer: snapshotting ? try? BrushPreview(context: EngineHarness.sharedContext, size: BrushPreviewCache.size) : nil)
+        let previews = BrushPreviewCache(renderer: snapshotting ? try? BrushPreview(context: EngineHarness.sharedContext, size: BrushPreviewCache.size) : nil,
+                                          directory: nil)
         let panel = BrushPanelView(viewModel: viewModel, previews: previews, actions: ChromeActions(), dismiss: {})
         let host = NSHostingView(rootView: panel)
         show(host, size: NSSize(width: Chrome.panelWidth, height: 600))

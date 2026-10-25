@@ -260,6 +260,13 @@ pick a brush — so the pen path is tested, not just the mouse path.
   brush circle while dragging.
 - **Stroke previews** for nineteen built-in brushes plus imports, at several sizes, take
   a moment each on the GPU; rendered once and cached on disk, keyed by brush and
-  version.
+  version. Done (0.8.12): `BrushPreviewCache` keeps each tile as a PNG in
+  `~/Library/Caches/com.artsy.app/Brush Previews/`, named by a digest of the brush's
+  settings as saved and the build number, so an edit or a release renders it afresh and
+  the system may empty the folder; the layout readies the library's tiles a turn of the
+  run loop at a time from a second after launch, pausing under a stroke. Measured on the
+  M4: 7 ms a tile for most brushes, 20 to 50 ms for the paint brushes, 300 ms for the
+  library, which was the first open's pause. The preview pad is now level whatever the
+  Settings tilt, and never snaps a shape, so a tile depends on nothing else.
 - **Two layouts, one code path.** The breakpoints are the same views with different
   sizes and a collapsed bar, not two apps; the risk is the bar's centre at 1024 pt wide.

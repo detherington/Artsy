@@ -138,4 +138,53 @@ final class BrushStudioTests: XCTestCase {
         }
         window.contentView = nil
     }
+
+    /// A tile rendered once is kept on disk: a cache with no renderer finds it, the same
+    /// picture. An edited brush or another build gets a fresh tile, and a warm-up readies
+    /// the library's tiles between turns of the run loop and drops what no brush uses.
+    func testPreviewTilesAreKeptOnDiskByBrushAndBuild() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent("artsy-tiles-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let files = { try FileManager.default.contentsOfDirectory(atPath: directory.path).filter { $0.hasSuffix(".png") } }
+        let renderer = try BrushPreview(context: EngineHarness.sharedContext, size: BrushPreviewCache.size)
+        let rendering = BrushPreviewCache(renderer: renderer, directory: directory, build: "24")
+        let rendered = try XCTUnwrap(rendering.image(for: .inkBrush))
+        XCTAssertEqual(try files().count, 1)
+
+        // Found again without a renderer, and the same picture
+        let kept = BrushPreviewCache(renderer: nil, directory: directory, build: "24")
+        let found = try XCTUnwrap(kept.image(for: .inkBrush))
+        XCTAssertEqual(found.size, rendered.size)
+        let a = NSBitmapImageRep(cgImage: try XCTUnwrap(rendered.cgImage(forProposedRect: nil, context: nil, hints: nil)))
+        let b = NSBitmapImageRep(cgImage: try XCTUnwrap(found.cgImage(forProposedRect: nil, context: nil, hints: nil)))
+        var painted = 0, differing = 0
+        for x in stride(from: 0, to: Int(BrushPreviewCache.size.width), by: 3) {
+            for y in stride(from: 0, to: Int(BrushPreviewCache.size.height), by: 3) {
+                let alphaA = a.colorAt(x: x, y: y)?.alphaComponent ?? -1
+                let alphaB = b.colorAt(x: x, y: y)?.alphaComponent ?? -2
+                if alphaA > 0.5 { painted += 1 }
+                if abs(alphaA - alphaB) > 1.5 / 255 { differing += 1 }
+            }
+        }
+        XCTAssertGreaterThan(painted, 50, "the stroke is there")
+        XCTAssertEqual(differing, 0, "and the kept tile is the rendered one")
+
+        // Not for an edited brush, nor for another build
+        var edited = BrushDescriptor.inkBrush
+        edited.opacity = 0.5
+        XCTAssertNil(kept.image(for: edited))
+        XCTAssertNil(BrushPreviewCache(renderer: nil, directory: directory, build: "25").image(for: .inkBrush))
+
+        // A warm-up readies the rest, a tile a turn, and drops a tile of some other build
+        let stale = directory.appendingPathComponent("stale.png")
+        try Data("not a tile".utf8).write(to: stale)
+        let library = BrushLibrary.shared.all
+        rendering.warm(library, after: 0)
+        let deadline = Date().addingTimeInterval(15)
+        while try FileManager.default.fileExists(atPath: stale.path) || files().count < library.count, Date() < deadline {
+            RunLoop.main.run(until: Date().addingTimeInterval(0.05))
+        }
+        XCTAssertEqual(try files().count, library.count, "a tile for every brush")
+        XCTAssertFalse(FileManager.default.fileExists(atPath: stale.path), "and the stale one gone")
+    }
 }
