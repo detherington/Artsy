@@ -288,26 +288,30 @@ final class StampBrushTests: XCTestCase {
 
     /// Bristle streaks belong to the stroke: move the stroke and the streaks move with it.
     /// Paper grain belongs to the canvas: move the stroke and it meets different tooth.
+    /// Stroke-attached grain runs with the stroke: a little way along a vertical oil
+    /// stroke the streaks across it are where they were, whereas the paper under a pencil
+    /// is fixed to the canvas and changes from row to row. (The streaks themselves are
+    /// laid out per stroke, so two strokes do not share them.)
     func testStrokeAttachedGrainTravelsWithTheStroke() throws {
-        func profile(_ brush: BrushDescriptor, offset: CGFloat) throws -> [Float] {
-            let harness = try EngineHarness(width: 300, height: 160)
+        func profiles(_ brush: BrushDescriptor) throws -> (here: [Float], on: [Float]) {
+            let harness = try EngineHarness(width: 160, height: 300)
             harness.select(brush)
             harness.viewModel.brushSize = 30
-            let y = 60 + offset
-            harness.draw(StrokeFixtures.line(from: CGPoint(x: 20, y: y), to: CGPoint(x: 280, y: y), pressure: 0.6...0.6))
+            harness.draw(StrokeFixtures.line(from: CGPoint(x: 80, y: 20), to: CGPoint(x: 80, y: 280), pressure: 0.6...0.6))
             let shown = harness.displayed()
             // Across the stroke, in its middle, where the streaks are
-            return (-12...12).map { shown.at(x: 150, y: Int(y) + $0).x }
+            func across(_ y: Int) -> [Float] { (-12...12).map { shown.at(x: 80 + $0, y: y).x } }
+            return (across(150), across(158))
         }
         func difference(_ a: [Float], _ b: [Float]) -> Float {
             zip(a, b).map { abs($0 - $1) }.reduce(0, +) / Float(a.count)
         }
-        let oilHere = try profile(.oil, offset: 0), oilThere = try profile(.oil, offset: 37)
-        XCTAssertGreaterThan(oilHere.max()! - oilHere.min()!, 0.1, "the streaks are visible")
-        XCTAssertLessThan(difference(oilHere, oilThere), 0.02, "same streaks wherever the stroke is")
+        let oil = try profiles(.oil)
+        XCTAssertGreaterThan(oil.here.max()! - oil.here.min()!, 0.1, "the streaks are visible")
+        XCTAssertLessThan(difference(oil.here, oil.on), 0.05, "the same streaks a little way along the stroke: \(difference(oil.here, oil.on))")
 
-        let pencilHere = try profile(.graphiteStick, offset: 0), pencilThere = try profile(.graphiteStick, offset: 37)
-        XCTAssertGreaterThan(difference(pencilHere, pencilThere), 0.05, "different paper under a moved stroke")
+        let pencil = try profiles(.graphiteStick)
+        XCTAssertGreaterThan(difference(pencil.here, pencil.on), 0.05, "different paper a little way along: \(difference(pencil.here, pencil.on))")
     }
 
     /// Height grain: light pressure only reaches the paper's peaks, firm pressure fills in.

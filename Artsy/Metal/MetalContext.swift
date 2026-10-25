@@ -240,8 +240,8 @@ final class MetalContext {
             desc.vertexFunction = try Self.function("compositeVertex", in: library)
             desc.fragmentFunction = try Self.function("waterInjectFragment", in: library)
             desc.vertexDescriptor = compVD
-            desc.colorAttachments[0].pixelFormat = .rg16Float
-            desc.colorAttachments[1].pixelFormat = .rgba16Float
+            desc.colorAttachments[0].pixelFormat = .rg16Unorm
+            desc.colorAttachments[1].pixelFormat = .rgba16Unorm
             self.waterInjectPipelineState = try device.makeRenderPipelineState(descriptor: desc)
         }
 

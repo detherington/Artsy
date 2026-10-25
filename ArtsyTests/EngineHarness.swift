@@ -74,10 +74,10 @@ final class EngineHarness {
 
     /// The water still on a layer, 0...cap in each pixel's `.x`, and the pigment still in it
     /// in `pigment`; zero everywhere once the water has dried.
-    func water(of layer: Layer) -> (water: PixelGrid, pigment: PixelGrid) {
+    func water(of layer: Layer) -> (water: PixelGrid, pigment: PixelGrid, settled: PixelGrid) {
         guard let water = layer.water else {
             let none = PixelGrid(width: width, height: height, values: [Float](repeating: 0, count: width * height * 4))
-            return (none, none)
+            return (none, none, none)
         }
         // The region's textures, read back and laid into canvas-sized grids
         func grid(_ texture: MTLTexture, channels: Int) -> PixelGrid {
@@ -93,13 +93,21 @@ final class EngineHarness {
             blit.endEncoding()
             commandBuffer.commit()
             commandBuffer.waitUntilCompleted()
-            var half = [UInt16](repeating: 0, count: w * h * channels)
-            half.withUnsafeMutableBytes {
-                readable.getBytes($0.baseAddress!, bytesPerRow: w * 2 * channels, from: MTLRegionMake2D(0, 0, w, h), mipmapLevel: 0)
+            // Half floats, unorm16 or floats, as the texture keeps them
+            let format = texture.pixelFormat
+            let wide = [MTLPixelFormat.rgba32Float, .rg32Float, .r32Float].contains(format)
+            let unorm = [MTLPixelFormat.rgba16Unorm, .rg16Unorm, .r16Unorm].contains(format)
+            var shorts = [UInt16](repeating: 0, count: wide ? 0 : w * h * channels)
+            var floats = [Float](repeating: 0, count: wide ? w * h * channels : 0)
+            if wide {
+                floats.withUnsafeMutableBytes { readable.getBytes($0.baseAddress!, bytesPerRow: w * 4 * channels, from: MTLRegionMake2D(0, 0, w, h), mipmapLevel: 0) }
+            } else {
+                shorts.withUnsafeMutableBytes { readable.getBytes($0.baseAddress!, bytesPerRow: w * 2 * channels, from: MTLRegionMake2D(0, 0, w, h), mipmapLevel: 0) }
             }
             for ty in 0..<h { for tx in 0..<w {
                 for c in 0..<channels {
-                    let v = Float(Float16(bitPattern: half[(ty * w + tx) * channels + c]))
+                    let i = (ty * w + tx) * channels + c
+                    let v = wide ? floats[i] : unorm ? Float(shorts[i]) / 65535 : Float(Float16(bitPattern: shorts[i]))
                     // Every layer pixel the texel covers
                     for dy in 0..<water.scale { for dx in 0..<water.scale {
                         let x = water.region.x + tx * water.scale + dx, y = water.region.y + ty * water.scale + dy
@@ -109,7 +117,7 @@ final class EngineHarness {
             } }
             return PixelGrid(width: width, height: height, values: values)
         }
-        return (grid(water.water[water.current], channels: 2), grid(water.pigment[water.current], channels: 4))
+        return (grid(water.water[water.current], channels: 2), grid(water.pigment[water.current], channels: 4), grid(water.settled, channels: 4))
     }
 
     // MARK: - Setup

@@ -90,6 +90,7 @@ final class StrokeRenderer {
         var grooves: Float
         var bristleCount: Int32
         var dryBrush: Float
+        var grainProcedural: Int32
     }
 
     /// A loaded brush's carries, one per mirror, and the texels of them in use: the dabs'
@@ -173,7 +174,9 @@ final class StrokeRenderer {
             carryTexels: carries?.texels ?? SIMD2(1, 1),
             grooves: settings.impasto?.grooves ?? 0,
             bristleCount: Int32(settings.bristles?.count ?? 0),
-            dryBrush: settings.bristles?.dryBrush ?? 0
+            dryBrush: settings.bristles?.dryBrush ?? 0,
+            // Bristle streaks are made in the shader, laid out per stroke, not sampled
+            grainProcedural: settings.grain?.texture == .bristles ? 1 : 0
         )
 
         encoder.setRenderPipelineState(pipeline)
@@ -184,9 +187,7 @@ final class StrokeRenderer {
         encoder.setFragmentTexture(grainTexture, index: 1)
         encoder.setFragmentTexture(secondTipTexture ?? paper, index: 2)
         encoder.setFragmentTexture(paper, index: 3)
-        // Grooves in thick paint come from the bristle grain whatever the brush's own grain,
-        // and dry-brushing reads the paper whatever the brush's grain
-        encoder.setFragmentTexture(context.brushTextures.bristleGrain ?? paper, index: 4)
+        // Dry-brushing reads the paper whatever the brush's grain
         encoder.setFragmentTexture(paper, index: 5)
         encoder.setFragmentSamplerState(context.tipSampler, index: 0)
         encoder.setFragmentSamplerState(context.grainSampler, index: 1)
@@ -195,9 +196,9 @@ final class StrokeRenderer {
         var drawn: [CGRect] = []
         var buffers: [MTLBuffer] = []
         for mirror in mirrors {
-            // Twelve floats per dab, matching `StampInstance` in Shaders.metal
+            // Thirteen floats per dab, matching `StampInstance` in Shaders.metal
             var instances: [Float] = []
-            instances.reserveCapacity(dabs.count * 12)
+            instances.reserveCapacity(dabs.count * 13)
             var bounds = CGRect.null
 
             for dab in dabs {
@@ -208,7 +209,7 @@ final class StrokeRenderer {
                 let angle = Float(atan2(ahead.y - center.y, ahead.x - center.x))
                 instances += [Float(center.x), Float(center.y), dab.size, angle,
                               dab.opacity * opacityScale, dab.seed, dab.reach, dab.aspect, dab.pathDistance,
-                              dab.secondAngle, dab.fan, dab.gap]
+                              dab.secondAngle, dab.fan, dab.gap, dab.strokeSeed]
 
                 // Half the diagonal covers the quad at any rotation
                 let reach = CGFloat(dab.size * max(dab.aspect, 1)) * 0.7072

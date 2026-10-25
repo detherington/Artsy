@@ -221,7 +221,10 @@ layer's pixels show the look throughout. What was left out of the plan: velocity
 flow is a surface-difference diffusion, stable at a fifth per step, 120 steps a
 second), a capillary layer that spreads by itself, and drips. Tilt began in Settings
 and is now a pad under Adjust (0.8.12), level when a window opens. The merge-time
-wash did not go away: brushes with `wet` and no `water` still use it.
+wash did not go away: brushes with `wet` and no `water` still use it. The first wash
+on the pen found the colour fading after the lift: a rounding leak in the half-float
+water textures, since fixed, with the pigment's mobility now following the brush's
+flow (`drawing-engine-plan.md`, step 10).
 
 ### 5. Bristles (medium)
 
@@ -250,6 +253,49 @@ bristles that bend with tilt beyond the stretch the dab already gets.
 
 Sizes are relative; steps 1 and 2 are a week each of the kind the engine steps took,
 3 half that, 4 three times that, 5 a week.
+
+## Living marks (2026-10-25)
+
+The pen found oil and acrylic reading as pre-baked stamps rather than live paint. What
+made them so: a stroke was dabs every 5% of the diameter and each dab the same thing —
+twelve bristle clumps at fixed homes, a bristle-streak image running along the path, a
+height that copied the coverage with the same image pressed in as grooves. The clumps
+fanned and parted but had no memory and no life; two strokes with the same pressure were
+copies, a straight stroke one texture extruded, and the lighting embossed the pattern the
+colour already showed. Nothing in a mark depended on how much paint there was.
+
+Six ways out, with what each costs:
+
+1. **Variation inside the stamp engine.** Clump homes seeded per stroke and wandering
+   along it; widths following the pressure's history; stray hairs; the stroke-attached
+   grain phased per stroke and drifting. Small, inside the shader, and it ends the
+   copy-of-a-copy look at once. Still a stamp; overdone it is noise. **Done** (step 12
+   of `drawing-engine-plan.md`).
+2. **Procedural grain in place of images.** Noise fields per pixel in stroke or canvas
+   space, seeded per stroke, shaped by pressure, speed and load. Never tiles. Synthetic
+   unless shaped well; still texture, not paint. **Done** for the bristle streaks (same
+   step); the canvas-fixed paper image stays.
+3. **Bristle dynamics with memory.** Clumps as particles with bend, drag and spring:
+   splaying under pressure and holding it, trailing on a turn, snapping back on a lift.
+   As a hybrid, the dab rasteriser fed the clumps' positions from a per-sample
+   simulation. Rebelle 8's approach; every press, turn and lift leaves a different mark.
+   Medium; the feel lives in tuning on the pen; the sim must be a pure function of the
+   recorded input. The splay memory in step 12 is its first inch.
+4. **Paint as a quantity, texture as its consequence.** Paint volume per dab from the
+   load; ridges from bristles dragging what is there; tooth showing where paint is
+   thin; streaks as the height the bristle paths leave. IMPaSTo and ArtRage. Large:
+   thickness stops being a copy of coverage and becomes volume, the lighting has to
+   carry more.
+5. **Lighting and relief alone.** Environment lighting with occlusion in the crevices,
+   relief from a smoothed independent height, gloss by thickness. Cheap; changes no
+   mark's shape.
+6. **Captured marks.** Scanned strokes cut into starts, bodies and ends. Unbeatable for
+   one mark; pre-baked again once marks overlap and mix; one colour, one lighting;
+   assets and licences. Not for a live mixing engine.
+
+The order taken: 1 and 2 as one step, then 3, with 5 beside either; 4 only after pen
+notes on 3. The judging ground is turns, lifts and pressure changes on the pen, not the
+preview tiles.
 
 ## Decisions
 

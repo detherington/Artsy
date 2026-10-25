@@ -150,7 +150,7 @@ final class CanvasViewModel: ObservableObject {
             bytes += pixels * (8 + (layer.heightTexture == nil ? 0 : 2) + (layer.wetTexture == nil ? 0 : 2))
             if let water = layer.water {
                 let region = water.region.width * water.region.height
-                bytes += region * 8 + region / (water.scale * water.scale) * 40
+                bytes += region * 8 + region / (water.scale * water.scale) * 48
             }
         }
         // Composite and its height map, each with mip levels (a third again), blend
