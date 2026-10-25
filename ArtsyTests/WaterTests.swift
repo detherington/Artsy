@@ -60,6 +60,36 @@ final class WaterTests: XCTestCase {
         XCTAssertEqual(harness.pixels(of: harness.drawingLayer.texture).values, dried.values, "nothing moves once dry")
     }
 
+    /// What is painted is what dries: the pigment is conserved through the drying, in the
+    /// water's own textures and in the layer's pixels, and the middle of a plain wash keeps
+    /// most of its depth, with a darker rim. (Half-float water textures had lost a quarter
+    /// of the pigment to rounding by the time a wash was dry, and the layer had read
+    /// lighter still while the pigment was half settled, so a stroke faded after the lift.)
+    func testAWashKeepsItsPigmentAsItDries() throws {
+        let harness = try canvasWithAWash(.watercolor)
+        harness.dryingTime = 20
+        func column() -> [Float] { let l = harness.pixels(of: harness.drawingLayer.texture); return (0..<140).map { l.at(x: 120, y: $0).w } }
+        func pigmentInWater() -> Float {
+            let w = harness.water(of: harness.drawingLayer)
+            return stride(from: 3, to: w.pigment.values.count, by: 4).reduce(Float(0)) { $0 + w.pigment.values[$1] + w.settled.values[$1] }
+        }
+        let painted = totalPigment(harness), laid = pigmentInWater()
+        let paintedMiddle = (66...74).map { column()[$0] }.reduce(0, +) / 9
+        XCTAssertEqual(laid, painted, accuracy: painted * 0.01, "the stroke's pigment is in the water: \(laid) of \(painted)")
+        for seconds in [1.0, 5.0, 14.0] {
+            harness.letWaterRun(seconds: seconds)
+            XCTAssertEqual(pigmentInWater(), painted, accuracy: painted * 0.01, "no pigment made or lost on the way: \(pigmentInWater()) of \(painted)")
+            XCTAssertEqual(totalPigment(harness), painted, accuracy: painted * 0.02, "and the layer shows all of it: \(totalPigment(harness)) of \(painted)")
+        }
+        harness.letWaterRun(seconds: 50)
+        XCTAssertNil(harness.drawingLayer.water, "dry")
+        XCTAssertEqual(totalPigment(harness), painted, accuracy: painted * 0.02, "dry with what was painted: \(totalPigment(harness)) of \(painted)")
+        let dried = column()
+        let middle = (66...74).map { dried[$0] }.reduce(0, +) / 9
+        XCTAssertGreaterThan(middle, paintedMiddle * 0.8, "the middle keeps most of its depth: \(middle) of \(paintedMiddle)")
+        XCTAssertGreaterThan((76...110).map { dried[$0] }.max() ?? 0, middle * 1.05, "and the rim is darker than the middle")
+    }
+
     func testTheWaterCarriesThePigmentWithoutMakingOrLosingIt() throws {
         let still = try canvasWithAWash(wash(flow: 0.01, settling: 1))
         still.letWaterRun(seconds: 40)
@@ -78,7 +108,8 @@ final class WaterTests: XCTestCase {
             // Outward from the middle of the stroke
             return (0...60).map { layer.at(x: 120, y: 70 + $0).w }
         }
-        let flowing = try profile(flow: 0.6, settling: 0.3), still = try profile(flow: 0.01, settling: 1)
+        // A runny wash, whose pigment goes freely with the water (mobility follows flow)
+        let flowing = try profile(flow: 1, settling: 0.3), still = try profile(flow: 0.01, settling: 1)
         func rim(_ profile: [Float]) -> Float {
             // The darkest band against the middle (the middle averaged, so one grain of the
             // paper does not decide it)
@@ -139,7 +170,8 @@ final class WaterTests: XCTestCase {
             return (-4...4).reduce(0) { $0 + alpha(harness, 120 + $1, 70) } / 9
         }
         let plain = try middle(withWater: false), bloomed = try middle(withWater: true)
-        XCTAssertLessThan(bloomed, plain * 0.85, "lighter where the water landed: \(bloomed) against \(plain)")
+        // About 15% lighter with the Water brush's flow (0.6, and the pigment's mobility with it)
+        XCTAssertLessThan(bloomed, plain * 0.9, "lighter where the water landed: \(bloomed) against \(plain)")
     }
 
     // MARK: - Living with the rest
@@ -198,5 +230,3 @@ final class WaterTests: XCTestCase {
         XCTAssertNil(old.water)
     }
 }
-
-

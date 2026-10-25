@@ -15,16 +15,16 @@ final class LayerWater {
     /// The rectangle of the layer the water is on, in layer pixels (origin top-left), a
     /// multiple of `scale` on every side.
     private(set) var region: MTLScissorRect
-    /// Free water per texel and how wet the paper is (rg16), and the pigment still in the
-    /// water (rgba16, premultiplied), each twice over for a step to read one and write the
-    /// other.
+    /// Free water per texel and how wet the paper is (rg16 unorm), and the pigment still
+    /// in the water (rgba16 unorm, premultiplied), each twice over for a step to read one
+    /// and write the other. Unorm, not half float: see `makeState`.
     var water: [MTLTexture]
     var pigment: [MTLTexture]
     /// Which of each pair holds the state now.
     var current = 0
     /// Scratch at the region's resolution: what leaves each texel for its neighbours.
     var flux: MTLTexture
-    /// Pigment settled on the paper since the water came (rgba16, premultiplied).
+    /// Pigment settled on the paper since the water came (rgba32 float, premultiplied).
     var settled: MTLTexture
     /// The dry paint that was there before, at the layer's resolution, the size of `region`.
     private(set) var dry: MTLTexture
@@ -189,9 +189,13 @@ final class WaterRenderer {
             texture?.label = label
             return texture
         }
-        guard let w0 = texture(.rg16Float, w, h, "Water"), let w1 = texture(.rg16Float, w, h, "Water"),
-              let p0 = texture(.rgba16Float, w, h, "Water pigment"), let p1 = texture(.rgba16Float, w, h, "Water pigment"),
-              let flux = texture(.rgba16Float, w, h, "Water flux"), let settled = texture(.rgba16Float, w, h, "Water settled"),
+        // Water and pigment change by a few ten-thousandths a step, 120 steps a second: in
+        // half floats those steps round away near 0.5 and a quarter of the pigment is lost
+        // by the time a wash is dry. Unorm16 resolves them (1.5e-5 everywhere, and nothing
+        // here exceeds 1); the settled pigment, read and written in place, has to be float
+        guard let w0 = texture(.rg16Unorm, w, h, "Water"), let w1 = texture(.rg16Unorm, w, h, "Water"),
+              let p0 = texture(.rgba16Unorm, w, h, "Water pigment"), let p1 = texture(.rgba16Unorm, w, h, "Water pigment"),
+              let flux = texture(.rgba16Float, w, h, "Water flux"), let settled = texture(.rgba32Float, w, h, "Water settled"),
               let dry = texture(.rgba16Float, region.width, region.height, "Water dry paint") else { return nil }
         for t in [w0, w1, p0, p1, flux, settled] { textureManager.clearTexture(t, commandBuffer: commandBuffer) }
         // The dry paint is what the layer shows now
@@ -279,7 +283,11 @@ final class WaterRenderer {
             granulation: settings.granulation,
             wick: 0.05 + 0.3 * settings.flow, capacity: Self.capacity,
             lift: Float(0.08 / Self.stepsPerSecond),
-            mobility: 0.4
+            // How freely the pigment goes with the water: with the brush's flow, so an
+            // ordinary wash (flow 0.5) dries keeping most of its middle, with a darker rim,
+            // and a runny one carries its pigment out to a bloom. At 0.4 for every wash the
+            // middle of a stroke lost a third of its depth as it dried.
+            mobility: 0.4 * settings.flow
         )
         let threads = MTLSize(width: 16, height: 16, depth: 1)
         for _ in 0..<steps {

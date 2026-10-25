@@ -565,8 +565,8 @@ of the layer and to what a laptop can run every frame.
 - **The water on a layer** (`LayerWater`, run by `WaterRenderer`): on the rectangle of
   the layer that water has been laid on, grown as strokes land and with a margin the
   water may bloom into, textures at the canvas's resolution (half above 4096²): free
-  water and how wet the paper is (rg16), the pigment in the water and the pigment
-  settled since the water came (rgba16, premultiplied), and, at the layer's own
+  water and how wet the paper is (rg16 unorm), the pigment in the water (rgba16 unorm)
+  and the pigment settled since the water came (rgba32 float, premultiplied), and, at the layer's own
   resolution, the dry paint that was there before. The layer's own pixels always show
   the look — settled pigment glazed over the dry paint, suspended pigment over that,
   rewritten every frame the water moves — so the composite, thumbnails, saving, export
@@ -627,7 +627,7 @@ of the layer and to what a laptop can run every frame.
 - **Cost.** A canvas-spanning Watercolor stroke on 2048² (a 1.1 Mtexel region, two
   steps a frame at 60 frames a second): 1.3 ms a frame while it flows
   (`testWaterFrameCost`), nothing once it has dried. Memory while a layer's water is
-  on it: 40 bytes a texel of the region plus 8 a layer pixel for the dry paint, at the
+  on it: 48 bytes a texel of the region plus 8 a layer pixel for the dry paint, at the
   canvas's resolution up to 4096² and half beyond, freed when the water is forgotten.
 - **Tests** (`WaterTests`): a wet stroke's water spreads beyond it, with pigment, and
   dries off, after which nothing moves; pigment is moved, not made or lost; pigment
@@ -637,6 +637,23 @@ of the layer and to what a laptop can run every frame.
   back and stops it; another brush settles the water and stays; Dry Layer stops it;
   the settings survive the brush file. The watercolor tile, the Water tile, the soft
   brushes over dark paint and the everything document were re-recorded after viewing.
+- **What the first wash on the pen found (0.8.13).** A Watercolor stroke dried to a
+  far paler colour than it was painted, within seconds of the lift, and the lift itself
+  was seamless (live and committed pixels identical). Three causes, measured on a
+  50 px wash: a quarter of the pigment was lost to rounding, since the water textures
+  were half floats and each step moved a few ten-thousandths, below the half-float
+  spacing near 0.5 (and at the 60 s drying time deep water could not evaporate at all,
+  only drain); the glaze drew settled and suspended pigment as two layers over each
+  other, which read up to 8% lighter while the pigment was half settled; and the
+  pigment's mobility of 0.4 for every wash carried a third of the middle's depth out
+  to the rim and a 10 px halo. Now: water and pigment in unorm16 (1.5e-5 steps, and
+  nothing in them exceeds 1), the settled pigment in float since it is read and
+  written in place, one pigment layer in the glaze, and mobility 0.4 × the brush's
+  flow, so a plain wash (flow 0.5) dries keeping 84% of its middle with a rim 11%
+  darker and a full-flow wash blooms as before. `testAWashKeepsItsPigmentAsItDries`
+  holds the pigment constant through the drying, in the water's textures and in the
+  layer, and the middle above 80%. The rim test uses a full-flow wash now, where the
+  mechanism shows at its strongest.
 
 ### 11. Bristles (medium) — done, untested by hand
 

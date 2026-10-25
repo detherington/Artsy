@@ -221,7 +221,10 @@ layer's pixels show the look throughout. What was left out of the plan: velocity
 flow is a surface-difference diffusion, stable at a fifth per step, 120 steps a
 second), a capillary layer that spreads by itself, and drips. Tilt began in Settings
 and is now a pad under Adjust (0.8.12), level when a window opens. The merge-time
-wash did not go away: brushes with `wet` and no `water` still use it.
+wash did not go away: brushes with `wet` and no `water` still use it. The first wash
+on the pen found the colour fading after the lift: a rounding leak in the half-float
+water textures, since fixed, with the pigment's mobility now following the brush's
+flow (`drawing-engine-plan.md`, step 10).
 
 ### 5. Bristles (medium)
 

@@ -1487,8 +1487,10 @@ fragment WaterInjectOut waterInjectFragment(
     return out;
 }
 
-// The look of the region for the layer: the settled pigment glazed over the dry paint
-// that was there, and the pigment still in the water glazed over that.
+// The look of the region for the layer: the pigment, settled and still in the water
+// together as the one layer of paint it is, glazed over the dry paint that was there.
+// (Drawn as two layers over each other, a wash half settled read lighter than its
+// pigment and darkened back as the rest came down.)
 struct WaterGlazeParams {
     uint2  size;
     uint2  origin;
@@ -1507,8 +1509,7 @@ fragment float4 waterGlazeFragment(
     float2 layerPx = in.texCoord * p.layerSize;
     float2 uv = (layerPx - float2(p.origin)) / (float2(p.size) * p.scale);
     float4 d = dry.sample(s, uv);   // kept for the region alone, at the layer's resolution
-    float4 r = settled.sample(s, uv);
-    if (r.a > 1e-5) d = blendOver(r, d, 1);
-    float4 g = pigment.sample(s, uv);
-    return g.a > 1e-5 ? blendOver(g, d, 1) : d;
+    float4 paint = settled.sample(s, uv) + pigment.sample(s, uv);
+    if (paint.a > 1.0) paint /= paint.a;   // piled past full coverage: full, its own colour
+    return paint.a > 1e-5 ? blendOver(paint, d, 1) : d;
 }
