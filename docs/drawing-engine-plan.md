@@ -793,6 +793,19 @@ is a live control on a graphite brush, the way its size is.
   and a recording round-trips it; a tap on a pill sets the grade; a golden strip of the
   seven grades, pressed from a touch to full, viewed before it was recorded.
 
+### 14. Pressure from speed (small) — done, untested by hand
+
+Step 0 of `ios-plan.md`, for the iPhone Duo's Pencil and the Mac's mouse alike: an input
+that reports no pressure gets one from how fast it moves (`PressureFromSpeed`): full when
+still, 0.2 at 2,500 canvas pixels a second, smoothed over 80 ms, the first sample slow.
+It sits in the view model's stroke input, after the recorder and before the guides and
+the smoother, so recordings stay raw and replays derive it again; the pressure curve
+applies on top; a pen with pressure is untouched; Settings → Tablet switches it. Tests
+in `PressureFromSpeedTests`: the curve's ends and its monotony, the smoothing's lag on a
+stop, and on the canvas a slow pencil line covering more than half again a fast one,
+with the substitute off and with a real pen the two equal. The mouse-strokes golden was
+re-recorded after viewing.
+
 ## At the limits: 8192² with 12 layers
 
 Measured after step 6 opened these limits up (`testLargeCanvasCosts`, debug build, M4 Pro):

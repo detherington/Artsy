@@ -22,6 +22,7 @@ public final class AppPreferences: ObservableObject {
         static let pressureCurves = "pressureCurves" // JSON: [pen key: PressureCurve]
         static let pencilGrades = "pencilGrades"     // JSON: [brush id: grade]
         static let easeStrokesWithoutPressure = "easeStrokesWithoutPressure"
+        static let pressureFromSpeed = "pressureFromSpeed"
         static let paintRelief = "paintRelief"
         static let paintGloss = "paintGloss"
         static let dryingTime = "dryingTime"
@@ -78,6 +79,11 @@ public final class AppPreferences: ObservableObject {
     /// Ease strokes in and out when the input has no pressure (mouse, trackpad).
     @Published public var easeStrokesWithoutPressure: Bool {
         didSet { defaults.set(easeStrokesWithoutPressure, forKey: Key.easeStrokesWithoutPressure) }
+    }
+    /// Pressure from speed for an input that reports none (a mouse, a trackpad, a pencil
+    /// without pressure): slow presses hard, a quick hatch lies light.
+    @Published public var pressureFromSpeed: Bool {
+        didSet { defaults.set(pressureFromSpeed, forKey: Key.pressureFromSpeed) }
     }
 
     /// How strongly thick paint (impasto) is lit on the canvas and in exports; 0 shows it flat.
@@ -162,6 +168,7 @@ public final class AppPreferences: ObservableObject {
 
         self.smoothingMode = defaults.string(forKey: Key.smoothingMode).flatMap(SmoothingMode.init(rawValue:)) ?? .oneEuro
         self.easeStrokesWithoutPressure = (defaults.object(forKey: Key.easeStrokesWithoutPressure) as? Bool) ?? true
+        self.pressureFromSpeed = (defaults.object(forKey: Key.pressureFromSpeed) as? Bool) ?? true
         self.paintRelief = min(max((defaults.object(forKey: Key.paintRelief) as? Double) ?? 1.0, 0), 2)
         self.paintGloss = min(max((defaults.object(forKey: Key.paintGloss) as? Double) ?? 0.5, 0), 1)
         self.dryingTime = min(max((defaults.object(forKey: Key.dryingTime) as? Double) ?? 60, 5), 600)

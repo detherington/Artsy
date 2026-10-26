@@ -259,7 +259,8 @@ final class CanvasViewTests: XCTestCase {
 
         let log = try logText()
         XCTAssertTrue(log.contains("stroke   Hard Round 12 px: 11 samples in 0.10 s (110/s)"), log)
-        XCTAssertTrue(log.contains("pressure 0.70–0.70"), "the mouse's fixed pressure")
+        XCTAssertTrue(log.contains(", pressure from speed"), "the mouse's pressure comes from its speed: \(log)")
+        XCTAssertFalse(log.contains("pressure 0.70–0.70"), "and is no longer the fixed 0.7 the events carry")
         XCTAssertTrue(log.contains(", mouse"), log)
         XCTAssertTrue(log.contains("stroke   committed in"), log)
         XCTAssertTrue(log.contains("undo     undo: 0 steps left"), log)
