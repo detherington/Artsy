@@ -285,7 +285,35 @@ against the boundary rather than retrofitted to it.
    turn to landscape.
 5. **Shipping.** Bundle identifiers, the App Store listing, an archive-and-upload
    script, TestFlight for the pen sessions, then review. Small to medium, plus
-   Apple's time.
+   Apple's time. **Built** (2026-10-26, branch `ios-shipping`), with the steps that
+   are App Store Connect's own left to do by hand. The app has its icon: the Mac
+   icon's artwork, which sits in a rounded rectangle with a transparent margin,
+   cropped inside that shape and flattened to the opaque 1,024-pixel square iOS
+   wants (a small Swift tool in the scratchpad did it; the result is in the asset
+   catalogue as the universal iOS icon). Its launch screen is the chrome's dark grey
+   through a colour in the catalogue rather than the generated white. Its plist
+   declares the category (Graphics & Design), that it needs Metal, and that it uses
+   no encryption of its own, so no compliance question per build. A privacy manifest
+   names the three required-reason APIs the app touches, each with its reason: user
+   defaults for the preferences, file timestamps for the brush library's order, the
+   system clock for the stroke timings; nothing is collected and nothing tracks.
+   `scripts/release-ios.sh <version>` bumps the version and build number in the iOS
+   target's settings, archives for devices, signs in the cloud with the App Store
+   Connect API key already in the environment (no distribution certificate or profile
+   on the Mac; `-allowProvisioningUpdates` has Apple keep them) and uploads through
+   `-exportArchive` with `scripts/ExportOptions-ios.plist`, where the build goes to
+   TestFlight once processed. `docs/app-store-listing.md` holds the listing's words
+   (name, subtitle, description, keywords, category, the privacy questionnaire's
+   answer), the screenshot sizes to make from the simulator, the TestFlight and review
+   notes, and the three things done once in App Store Connect by hand: the app record
+   for `com.artsy.app`, a home on the web for `docs/privacy-policy.md` (GitHub Pages
+   from `docs/` would do), and the API key's role. A trial of the script's archive step from here succeeded: automatic provisioning
+   registered the bundle identifier's iOS side with the portal and signed the archive
+   with the Apple Development identity and a team profile it made. The export and
+   upload, which make the cloud-managed distribution certificate and profile on the
+   account and send the build up, are the script's first run in Darrell's hands, once
+   the app record exists. Not in this step: screenshots for the listing, which want a
+   real painting on the canvas, and the review itself.
 
 Each step is its own branch and PR, with the engine tests the net for every one.
 
