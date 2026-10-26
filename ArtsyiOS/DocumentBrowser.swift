@@ -92,6 +92,8 @@ struct DocumentBrowser: UIViewControllerRepresentable {
                 let screen = CanvasHostingController(rootView: CanvasScreen(session: session))
                 screen.modalPresentationStyle = .fullScreen
                 screen.overrideUserInterfaceStyle = .dark
+                screen.keys = KeyCommands.entries(for: session) { [weak model] name in model?.app(name) }
+                model.presenter = screen
                 model.dismissCanvas = { [weak controller] in controller?.dismiss(animated: true) }
                 controller.present(screen, animated: true)
             } catch {
@@ -108,7 +110,32 @@ struct DocumentBrowser: UIViewControllerRepresentable {
     }
 }
 
-/// The canvas screen as a view controller: full screen, no status bar.
+/// The canvas screen as a view controller: full screen, no status bar, and the keys a
+/// keyboard sends, held as the Mac's shortcuts.
 final class CanvasHostingController: UIHostingController<CanvasScreen> {
+    var keys: [KeyCommands.Entry] = [] {
+        didSet {
+            commands = keys.map { entry in
+                let command = UIKeyCommand(title: entry.title, action: #selector(runKey(_:)), input: entry.input,
+                                           modifierFlags: entry.modifiers, propertyList: entry.id)
+                command.wantsPriorityOverSystemBehavior = entry.overridesSystem
+                return command
+            }
+        }
+    }
+    private var commands: [UIKeyCommand] = []
+
     override var prefersStatusBarHidden: Bool { true }
+    override var keyCommands: [UIKeyCommand]? { commands }
+    override var canBecomeFirstResponder: Bool { true }
+
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+        becomeFirstResponder()
+    }
+
+    @objc private func runKey(_ command: UIKeyCommand) {
+        guard let id = command.propertyList as? String, let entry = keys.first(where: { $0.id == id }) else { return }
+        entry.run()
+    }
 }
