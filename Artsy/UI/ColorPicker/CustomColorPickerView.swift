@@ -1,6 +1,10 @@
 import SwiftUI
-import AppKit
 import ArtsyEngine
+#if os(macOS)
+#if canImport(AppKit)
+import AppKit
+#endif
+#endif
 
 /// Compact color picker shown in a popover. Continuous interaction (SV square,
 /// hue slider, hex field) updates live; discrete selection (preset swatch,
@@ -56,16 +60,18 @@ struct CustomColorPickerView: View {
 
                 Spacer()
 
+                #if os(macOS)
                 Button(action: eyedrop) {
                     Image(systemName: "eyedropper")
                         .font(.system(size: 12))
                 }
                 .buttonStyle(.plain)
                 .help("Pick from screen")
+                #endif
 
                 // Current color preview
                 RoundedRectangle(cornerRadius: 3)
-                    .fill(Color(nsColor: currentNSColor))
+                    .fill(currentColor.displayColor)
                     .frame(width: 28, height: 20)
                     .overlay(
                         RoundedRectangle(cornerRadius: 3)
@@ -115,7 +121,7 @@ struct CustomColorPickerView: View {
             if applyHex(hex) { commit() }
         } label: {
             RoundedRectangle(cornerRadius: 3)
-                .fill(Color(nsColor: NSColor.fromHex(hex) ?? .black))
+                .fill((ColorMath.color(fromHex: hex) ?? .black).displayColor)
                 .frame(width: size, height: size)
                 .overlay(
                     RoundedRectangle(cornerRadius: 3)
@@ -128,52 +134,35 @@ struct CustomColorPickerView: View {
 
     // MARK: - Color sync
 
-    private var currentNSColor: NSColor {
-        NSColor(colorSpace: .displayP3, hue: CGFloat(hue), saturation: CGFloat(saturation),
-                brightness: CGFloat(brightness), alpha: 1.0)
+    private var currentColor: StrokeColor {
+        ColorMath.color(hue: hue, saturation: saturation, brightness: brightness)
     }
 
     /// Called when the bound StrokeColor changes externally (on appear).
     private func syncFromStrokeColor() {
-        let ns = NSColor(displayP3Red: CGFloat(color.red), green: CGFloat(color.green),
-                         blue: CGFloat(color.blue), alpha: CGFloat(color.alpha))
-        var h: CGFloat = 0, s: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
-        ns.getHue(&h, saturation: &s, brightness: &b, alpha: &a)
-        hue = Double(h)
-        saturation = Double(s)
-        brightness = Double(b)
-        hexText = hexString(from: ns)
+        let hsb = ColorMath.hsb(of: color)
+        hue = hsb.hue
+        saturation = hsb.saturation
+        brightness = hsb.brightness
+        hexText = ColorMath.hex(of: color)
     }
 
     /// Called when any HSB component changes — write back to the binding.
     private func syncFromHSB() {
-        let ns = currentNSColor
-        color = StrokeColor(
-            red: Float(ns.redComponent),
-            green: Float(ns.greenComponent),
-            blue: Float(ns.blueComponent),
-            alpha: 1.0
-        )
-        hexText = hexString(from: ns)
+        color = currentColor
+        hexText = ColorMath.hex(of: color)
     }
 
     /// Apply a hex string. Returns true if valid.
     @discardableResult
     private func applyHex(_ hex: String) -> Bool {
-        guard let ns = NSColor.fromHex(hex) else { return false }
-        var h: CGFloat = 0, s: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
-        let p3 = ns.usingColorSpace(.displayP3) ?? ns
-        p3.getHue(&h, saturation: &s, brightness: &b, alpha: &a)
-        hue = Double(h)
-        saturation = Double(s)
-        brightness = Double(b)
-        hexText = hexString(from: p3)
-        color = StrokeColor(
-            red: Float(p3.redComponent),
-            green: Float(p3.greenComponent),
-            blue: Float(p3.blueComponent),
-            alpha: 1.0
-        )
+        guard let parsed = ColorMath.color(fromHex: hex) else { return false }
+        let hsb = ColorMath.hsb(of: parsed)
+        hue = hsb.hue
+        saturation = hsb.saturation
+        brightness = hsb.brightness
+        hexText = ColorMath.hex(of: parsed)
+        color = parsed
         return true
     }
 
@@ -184,23 +173,14 @@ struct CustomColorPickerView: View {
 
     // MARK: - Eyedropper
 
+    #if os(macOS)
     private func eyedrop() {
         NSColorSampler().show { picked in
             guard let ns = picked else { return }
-            let hex = hexString(from: ns.usingColorSpace(.displayP3) ?? ns)
-            if applyHex(hex) { commit() }
+            if applyHex(ColorMath.hex(of: ns.strokeColor)) { commit() }
         }
     }
-
-    // MARK: - Hex helpers
-
-    private func hexString(from ns: NSColor) -> String {
-        let p3 = ns.usingColorSpace(.displayP3) ?? ns
-        let r = Int((max(0, min(1, p3.redComponent)) * 255).rounded())
-        let g = Int((max(0, min(1, p3.greenComponent)) * 255).rounded())
-        let b = Int((max(0, min(1, p3.blueComponent)) * 255).rounded())
-        return String(format: "%02X%02X%02X", r, g, b)
-    }
+    #endif
 }
 
 // MARK: - SV Square
@@ -215,8 +195,7 @@ struct SVSquareView: View {
             ZStack {
                 // Hue base
                 Rectangle()
-                    .fill(Color(nsColor: NSColor(colorSpace: .displayP3, hue: CGFloat(hue),
-                                                 saturation: 1, brightness: 1, alpha: 1)))
+                    .fill(ColorMath.color(hue: hue, saturation: 1, brightness: 1).displayColor)
 
                 // White-to-transparent horizontal (saturation)
                 LinearGradient(
@@ -261,8 +240,7 @@ struct HueSliderView: View {
     @Binding var hue: Double
 
     private static let hueColors: [Color] = stride(from: 0.0, through: 1.0, by: 1.0 / 12.0).map {
-        Color(nsColor: NSColor(colorSpace: .displayP3, hue: CGFloat($0), saturation: 1,
-                               brightness: 1, alpha: 1))
+        ColorMath.color(hue: $0, saturation: 1, brightness: 1).displayColor
     }
 
     var body: some View {
@@ -290,20 +268,5 @@ struct HueSliderView: View {
                     }
             )
         }
-    }
-}
-
-// MARK: - NSColor hex
-
-extension NSColor {
-    /// Parse "#RRGGBB" or "RRGGBB" as a Display P3 color.
-    static func fromHex(_ hex: String) -> NSColor? {
-        var s = hex.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
-        if s.hasPrefix("#") { s.removeFirst() }
-        guard s.count == 6, let v = UInt32(s, radix: 16) else { return nil }
-        let r = CGFloat((v >> 16) & 0xFF) / 255.0
-        let g = CGFloat((v >> 8) & 0xFF) / 255.0
-        let b = CGFloat(v & 0xFF) / 255.0
-        return NSColor(colorSpace: .displayP3, components: [r, g, b, 1.0], count: 4)
     }
 }

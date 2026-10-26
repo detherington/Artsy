@@ -1,4 +1,6 @@
+#if canImport(AppKit)
 import AppKit
+#endif
 import SwiftUI
 import UniformTypeIdentifiers
 import ArtsyEngine
@@ -211,7 +213,7 @@ struct LayerActions {
     func saveStep(_ description: String, changing scope: CanvasUndoManager.Scope = .nothing) {
         guard let renderer else { return }
         // A transform in progress lands on its layer before the layer list changes
-        (NSApp.delegate as? AppDelegate)?.activeStorePublic?.canvasView.commitPendingEdits()
+        ChromeActions.commitPendingEdits()
         viewModel.saveUndoSnapshot(renderer: renderer, description: description, changing: scope)
     }
 

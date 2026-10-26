@@ -91,7 +91,7 @@ struct NewCanvasView: View {
                             .background(
                                 !useCustom && selectedPreset?.name == preset.name
                                     ? Color.accentColor.opacity(0.2)
-                                    : Color(nsColor: .controlBackgroundColor)
+                                    : Platform.controlBackground
                             )
                             .cornerRadius(6)
                             .overlay(

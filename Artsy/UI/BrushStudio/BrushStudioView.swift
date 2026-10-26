@@ -34,7 +34,7 @@ struct BrushStudioView: View {
             .formStyle(.grouped)
         }
         .frame(minWidth: 420, idealWidth: 440, minHeight: 560)
-        .background(Color(nsColor: .windowBackgroundColor))
+        .background(Platform.windowBackground)
     }
 
     // MARK: - Header
@@ -44,7 +44,7 @@ struct BrushStudioView: View {
             ZStack {
                 Color.white
                 if let preview = model.preview {
-                    Image(nsImage: preview)
+                    Image(platformImage: preview)
                         .resizable()
                         .aspectRatio(contentMode: .fit)
                 }

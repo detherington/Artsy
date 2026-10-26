@@ -10,7 +10,12 @@ struct ToolRailView: View {
     @State private var modesFor: ToolType?
 
     /// Pan is a gesture (space, the middle button, two fingers), not a tool in the rail.
+    /// On iPad, the tools the canvas there takes so far.
+    #if os(macOS)
     static let tools: [ToolType] = [.brush, .eraser, .fill, .eyedropper, .selection, .shape, .transform]
+    #else
+    static let tools: [ToolType] = [.brush, .eraser, .fill, .eyedropper]
+    #endif
 
     var body: some View {
         VStack(spacing: 2) {
@@ -102,6 +107,14 @@ struct ChromeActions {
     /// An app-level action by its selector name, run after any pop-up has closed so it
     /// lands on the canvas window.
     var app: (String) -> Void = { name in
+        #if os(macOS)
         DispatchQueue.main.async { NSApp.sendAction(Selector((name)), to: nil, from: nil) }
+        #else
+        DiagnosticsLog.shared.note(.app, "\(name) is not on this platform yet")
+        #endif
     }
+
+    /// A transform in progress lands on its layer before the layer list changes; the app
+    /// sets this at launch to reach its canvas view.
+    static var commitPendingEdits: () -> Void = {}
 }

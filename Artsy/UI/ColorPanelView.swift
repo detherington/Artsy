@@ -1,4 +1,6 @@
+#if canImport(AppKit)
 import AppKit
+#endif
 import SwiftUI
 import ArtsyEngine
 
@@ -37,6 +39,7 @@ struct ColorPanelView: View {
         VStack(spacing: 0) {
             PanelHeader("Colour") {
                 HStack(spacing: 6) {
+                    #if os(macOS)
                     Button(action: sampleScreen) {
                         Image(systemName: "scope")
                             .font(.system(size: 14))
@@ -46,6 +49,7 @@ struct ColorPanelView: View {
                     .buttonStyle(.plain)
                     .foregroundColor(Chrome.text)
                     .help("Pick a colour from anywhere on the screen")
+                    #endif
                     Button(action: {
                         viewModel.currentTool = .eyedropper
                         dismiss()
@@ -230,10 +234,12 @@ struct ColorPanelView: View {
     }
 
     private func sampleScreen() {
+        #if os(macOS)
         NSColorSampler().show { picked in
             guard let picked else { return }
             pick(picked.strokeColor)
         }
+        #endif
     }
 }
 
@@ -290,16 +296,37 @@ enum ColorPanelActions {
 
 /// Between the engine's Display P3 colour and what the panel shows and reads.
 enum ColorMath {
+    /// The components' hue, saturation and brightness, as the toolkits compute them: a
+    /// grey has no hue, black no saturation.
     static func hsb(of color: StrokeColor) -> (hue: Double, saturation: Double, brightness: Double) {
-        var h: CGFloat = 0, s: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
-        color.nsColor.getHue(&h, saturation: &s, brightness: &b, alpha: &a)
-        return (Double(h), Double(s), Double(b))
+        let r = Double(color.red), g = Double(color.green), b = Double(color.blue)
+        let high = max(r, g, b), low = min(r, g, b), spread = high - low
+        var hue = 0.0
+        if spread > 0 {
+            if high == r { hue = (g - b) / spread }
+            else if high == g { hue = (b - r) / spread + 2 }
+            else { hue = (r - g) / spread + 4 }
+            hue /= 6
+            if hue < 0 { hue += 1 }
+        }
+        return (hue, high > 0 ? spread / high : 0, high)
     }
 
     static func color(hue: Double, saturation: Double, brightness: Double) -> StrokeColor {
-        let ns = NSColor(colorSpace: .displayP3, hue: CGFloat(hue), saturation: CGFloat(saturation),
-                         brightness: CGFloat(brightness), alpha: 1)
-        return StrokeColor(red: Float(ns.redComponent), green: Float(ns.greenComponent), blue: Float(ns.blueComponent), alpha: 1)
+        let turn = (hue - floor(hue)) * 6
+        let sector = Int(turn), f = turn - Double(sector)
+        let v = brightness
+        let p = v * (1 - saturation), q = v * (1 - saturation * f), t = v * (1 - saturation * (1 - f))
+        let (r, g, b): (Double, Double, Double)
+        switch sector {
+        case 0: (r, g, b) = (v, t, p)
+        case 1: (r, g, b) = (q, v, p)
+        case 2: (r, g, b) = (p, v, t)
+        case 3: (r, g, b) = (p, q, v)
+        case 4: (r, g, b) = (t, p, v)
+        default: (r, g, b) = (v, p, q)
+        }
+        return StrokeColor(red: Float(r), green: Float(g), blue: Float(b), alpha: 1)
     }
 
     static func hex(of color: StrokeColor) -> String {
@@ -307,8 +334,13 @@ enum ColorMath {
         return String(format: "%02X%02X%02X", byte(color.red), byte(color.green), byte(color.blue))
     }
 
+    /// "#RRGGBB" or "RRGGBB" as a colour in Display P3.
     static func color(fromHex hex: String) -> StrokeColor? {
-        NSColor.fromHex(hex)?.strokeColor
+        var s = hex.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+        if s.hasPrefix("#") { s.removeFirst() }
+        guard s.count == 6, let v = UInt32(s, radix: 16) else { return nil }
+        return StrokeColor(red: Float((v >> 16) & 0xFF) / 255, green: Float((v >> 8) & 0xFF) / 255,
+                           blue: Float(v & 0xFF) / 255, alpha: 1)
     }
 
     /// Degrees typed into the hue field, into a hue; false if it was not a number.

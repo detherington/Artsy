@@ -3,6 +3,8 @@ import ArtsyEngine
 
 struct UnsplashPanelView: View {
     @ObservedObject var manager: UnsplashManager
+    let viewModel: CanvasViewModel
+    let actions: ChromeActions
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -85,7 +87,7 @@ struct UnsplashPanelView: View {
                             photo: photo,
                             isLoading: manager.downloadingPhotoID == photo.id,
                             onTap: {
-                                Task { await manager.addPhotoAsLayer(photo) }
+                                Task { await manager.addPhotoAsLayer(photo, to: viewModel, renderer: actions.renderer()) }
                             }
                         )
                     }
@@ -113,7 +115,7 @@ struct UnsplashPanelView: View {
                         .foregroundColor(Chrome.secondaryText)
                     Button("Unsplash") {
                         if let url = URL(string: "https://unsplash.com/?utm_source=artsy&utm_medium=referral") {
-                            NSWorkspace.shared.open(url)
+                            Platform.open(url)
                         }
                     }
                     .buttonStyle(.plain)
@@ -182,7 +184,7 @@ struct UnsplashResultCell: View {
             Button(action: {
                 let utmURL = "\(photo.user.links.html)?utm_source=artsy&utm_medium=referral"
                 if let url = URL(string: utmURL) {
-                    NSWorkspace.shared.open(url)
+                    Platform.open(url)
                 }
             }) {
                 Text(photo.user.name)

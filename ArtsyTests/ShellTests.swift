@@ -421,8 +421,8 @@ final class ShellTests: XCTestCase {
         // The Tilt section follows, its label and the pad with Level beside it; a drag on
         // the pad is the pad's, not a scroll, and lands the lean where the pen is
         let padTop: CGFloat = radialY + 20 + 8 + 30
-        let padCentre = NSPoint(x: 14 + TiltPadView.side / 2, y: padTop + TiltPadView.side / 2)
-        let reach = TiltPadView.side / 2 - TiltPadView.inset
+        let padCentre = NSPoint(x: 14 + TiltPadMetrics.side / 2, y: padTop + TiltPadMetrics.side / 2)
+        let reach = TiltPadMetrics.side / 2 - TiltPadMetrics.inset
         send(.leftMouseDown, at: NSPoint(x: padCentre.x, y: 640 - padCentre.y), time: 5)
         send(.leftMouseDragged, at: NSPoint(x: padCentre.x + reach * 0.5, y: 640 - padCentre.y - reach * 0.25), time: 5.1)
         send(.leftMouseUp, at: NSPoint(x: padCentre.x + reach * 0.5, y: 640 - padCentre.y - reach * 0.25), time: 5.2)
@@ -434,7 +434,7 @@ final class ShellTests: XCTestCase {
         let scroll = try XCTUnwrap(host.firstDescendant(of: PenScrollView.self))
         XCTAssertEqual(scroll.contentView.bounds.origin.y, 0, "the list did not scroll")
         // Level, at the bottom of the column beside the pad
-        tap(14 + TiltPadView.side + 12 + (Chrome.panelWidth - 28 - TiltPadView.side - 12) / 2, padTop + TiltPadView.side - 22, 6)
+        tap(14 + TiltPadMetrics.side + 12 + (Chrome.panelWidth - 28 - TiltPadMetrics.side - 12) / 2, padTop + TiltPadMetrics.side - 22, 6)
         XCTAssertEqual(viewModel.canvasTilt, .zero, "level again")
 
         // Reset view: the first row of the View section

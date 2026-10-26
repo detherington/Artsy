@@ -1,5 +1,4 @@
 import Foundation
-import AppKit
 import Combine
 import SwiftUI
 import ArtsyEngine
@@ -11,7 +10,7 @@ import ArtsyEngine
 /// the library and switches the canvas to it.
 final class BrushStudioModel: ObservableObject {
     @Published private(set) var brush: BrushDescriptor
-    @Published private(set) var preview: NSImage?
+    @Published private(set) var preview: PlatformImage?
     @Published private(set) var isBuiltIn: Bool
 
     private let viewModel: CanvasViewModel
@@ -46,7 +45,7 @@ final class BrushStudioModel: ObservableObject {
             do {
                 edited = try library.duplicate(brush)
             } catch {
-                NSAlert(error: error).runModal()
+                Platform.present(error, doing: "copying the brush")
                 return
             }
             isBuiltIn = false
@@ -57,7 +56,7 @@ final class BrushStudioModel: ObservableObject {
         do {
             try library.save(edited)
         } catch {
-            NSAlert(error: error).runModal()
+            Platform.present(error, doing: "saving the brush")
         }
         schedulePreview()
     }
@@ -116,7 +115,7 @@ final class BrushStudioModel: ObservableObject {
         guard let previewRenderer else { return }
         let color = viewModel.currentColor.alpha > 0 ? viewModel.currentColor : .black
         if let image = previewRenderer.render(brush: brush.graded(viewModel.pencilGrade), color: color, size: viewModel.brushSize) {
-            preview = NSImage(cgImage: image, size: previewRenderer.size)
+            preview = PlatformImage.from(image, size: previewRenderer.size)
         }
     }
 
