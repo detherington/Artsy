@@ -4,6 +4,7 @@ import ArtsyEngine
 struct AIPanelView: View {
     @ObservedObject var viewModel: CanvasViewModel
     @ObservedObject var aiManager: AIResultsManager
+    let actions: ChromeActions
     @StateObject private var customStyles = CustomStyleStore()
 
     @State private var prompt: String = ""
@@ -194,8 +195,8 @@ struct AIPanelView: View {
         }
         .sheet(item: $previewResult) { result in
             VStack(spacing: 12) {
-                if let nsImage = NSImage(data: result.imageData) {
-                    Image(nsImage: nsImage)
+                if let image = PlatformImage(data: result.imageData) {
+                    Image(platformImage: image)
                         .resizable()
                         .aspectRatio(contentMode: .fit)
                         .frame(maxWidth: 600, maxHeight: 600)
@@ -231,9 +232,8 @@ struct AIPanelView: View {
     }
 
     private func generate() {
-        // Get the canvas view's renderer to export the canvas image
-        guard let appDelegate = NSApp.delegate as? AppDelegate,
-              let store = appDelegate.activeStorePublic else {
+        // The canvas's renderer, to send the canvas along with the words
+        guard let renderer = actions.renderer() else {
             // Fallback to text-only generation
             Task {
                 await aiManager.generateFromPrompt(
@@ -247,7 +247,7 @@ struct AIPanelView: View {
         }
 
         // Export canvas as PNG data
-        if let imageData = ImageExporter.exportForAI(renderer: store.canvasView.renderer) {
+        if let imageData = ImageExporter.exportForAI(renderer: renderer) {
             Task {
                 await aiManager.transformSketch(
                     imageData: imageData,
@@ -270,17 +270,15 @@ struct AIPanelView: View {
     }
 
     private func importResult(_ result: AIGeneratedImage) {
-        guard let appDelegate = NSApp.delegate as? AppDelegate,
-              let store = appDelegate.activeStorePublic,
-              let layerStack = store.viewModel.layerStack,
-              let nsImage = NSImage(data: result.imageData),
-              let cgImage = nsImage.cgImage(forProposedRect: nil, context: nil, hints: nil) else { return }
+        guard let renderer = actions.renderer(),
+              let layerStack = viewModel.layerStack,
+              let image = PlatformImage(data: result.imageData),
+              let cgImage = image.cgImageValue else { return }
 
-        let renderer = store.canvasView.renderer!
-        store.canvasView.commitPendingEdits()
+        ChromeActions.commitPendingEdits()
         // Adding a layer is a step to undo, like a stock image; nothing already there changes
-        store.viewModel.saveUndoSnapshot(renderer: renderer, description: "Add AI Image", changing: .nothing)
-        let step = store.viewModel.undoManager.lastStepToken
+        viewModel.saveUndoSnapshot(renderer: renderer, description: "Add AI Image", changing: .nothing)
+        let step = viewModel.undoManager.lastStepToken
         do {
             let idx = try layerStack.addLayer(above: layerStack.activeLayerIndex, name: "AI: \(result.model)")
             let layer = layerStack.layers[idx]
@@ -295,7 +293,7 @@ struct AIPanelView: View {
             renderer.updateThumbnail(for: layer)
         } catch {
             // Layer limit reached or other error: nothing happened, so nothing to undo
-            store.viewModel.undoManager.popLastSnapshot(if: step)
+            viewModel.undoManager.popLastSnapshot(if: step)
         }
     }
 }
@@ -523,8 +521,8 @@ struct AIResultThumbnail: View {
 
     var body: some View {
         VStack(spacing: 2) {
-            if let nsImage = NSImage(data: result.imageData) {
-                Image(nsImage: nsImage)
+            if let image = PlatformImage(data: result.imageData) {
+                Image(platformImage: image)
                     .resizable()
                     .aspectRatio(contentMode: .fit)
                     .cornerRadius(4)

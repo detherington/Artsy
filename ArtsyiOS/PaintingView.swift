@@ -13,7 +13,7 @@ import ArtsyEngine
 /// Pencil and a finger give none, and the engine derives one from speed.
 final class PaintingView: MTKView {
     private weak var viewModel: CanvasViewModel?
-    private weak var renderer: CanvasRenderer?
+    private(set) weak var renderer: CanvasRenderer?
     /// The touch drawing the stroke in progress, if any.
     private var drawingTouch: UITouch?
     private var strokeHasPressure = false
@@ -61,10 +61,20 @@ final class PaintingView: MTKView {
         else { return }
         // Two fingers at once are a gesture, not a stroke
         if touch.type == .direct, event?.allTouches?.filter({ $0.type == .direct }).count ?? 1 > 1 { return }
-        drawingTouch = touch
-        strokeHasPressure = touch.type == .pencil && touch.force > 0
-        renderer.beginStroke()
-        viewModel.beginStroke(point: strokePoint(from: touch), hasPressure: strokeHasPressure)
+        switch viewModel.currentTool {
+        case .brush, .eraser:
+            drawingTouch = touch
+            strokeHasPressure = touch.type == .pencil && touch.force > 0
+            renderer.beginStroke()
+            viewModel.beginStroke(point: strokePoint(from: touch), hasPressure: strokeHasPressure)
+        case .eyedropper:
+            pickColor(at: canvasPoint(of: touch))
+        case .fill:
+            fill(at: canvasPoint(of: touch))
+        default:
+            // Selection, shapes and transforms are not on iPad yet
+            break
+        }
     }
 
     override func touchesMoved(_ touches: Set<UITouch>, with event: UIEvent?) {
@@ -100,10 +110,8 @@ final class PaintingView: MTKView {
     /// space through the canvas transform, its force as pressure, its altitude and azimuth
     /// as the two tilt components, its roll (a Pencil Pro) as rotation.
     private func strokePoint(from touch: UITouch) -> StrokePoint {
-        guard let viewModel else { return StrokePoint(position: .zero, pressure: 0, tiltX: 0, tiltY: 0, rotation: 0, timestamp: touch.timestamp) }
-        let location = touch.location(in: self)
-        let upwards = CGPoint(x: location.x, y: bounds.height - location.y)
-        let canvas = viewModel.transform.viewToCanvas(upwards, viewSize: bounds.size)
+        guard viewModel != nil else { return StrokePoint(position: .zero, pressure: 0, tiltX: 0, tiltY: 0, rotation: 0, timestamp: touch.timestamp) }
+        let canvas = canvasPoint(of: touch)
         let pressure: Float = touch.type == .pencil && touch.maximumPossibleForce > 0
             ? Float(min(max(touch.force / touch.maximumPossibleForce, 0), 1)) : 0.7
         var tilt: (x: Float, y: Float) = (0, 0)
@@ -113,6 +121,71 @@ final class PaintingView: MTKView {
         var rotation: Float = 0
         if #available(iOS 17.5, *), touch.type == .pencil { rotation = Float(touch.rollAngle * 180 / .pi) }
         return StrokePoint(position: canvas, pressure: pressure, tiltX: tilt.x, tiltY: tilt.y, rotation: rotation, timestamp: touch.timestamp)
+    }
+
+    /// A touch's point on the canvas, through the transform from the engine's y-up view space.
+    private func canvasPoint(of touch: UITouch) -> CGPoint {
+        guard let viewModel else { return .zero }
+        return viewModel.transform.viewToCanvas(upwards(touch.location(in: self)), viewSize: bounds.size)
+    }
+
+    // MARK: - Eyedropper and fill
+
+    /// The colour under the touch, as displayed: the composite over the white that shows
+    /// through wherever the canvas is not opaque. Then back to the brush, as on the Mac.
+    private func pickColor(at canvasPoint: CGPoint) {
+        guard let viewModel, let renderer, let composite = renderer.compositeTexture else { return }
+        let size = viewModel.canvasSize
+        guard canvasPoint.x >= 0, canvasPoint.x < size.width, canvasPoint.y >= 0, canvasPoint.y < size.height else { return }
+        // Canvas coordinates (y up) to the texture's (y down)
+        let tx = Int(canvasPoint.x.rounded()), ty = Int((size.height - canvasPoint.y).rounded())
+        guard tx >= 0, tx < composite.width, ty >= 0, ty < composite.height,
+              let staging = try? renderer.textureManager.makeSharedTexture(width: 1, height: 1, label: "Eyedropper"),
+              let commands = renderer.context.commandQueue.makeCommandBuffer(),
+              let blit = commands.makeBlitCommandEncoder() else { return }
+        blit.copy(from: composite, sourceSlice: 0, sourceLevel: 0, sourceOrigin: MTLOrigin(x: tx, y: ty, z: 0),
+                  sourceSize: MTLSize(width: 1, height: 1, depth: 1),
+                  to: staging, destinationSlice: 0, destinationLevel: 0, destinationOrigin: MTLOrigin(x: 0, y: 0, z: 0))
+        blit.endEncoding()
+        commands.commit()
+        commands.waitUntilCompleted()
+        var half: [UInt16] = [0, 0, 0, 0]
+        half.withUnsafeMutableBytes { raw in
+            staging.getBytes(raw.baseAddress!, bytesPerRow: 8,
+                             from: MTLRegion(origin: MTLOrigin(x: 0, y: 0, z: 0), size: MTLSize(width: 1, height: 1, depth: 1)), mipmapLevel: 0)
+        }
+        let through = 1 - Float(Float16(bitPattern: half[3]))
+        let picked = StrokeColor(red: min(1, max(0, Float(Float16(bitPattern: half[0])) + through)),
+                                 green: min(1, max(0, Float(Float16(bitPattern: half[1])) + through)),
+                                 blue: min(1, max(0, Float(Float16(bitPattern: half[2])) + through)), alpha: 1)
+        viewModel.foregroundColor = picked
+        viewModel.currentColor = picked
+        viewModel.currentTool = .brush
+    }
+
+    /// A bucket fill from the touch, as on the Mac: the undo step saved first, the fill
+    /// in the background, applied only if the step still stands when it lands.
+    private func fill(at canvasPoint: CGPoint) {
+        guard let viewModel, let renderer, let layer = viewModel.layerStack?.activeLayer, !layer.isLocked else { return }
+        let size = viewModel.canvasSize
+        guard canvasPoint.x >= 0, canvasPoint.x < size.width, canvasPoint.y >= 0, canvasPoint.y < size.height else { return }
+        viewModel.saveUndoSnapshot(renderer: renderer, description: "Fill", changing: .layer(layer))
+        let step = viewModel.undoManager.lastStepToken
+        let started = DispatchTime.now().uptimeNanoseconds
+        BucketFill.fillAsync(
+            renderer: renderer, layer: layer, canvasPoint: canvasPoint, canvasSize: size,
+            fillColor: viewModel.currentColor, tolerance: viewModel.fillTolerance, selectionPath: viewModel.selectionPath,
+            shouldApply: { [weak viewModel, weak layer] in
+                guard let viewModel, let layer, viewModel.undoManager.holds(step),
+                      viewModel.layerStack?.layers.contains(where: { $0 === layer }) == true else { return false }
+                return true
+            }
+        ) { [weak renderer, weak layer] in
+            guard let renderer, let layer else { return }
+            DiagnosticsLog.shared.note(.tool, String(format: "fill landed after %.2f s", Double(DispatchTime.now().uptimeNanoseconds - started) / 1e9))
+            renderer.updateThumbnail(for: layer)
+            renderer.viewModel?.noteContentChanged()
+        }
     }
 
     // MARK: - Two fingers: pan, pinch, turn
@@ -154,15 +227,11 @@ extension PaintingView: UIGestureRecognizerDelegate {
                            shouldRecognizeSimultaneouslyWith other: UIGestureRecognizer) -> Bool { true }
 }
 
-/// The painting view for SwiftUI.
+/// The session's painting view, for SwiftUI.
 struct CanvasHost: UIViewRepresentable {
-    let context: MetalContext
-    let viewModel: CanvasViewModel
-    let renderer: CanvasRenderer
+    let view: PaintingView
 
-    func makeUIView(context: Context) -> PaintingView {
-        PaintingView(frame: .zero, context: self.context, viewModel: viewModel, renderer: renderer)
-    }
+    func makeUIView(context: Context) -> PaintingView { view }
 
     func updateUIView(_ view: PaintingView, context: Context) {}
 }

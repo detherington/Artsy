@@ -46,7 +46,7 @@ struct PressureCurveEditor: View {
             handle(at: handle2) { curve = PressureCurve(controlPoint1: handle1, controlPoint2: $0) }
         }
         .frame(width: size, height: size)
-        .background(Color(nsColor: .controlBackgroundColor))
+        .background(Platform.controlBackground)
         .clipShape(RoundedRectangle(cornerRadius: 6))
         .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color.secondary.opacity(0.3)))
     }
@@ -100,7 +100,7 @@ struct PressureCurveControl: View {
                             .controlSize(.small)
                     }
                 }
-                Text(TabletEventHandler.currentPenID == nil
+                Text(CanvasViewModel.currentPenKey() == "default"
                      ? "Used until a pen is detected; each pen then keeps its own curve."
                      : "Saved for the pen in use.")
                     .font(.system(size: 10))
@@ -121,7 +121,7 @@ struct PressureCurveControl: View {
             get: { viewModel.pressureCurve },
             set: { curve in
                 viewModel.pressureCurve = curve
-                AppPreferences.shared.pressureCurves[TabletEventHandler.currentPenKey] = curve
+                AppPreferences.shared.pressureCurves[CanvasViewModel.currentPenKey()] = curve
             }
         )
     }

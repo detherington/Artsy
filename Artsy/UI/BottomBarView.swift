@@ -1,4 +1,3 @@
-import AppKit
 import SwiftUI
 import ArtsyEngine
 
@@ -38,19 +37,19 @@ struct BottomBarView: View {
                     showingLayers = true
                 }
             }
-            .popover(isPresented: $showingLayers, arrowEdge: .top) {
+            .popover(isPresented: $showingLayers, arrowEdge: Chrome.barPopoverEdge) {
                 LayersPanelView(viewModel: viewModel, renderer: actions.renderer(), dockAvailable: chrome.isWide)
             }
             ChromeButton(systemImage: "slider.horizontal.3", label: "Adjust", help: "Symmetry, guides and the view") {
                 showingAdjust = true
             }
-            .popover(isPresented: $showingAdjust, arrowEdge: .top) {
+            .popover(isPresented: $showingAdjust, arrowEdge: Chrome.barPopoverEdge) {
                 AdjustPanelView(viewModel: viewModel, actions: actions)
             }
             ChromeButton(systemImage: "plus", label: "Add", help: "AI, stock images and imports") {
                 showingAdd = true
             }
-            .popover(isPresented: $showingAdd, arrowEdge: .top) {
+            .popover(isPresented: $showingAdd, arrowEdge: Chrome.barPopoverEdge) {
                 AddPanelView(viewModel: viewModel, actions: actions, dismiss: { showingAdd = false })
             }
             ChromeButton(systemImage: "arrow.down.right.and.arrow.up.left", label: "Hide", help: "Hide the interface (Tab)") {
@@ -114,7 +113,7 @@ struct BrushPill: View {
         Button(action: { showing = true }) {
             HStack(spacing: 8) {
                 if let image = previews.image(for: viewModel.currentBrush) {
-                    Image(nsImage: image)
+                    Image(platformImage: image)
                         .resizable()
                         .aspectRatio(contentMode: .fit)
                         .frame(width: 54, height: 18)
@@ -134,7 +133,7 @@ struct BrushPill: View {
         }
         .buttonStyle(.plain)
         .help("Brush")
-        .popover(isPresented: $showing, arrowEdge: .top) {
+        .popover(isPresented: $showing, arrowEdge: Chrome.barPopoverEdge) {
             BrushPanelView(viewModel: viewModel, previews: previews, actions: actions, dismiss: { showing = false })
         }
     }
@@ -222,13 +221,13 @@ struct ColorSwatchButton: View {
         ZStack(alignment: .topLeading) {
             Button(action: { showingBackground = true }) {
                 RoundedRectangle(cornerRadius: 7)
-                    .fill(Color(nsColor: viewModel.swapBackgroundColor.nsColor))
+                    .fill(viewModel.swapBackgroundColor.displayColor)
                     .frame(width: 36, height: 36)
                     .overlay(RoundedRectangle(cornerRadius: 7).stroke(Color.white.opacity(0.25), lineWidth: 1))
             }
             .buttonStyle(.plain)
             .help("Background colour")
-            .popover(isPresented: $showingBackground, arrowEdge: .top) {
+            .popover(isPresented: $showingBackground, arrowEdge: Chrome.barPopoverEdge) {
                 ColorPanelView(
                     color: Binding(get: { viewModel.swapBackgroundColor }, set: { viewModel.swapBackgroundColor = $0 }),
                     viewModel: viewModel, dismiss: { showingBackground = false }
@@ -236,13 +235,13 @@ struct ColorSwatchButton: View {
             }
             Button(action: { showingForeground = true }) {
                 RoundedRectangle(cornerRadius: 5)
-                    .fill(Color(nsColor: viewModel.foregroundColor.nsColor))
+                    .fill(viewModel.foregroundColor.displayColor)
                     .frame(width: 24, height: 24)
                     .overlay(RoundedRectangle(cornerRadius: 5).stroke(Color.white.opacity(0.6), lineWidth: 1))
             }
             .buttonStyle(.plain)
             .help("Colour (X swaps the two)")
-            .popover(isPresented: $showingForeground, arrowEdge: .top) {
+            .popover(isPresented: $showingForeground, arrowEdge: Chrome.barPopoverEdge) {
                 ColorPanelView(
                     color: Binding(get: { viewModel.foregroundColor },
                                    set: { viewModel.foregroundColor = $0; viewModel.currentColor = $0 }),
@@ -436,9 +435,9 @@ struct AddPanelView: View {
             DragScroll {
                 VStack(spacing: 0) {
                     if section == 0 {
-                        AIPanelView(viewModel: viewModel, aiManager: aiManager)
+                        AIPanelView(viewModel: viewModel, aiManager: aiManager, actions: actions)
                     } else {
-                        UnsplashPanelView(manager: unsplashManager)
+                        UnsplashPanelView(manager: unsplashManager, viewModel: viewModel, actions: actions)
                     }
                     Divider().overlay(Chrome.hairline).padding(.vertical, 8)
                     PanelRow(systemImage: "photo.on.rectangle", label: "Import an image…", note: "as a layer") {

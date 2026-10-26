@@ -26,6 +26,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         // The engine asks the platform for the pen in use and for its own diagnostics lines
         CanvasViewModel.currentPenKey = { TabletEventHandler.currentPenKey }
+        ChromeActions.commitPendingEdits = { [weak self] in self?.activeStorePublic?.canvasView.commitPendingEdits() }
         DiagnosticsLog.platformDetails = {
             let screens = NSScreen.screens.map { "\(Int($0.frame.width))×\(Int($0.frame.height)) @\($0.backingScaleFactor)x" }
             return ["screens " + (screens.isEmpty ? "none" : screens.joined(separator: ", "))]

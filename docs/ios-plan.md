@@ -166,7 +166,47 @@ against the boundary rather than retrofitted to it.
    iCloud Drive (the `.artsy` package is shared with the Mac as it is); layers,
    Adjust and Add; the Studio, Settings and Shortcuts as sheets; the keyboard
    commands for an iPad with a keyboard; import and export; the AI and stock views
-   with their keys. Medium to large.
+   with their keys. Medium to large. In three slices, each its own branch:
+   - **3a. The chrome shared.** **Done** (2026-10-26, branch `ipad-chrome`): the
+     Mac's SwiftUI chrome is compiled into both apps rather than written twice. The
+     `Artsy/UI`, `Artsy/AI` and `Artsy/Unsplash` folders are synchronised groups of
+     both targets (31 explicit file entries left the project file, 128 lines), with
+     three Mac-only files kept out of the iOS target: the window layout, the pen
+     scroll view and the tilt pad's NSView. What the chrome needed to compile on
+     both: a `Platform` file (the toolkit's image behind one name, a browser for a
+     link, an error to show, the system's window colours, a checkbox that is a switch
+     where there are none); the colour panel's maths in pure HSB rather than through
+     `NSColor`, which the colour tests pass unchanged; the screen sampler kept to the
+     Mac; the three places that reached the app delegate for the canvas now reach it
+     through `ChromeActions` (the AI and stock panels take the renderer from the
+     actions, and a transform in progress lands through a hook the Mac sets at
+     launch); the rail's app actions a logged no-op on iPad until the sheets come;
+     the pressure-curve editor asking the engine's pen-key hook rather than the Mac's
+     tablet handler; a dozen `#if os` lines across eight files. iPad's own twins are
+     60 lines: a drag scroll that is a plain `ScrollView`, since iOS scrolls under the
+     Pencil and a finger alike, and a tilt pad drawn in SwiftUI with a drag, sharing
+     the Mac pad's geometry. `CanvasScreen` lays out the rail, bar, dock (on a
+     screen at least 1,600 pt wide, which no iPad is), pill and zoom HUD in SwiftUI
+     and builds the actions from the session: undo, redo, zoom, rotate, flip, guides.
+     The rail on iPad shows the tools the canvas there takes: brush, eraser, fill and
+     eyedropper, the last two ported from the Mac canvas (the 1×1 readback of the
+     composite; the background fill guarded by its undo step); selection, shape and
+     transform wait for their overlay. Verified on the iPad Pro 13-inch (M5)
+     simulator, each panel opened and used: brushes (tiles, grade, pressure), layers,
+     Adjust (the pad dragged to "→ 74% ↑ 57%" and levelled), Add (AI and stock),
+     Colour (a palette pick turning the bar's swatch red), the chrome hidden to the
+     pill and back, a fill landing red and undone, the eyedropper reading white; the
+     Mac suite's 285 tests pass. Two things iPad taught: a popover asked for below a
+     bar at the bottom of the screen opens off the screen, since iPad does not flip
+     it as the Mac does, so the bar's panels ask for above (`Chrome.barPopoverEdge`);
+     and the Add panel takes a couple of seconds to appear on the simulator, the AI
+     keys being read from the keychain as it opens. Guides are kept but not drawn on
+     iPad yet, and the panels' key notes are the Mac's until the keyboard commands.
+   - **3b. Documents.** The document browser as the app's root, `.artsy` in iCloud
+     Drive and On My iPad, new canvases at the Mac's sizes, the title in the bar.
+   - **3c. Sheets and the rest.** Studio, Settings and Shortcuts as sheets; the
+     keyboard commands; import and export through the share sheet and the document
+     picker; the AI and stock keys in Settings.
 4. **The phone layout.** The third breakpoint, finger-first; canvas size caps by
    device. Medium.
 5. **Shipping.** Bundle identifiers, the App Store listing, an archive-and-upload

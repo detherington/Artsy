@@ -1,4 +1,4 @@
-import AppKit
+import Foundation
 import CryptoKit
 import ImageIO
 import UniformTypeIdentifiers
@@ -19,7 +19,7 @@ final class BrushPreviewCache {
     private let renderer: BrushPreview?
     private let directory: URL?
     private let build: String
-    private var rendered: [UUID: (brush: BrushDescriptor, image: NSImage)] = [:]
+    private var rendered: [UUID: (brush: BrushDescriptor, image: PlatformImage)] = [:]
 
     /// `directory` keeps the tiles between launches; nil keeps them for this run only.
     init(renderer: BrushPreview?, directory: URL? = BrushPreviewCache.defaultDirectory, build: String = BrushPreviewCache.appBuild) {
@@ -40,18 +40,18 @@ final class BrushPreviewCache {
         Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "0"
     }
 
-    func image(for brush: BrushDescriptor) -> NSImage? {
+    func image(for brush: BrushDescriptor) -> PlatformImage? {
         if let hit = rendered[brush.id], hit.brush == brush { return hit.image }
         let file = self.file(for: brush)
         if let file, let kept = Self.read(file) {
-            let image = NSImage(cgImage: kept, size: Self.size)
+            let image = PlatformImage.from(kept, size: Self.size)
             rendered[brush.id] = (brush, image)
             return image
         }
         guard let renderer,
               let cg = renderer.render(brush: brush, color: StrokeColor(red: 1, green: 1, blue: 1, alpha: 1), size: 16, onPaper: false)
         else { return nil }
-        let image = NSImage(cgImage: cg, size: Self.size)
+        let image = PlatformImage.from(cg, size: Self.size)
         rendered[brush.id] = (brush, image)
         if let file { Self.write(cg, to: file) }
         return image

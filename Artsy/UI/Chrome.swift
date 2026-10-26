@@ -12,6 +12,14 @@ enum Chrome {
     /// The least a pen should have to hit.
     static let target: CGFloat = 44
     static let panelWidth: CGFloat = 340
+    /// Where a panel's arrow goes when it opens from the bar: on the Mac the panel is
+    /// asked for below and flipped above the bar by the system; on iPad it is asked for
+    /// above, since nothing flips it.
+    #if os(macOS)
+    static let barPopoverEdge: Edge = .top
+    #else
+    static let barPopoverEdge: Edge = .bottom
+    #endif
 
     static let background = Color(white: 0.13)
     static let panel = Color(white: 0.16)

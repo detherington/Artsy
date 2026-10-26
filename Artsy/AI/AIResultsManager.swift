@@ -1,5 +1,4 @@
 import Foundation
-import AppKit
 import ArtsyEngine
 
 final class AIResultsManager: ObservableObject {
@@ -79,9 +78,5 @@ final class AIResultsManager: ObservableObject {
         activeService.cancel()
         isGenerating = false
         progress = nil
-    }
-
-    func imageToNSImage(_ generatedImage: AIGeneratedImage) -> NSImage? {
-        NSImage(data: generatedImage.imageData)
     }
 }

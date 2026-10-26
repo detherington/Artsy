@@ -1,4 +1,6 @@
+#if canImport(AppKit)
 import AppKit
+#endif
 import SwiftUI
 import ArtsyEngine
 
@@ -188,7 +190,7 @@ enum BrushCardAction {
 /// brush marked. A right-click, which a pen gets by holding still, opens the menu.
 struct BrushCard: View {
     let brush: BrushDescriptor
-    let image: NSImage?
+    let image: PlatformImage?
     let number: Int?
     let isSelected: Bool
     let isUserBrush: Bool
@@ -203,7 +205,7 @@ struct BrushCard: View {
                 ZStack(alignment: .topTrailing) {
                     Group {
                         if let image {
-                            Image(nsImage: image)
+                            Image(platformImage: image)
                                 .resizable()
                                 .aspectRatio(contentMode: .fit)
                         } else {
