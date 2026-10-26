@@ -228,9 +228,31 @@ against the boundary rather than retrofitted to it.
      of it on this OS. The browser shows a generic icon for the package; a Quick Look
      thumbnail extension could show the document's own thumbnail (step 5). The app's
      own iCloud container is not set up; the browser reaches iCloud Drive without it.
-   - **3c. Sheets and the rest.** Studio, Settings and Shortcuts as sheets; the
-     keyboard commands; import and export through the share sheet and the document
-     picker; the AI and stock keys in Settings.
+   - **3c. Sheets and the rest.** **Done** (2026-10-26, branch `ipad-sheets`): the
+     Mac's app-level actions, which its chrome asks for by selector name, are answered
+     on iPad by the app model (`ArtsyiOS/AppActions.swift`) with sheets, pickers and
+     the share sheet over the canvas screen. The Studio, Settings (the AI and stock
+     keys included) and Keyboard Shortcuts are the Mac's views as form sheets, dark,
+     with a little room under the top edge where the Mac had a title bar; the bar's
+     document menu on iPad lists the exports, Settings and Shortcuts beside Documents
+     and Save now. Export PNG, PNG 16-bit and JPEG write the lit canvas to a scratch
+     folder and offer it through the share sheet, a popover from the menu's corner of
+     the bar; a brush exports the same way. Import an image is the Photos picker, the
+     picked photo a new layer fitted to the canvas with its undo step; import brushes
+     and tip or grain images are the document picker handing over copies, into the
+     library as on the Mac. The keys an iPad with a keyboard sends are the Mac's,
+     `ArtsyiOS/KeyCommands.swift`, as key commands on the canvas screen's controller:
+     the tool keys (which wait for a stroke to end), size and opacity, the colours,
+     the nine brushes, Tab for the chrome, and the ⌘ keys for undo, zoom, rotation,
+     flip, grid, save, documents, exports, Studio, Settings and Shortcuts. One thing
+     iPad taught: a panel's row closes the panel only on the next layout pass, and a
+     sheet or picker put up on the panel in the meantime goes down with it (the Photos
+     picker's view service was torn down the instant it came up), so every
+     presentation waits for the panel to go first. Verified on the simulator: E switching to the
+     eraser from the keyboard; Settings, Shortcuts and the Studio as sheets; Export
+     PNG offering "Untitled 2, PNG Image, 78 KB" in the share sheet; a photo placed as
+     a layer. The Shortcuts sheet still lists the Mac's keys, S, U, T, H, Space and
+     ⌥-click among them, which iPad does not answer yet.
 4. **The phone layout.** The third breakpoint, finger-first; canvas size caps by
    device. Medium.
 5. **Shipping.** Bundle identifiers, the App Store listing, an archive-and-upload

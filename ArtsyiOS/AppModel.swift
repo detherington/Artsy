@@ -15,6 +15,12 @@ final class AppModel: ObservableObject {
     @Published private(set) var session: PaintingSession?
     /// Takes the canvas screen down; set by whoever put it up.
     var dismissCanvas: (() -> Void)?
+    /// The canvas screen's controller, which sheets, pickers and share sheets come up over.
+    weak var presenter: UIViewController?
+    /// The Studio's model while its sheet is up.
+    var studioModel: BrushStudioModel?
+    /// A picker's delegate while the picker is up.
+    var pickerDelegate: AnyObject?
 
     init() {
         do {
@@ -43,7 +49,7 @@ final class AppModel: ObservableObject {
         guard let context else { throw Failure.noEngine }
         if let open = session { open.close() }
         let session = try PaintingSession(.document(url), context: context, previews: previews) { [weak self] name in
-            self?.handle(app: name)
+            self?.app(name)
         }
         self.session = session
         return session
@@ -76,18 +82,6 @@ final class AppModel: ObservableObject {
         session.close { [weak self] in
             self?.session = nil
             self?.dismissCanvas?()
-        }
-    }
-
-    /// The app-level actions the chrome asks for by the Mac's selector names.
-    private func handle(app name: String) {
-        switch name {
-        case "handleSave":
-            session?.save()
-        case "handleOpen", "showNewCanvasDialog":
-            closeDocument()
-        default:
-            DiagnosticsLog.shared.note(.app, "\(name) is not on iPad yet")
         }
     }
 }

@@ -83,6 +83,13 @@ struct DocumentMenu: View {
             // The documents are the screen behind this one; saving is continuous
             Button("Documents") { actions.app("handleOpen") }
             Button("Save now") { actions.app("handleSave") }
+            Divider()
+            Button("Export PNG…") { actions.app("handleExportPNG") }
+            Button("Export PNG (16-bit)…") { actions.app("handleExportPNG16") }
+            Button("Export JPEG…") { actions.app("handleExportJPEG") }
+            Divider()
+            Button("Settings…") { actions.app("showSettings") }
+            Button("Keyboard Shortcuts…") { actions.app("showShortcuts") }
             #endif
             Divider()
             Text("\(Int(viewModel.canvasSize.width)) × \(Int(viewModel.canvasSize.height)) px, "

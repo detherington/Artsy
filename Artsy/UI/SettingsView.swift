@@ -2,6 +2,11 @@ import SwiftUI
 import ArtsyEngine
 
 struct SettingsView: View {
+    #if os(macOS)
+    private static let keychainNote = "Keys are stored securely in macOS Keychain."
+    #else
+    private static let keychainNote = "Keys are stored securely in the Keychain."
+    #endif
     @State private var selectedTab = 0
     @State private var openAIKey: String = ""
     @State private var googleKey: String = ""
@@ -17,7 +22,7 @@ struct SettingsView: View {
                 Text("API Keys")
                     .font(.headline)
 
-                Text("Keys are stored securely in macOS Keychain.")
+                Text(Self.keychainNote)
                     .font(.system(size: 13))
                     .foregroundColor(.secondary)
 

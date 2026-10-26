@@ -114,6 +114,12 @@ final class PaintingSession: ObservableObject {
         return actions
     }
 
+    /// Zooms about the middle of the view, for the keyboard.
+    func zoom(by factor: CGFloat) {
+        let bounds = paintingView.bounds
+        viewModel.transform.zoom(by: factor, at: CGPoint(x: bounds.midX, y: bounds.midY), viewSize: bounds.size)
+    }
+
     // MARK: - Saving
 
     /// Saves to the document's URL. The canvas is marked clean only if nothing changed
