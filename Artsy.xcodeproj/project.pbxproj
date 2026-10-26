@@ -7,6 +7,8 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		4A4F0601CD6C158BA7FAAA0E /* container-migration.plist in Resources */ = {isa = PBXBuildFile; fileRef = 0D6C27843CB56D18E7A7D7C8 /* container-migration.plist */; };
+		6FD53E16009C26930F3DEC6D /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 6AA862377DCB3A2A07C44316 /* PrivacyInfo.xcprivacy */; };
 		8C9D0E1F2A3B4C5D6E7F8A9B /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A9B5B66FC7F18B7121C9034F /* Assets.xcassets */; };
 		0CF5E7B6A65CFA6F66F18BB2 /* PencilTiltTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D897CE034798F52F728C0DCD /* PencilTiltTests.swift */; };
 		7A6EC18DAC4F5ED7A9B1D3F6 /* ArtsyEngine in Frameworks */ = {isa = PBXBuildFile; productRef = 8B7FD29EBD5A6FE8BAC2E4A7 /* ArtsyEngine */; };
@@ -77,6 +79,8 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		0D6C27843CB56D18E7A7D7C8 /* container-migration.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "container-migration.plist"; sourceTree = "<group>"; };
+		6AA862377DCB3A2A07C44316 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = "PrivacyInfo.xcprivacy"; sourceTree = "<group>"; };
 		D897CE034798F52F728C0DCD /* PencilTiltTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PencilTiltTests.swift; sourceTree = "<group>"; };
 		2B1F7C3E5D9A0F82B4C6E8A1 /* Artsy.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Artsy.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		85BEF4DB23BB7DC6815705C4 /* PressureFromSpeedTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PressureFromSpeedTests.swift; sourceTree = "<group>"; };
@@ -239,6 +243,8 @@
 		76AB9238CF5BF1DF52452A54 /* Resources */ = {
 			isa = PBXGroup;
 			children = (
+				0D6C27843CB56D18E7A7D7C8 /* container-migration.plist */,
+				6AA862377DCB3A2A07C44316 /* PrivacyInfo.xcprivacy */,
 				BB624EDD0614857BAEA2DD18 /* ArtsyDoc.icns */,
 				A9B5B66FC7F18B7121C9034F /* Assets.xcassets */,
 			);
@@ -365,6 +371,7 @@
 				55AABB0000000000000004AA /* Frameworks */,
 				CD7BD6BD4A23BDC30D55192C /* Resources */,
 				55AABB0000000000000005AA /* Embed Frameworks */,
+				A5E4589B09140199D781A980 /* Strip Sparkle keys for the App Store */,
 			);
 			buildRules = (
 			);
@@ -497,6 +504,8 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				4A4F0601CD6C158BA7FAAA0E /* container-migration.plist in Resources */,
+				6FD53E16009C26930F3DEC6D /* PrivacyInfo.xcprivacy in Resources */,
 				AA5A098CDBEB618185360A3E /* ArtsyDoc.icns in Resources */,
 				211333D0F25AD782C00CACCA /* Assets.xcassets in Resources */,
 			);
@@ -511,6 +520,29 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXResourcesBuildPhase section */
+
+/* Begin PBXShellScriptBuildPhase section */
+		A5E4589B09140199D781A980 /* Strip Sparkle keys for the App Store */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+				"$(TARGET_BUILD_DIR)/$(INFOPLIST_PATH)",
+			);
+			name = "Strip Sparkle keys for the App Store";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "# The App Store build has no Sparkle: the framework is excluded from the build, and here\n# its keys come out of the Info.plist so nothing in the bundle names an update feed.\nif [ \"$CONFIGURATION\" = \"AppStore\" ]; then\n  PLIST=\"$TARGET_BUILD_DIR/$INFOPLIST_PATH\"\n  for key in SUFeedURL SUPublicEDKey SUEnableAutomaticChecks SUScheduledCheckInterval; do\n    /usr/libexec/PlistBuddy -c \"Delete :$key\" \"$PLIST\" 2>/dev/null || true\n  done\nfi\n";
+		};
+/* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
 		0635D5A6E1AD94AB98E1DA3F /* Sources */ = {
@@ -895,6 +927,145 @@
 			};
 			name = Release;
 		};
+		C3BE445B6D7EC39FCA5A88E1 /* AppStore */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ARCHS = arm64;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = macosx;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_VERSION = 5.0;
+			};
+			name = AppStore;
+		};
+		3ACC4079D59EE50752A4805D /* AppStore */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = "Artsy/App/Artsy-AppStore.entitlements";
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = 8B29CDK832;
+				EXCLUDED_SOURCE_FILE_NAMES = Sparkle.framework;
+				COMBINE_HIDPI_IMAGES = YES;
+				FRAMEWORK_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(SRCROOT)/Artsy/Frameworks",
+				);
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = Artsy/App/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				METAL_LIBRARY_OUTPUT_DIR = "$(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)";
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				PRODUCT_BUNDLE_IDENTIFIER = com.artsy.app;
+				SDKROOT = macosx;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "$(inherited) APP_STORE";
+				SWIFT_VERSION = 5.9;
+			};
+			name = AppStore;
+		};
+		40712BFC67892345D9573A5B /* AppStore */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				COMBINE_HIDPI_IMAGES = YES;
+				FRAMEWORK_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(SRCROOT)/Artsy/Frameworks",
+				);
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@loader_path/../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.artsy.ArtsyTests;
+				SDKROOT = macosx;
+				SWIFT_VERSION = 5.9;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Artsy.app/Contents/MacOS/Artsy";
+			};
+			name = AppStore;
+		};
+		91EE5C55BC13E9752BC017B9 /* AppStore */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 2;
+				DEVELOPMENT_TEAM = 8B29CDK832;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = ArtsyiOS/Info.plist;
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight UIInterfaceOrientationPortrait";
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 0.9.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				PRODUCT_BUNDLE_IDENTIFIER = com.artsy.app;
+				PRODUCT_NAME = Artsy;
+				SDKROOT = iphoneos;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
+				SWIFT_VERSION = 5.9;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = AppStore;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -903,6 +1074,7 @@
 			buildConfigurations = (
 				E130B2C6A9858EE99CDE5C5D /* Debug */,
 				E7A32DEDFF8275F8AC598F0F /* Release */,
+				40712BFC67892345D9573A5B /* AppStore */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Debug;
@@ -912,6 +1084,7 @@
 			buildConfigurations = (
 				E68C5A5855BB400845A817D7 /* Debug */,
 				63FE9E7185DB7FF6E5B9C9AE /* Release */,
+				C3BE445B6D7EC39FCA5A88E1 /* AppStore */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Debug;
@@ -921,6 +1094,7 @@
 			buildConfigurations = (
 				015FA4CE9F0618B8F546662C /* Debug */,
 				814F59F3FC3DAAFE6CA38623 /* Release */,
+				3ACC4079D59EE50752A4805D /* AppStore */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Debug;
@@ -930,6 +1104,7 @@
 			buildConfigurations = (
 				AD9BF4BADF7C8BAADCE4A6C9 /* Debug */,
 				BEAC05CBEA8D9CBBEDF5B7DA /* Release */,
+				91EE5C55BC13E9752BC017B9 /* AppStore */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Debug;

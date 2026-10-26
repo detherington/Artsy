@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- The first time the sandboxed (App Store) build runs, macOS moves what the
+	     Developer ID build kept in the home Library into the app's container: the brush
+	     library with its textures, the stroke recordings, the diagnostics log, and the
+	     preferences. Ignored by the unsandboxed build. -->
+	<key>Move</key>
+	<array>
+		<string>${Library}/Application Support/Artsy</string>
+		<string>${Library}/Preferences/${BundleId}.plist</string>
+	</array>
+</dict>
+</plist>

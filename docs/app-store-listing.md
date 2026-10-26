@@ -2,6 +2,8 @@
 
 What the App Store listing for iPad and iPhone says, and the steps around it that are
 done by hand in App Store Connect. The build itself comes from `scripts/release-ios.sh`.
+The Mac joins the same record as its macOS platform; its build, sandbox and script are
+in `mac-app-store.md`, and what the listing needs for it is at the end of this page.
 
 ## Before the first upload, once
 
@@ -76,3 +78,21 @@ colour panel; Layers. Three to five of each.
   (OpenAI, Google or Unsplash) entered in Settings; the app works fully without them."
 - **Demo account:** none, there are no accounts.
 - **Sign-in:** none.
+
+## The Mac
+
+The Mac app shares the bundle ID, so it is not a second app: in App Store Connect the
+record gets the macOS platform (the app's page → the platform list's plus button →
+macOS), and the two are sold as one. The build comes from
+`scripts/release-mac-appstore.sh`; it is sandboxed, has no Sparkle, and is Apple silicon
+only, which the listing states as "Requires a Mac with Apple silicon".
+
+- **Screenshots:** 16:10, at 1280×800, 1440×900, 2560×1600 or 2880×1800. The same
+  scenes as the iPad's: a painting with the chrome up, the brush panel, the colour
+  panel, Layers beside the canvas in a wide window.
+- **Description and keywords:** the iPad's, with "iPad" read as "Mac" where it names the
+  device; the format line stays, since documents move between the two through iCloud
+  Drive.
+- **Review notes:** the same as iOS's (the AI and stock image panels need the reviewer's
+  own keys; the app works fully without them).
+- **Version:** the Mac's own, from `Artsy/App/Info.plist`; it need not match iOS's.
