@@ -202,8 +202,32 @@ against the boundary rather than retrofitted to it.
      and the Add panel takes a couple of seconds to appear on the simulator, the AI
      keys being read from the keychain as it opens. Guides are kept but not drawn on
      iPad yet, and the panels' key notes are the Mac's until the keyboard commands.
-   - **3b. Documents.** The document browser as the app's root, `.artsy` in iCloud
-     Drive and On My iPad, new canvases at the Mac's sizes, the title in the bar.
+   - **3b. Documents.** **Done** (2026-10-26, branch `ipad-documents`): the system's
+     document browser is the app's root, over iCloud Drive, On My iPad and any other
+     provider, and the canvas screen is presented over it for the document picked.
+     The app declares the `.artsy` package as its own document type (the Mac's
+     declarations in an `Info.plist` merged into the generated one), supports the
+     browser and opening in place, and exposes its folder in Files. A new document
+     comes from the browser's plus button through the Mac's new-canvas view as a
+     sheet, written blank at the chosen size into a temporary folder and moved by the
+     browser to where the user put it, then opened from there like any other. A
+     session is one open document: the URL's security scope held while it is open,
+     saved to its URL when it closes, every half minute between strokes when it has
+     been drawn on, when the app goes to the background, and on "Save now" in the
+     bar's document menu, which on iPad is "Documents" (back to the browser) and
+     "Save now". A save marks the canvas clean only if nothing changed while it was
+     in flight. The engine's document reads and the replacement at the end of a save
+     are under file coordination now, on both platforms, so a document in a
+     provider's folder is read after the provider has finished with it and replaced
+     whole. Verified on the simulator: a document created at 1,920×1,080 through the
+     sheet, named "Untitled 2" by the browser beside the step-2 document, drawn on,
+     closed through the menu (saved in 0.08 s), listed in Recents, reopened with its
+     stroke; a stroke then autosaved three seconds later when the timer came round.
+     Two things to check on a device: the browser shows the package's size as
+     exabytes on the simulator (104 KB on disk), and it ignores the dark style asked
+     of it on this OS. The browser shows a generic icon for the package; a Quick Look
+     thumbnail extension could show the document's own thumbnail (step 5). The app's
+     own iCloud container is not set up; the browser reaches iCloud Drive without it.
    - **3c. Sheets and the rest.** Studio, Settings and Shortcuts as sheets; the
      keyboard commands; import and export through the share sheet and the document
      picker; the AI and stock keys in Settings.

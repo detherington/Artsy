@@ -147,6 +147,13 @@
 			);
 			target = 1A0E6B2D4C8F9E71A3B5D7F0 /* ArtsyiOS */;
 		};
+		6A7B8C9D0E1F2A3B4C5D6E7F /* Exceptions for "ArtsyiOS" folder in "ArtsyiOS" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = 1A0E6B2D4C8F9E71A3B5D7F0 /* ArtsyiOS */;
+		};
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -164,6 +171,9 @@
 		};
 		3C2A8D4F6E0B1A93C5D7F9B2 /* ArtsyiOS */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				6A7B8C9D0E1F2A3B4C5D6E7F /* Exceptions for "ArtsyiOS" folder in "ArtsyiOS" target */,
+			);
 			explicitFileTypes = {
 			};
 			explicitFolders = (
@@ -831,6 +841,7 @@
 				DEVELOPMENT_TEAM = 8B29CDK832;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = ArtsyiOS/Info.plist;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -861,6 +872,7 @@
 				DEVELOPMENT_TEAM = 8B29CDK832;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = ArtsyiOS/Info.plist;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
