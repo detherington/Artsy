@@ -117,6 +117,22 @@ public final class CanvasViewModel: ObservableObject {
         set { easesStrokesOverride = newValue }
     }
     private var easesStrokesOverride: Bool?
+    /// Pressure from speed when the input has no pressure of its own (`PressureFromSpeed`).
+    /// Follows the preference unless set explicitly.
+    public var pressureFromSpeed: Bool {
+        get { pressureFromSpeedOverride ?? AppPreferences.shared.pressureFromSpeed }
+        set { pressureFromSpeedOverride = newValue }
+    }
+    private var pressureFromSpeedOverride: Bool?
+    private var speedPressure = PressureFromSpeed()
+
+    /// The sample with its pressure from its speed, for an input that reports none.
+    private func substitutingPressure(_ point: StrokePoint) -> StrokePoint {
+        guard !strokeHasPressure, pressureFromSpeed else { return point }
+        let pressure = speedPressure.pressure(for: point)
+        return StrokePoint(position: point.position, pressure: pressure, tiltX: point.tiltX, tiltY: point.tiltY,
+                           rotation: point.rotation, timestamp: point.timestamp)
+    }
 
     /// Captures raw input for replay in tests; nil unless the `recordStrokes` default is on.
     public var recorder: StrokeRecorder?
@@ -219,7 +235,8 @@ public final class CanvasViewModel: ObservableObject {
         snapAnchor = nil
         strokeHasPressure = hasPressure
         recorder?.beginStroke(settingsFrom: self, firstPoint: rawPoint)
-        let point = snappedToGuides(rawPoint)
+        speedPressure = PressureFromSpeed()
+        let point = snappedToGuides(substitutingPressure(rawPoint))
         smoother.mode = smoothingMode
         smoother.strength = smoothingStrength
         smoother.zoom = transform.scale
@@ -301,7 +318,7 @@ public final class CanvasViewModel: ObservableObject {
         guard rawPoint.isFinite else { return }
         recorder?.append(rawPoint)
         guard isDrawing else { return }
-        let point = snappedToGuides(rawPoint)
+        let point = snappedToGuides(substitutingPressure(rawPoint))
         lastInput = point
         activePath?.append(smoother.filter(point))
         checkShapeSnap()
@@ -369,7 +386,8 @@ public final class CanvasViewModel: ObservableObject {
                       currentBrush.name, brushSize, samples.count, duration, duration > 0 ? Double(samples.count) / duration : 0,
                       Double(length), pressures.min() ?? 0, pressures.max() ?? 0, tilt, path.holdDuration,
                       restSamplesInStroke > 0 ? ", \(restSamplesInStroke) rest samples" : "",
-                      strokeHasPressure ? "" : ", no pressure", snappedShapeName.map { ", snapped to \($0)" } ?? "")
+                      strokeHasPressure ? "" : (pressureFromSpeed ? ", pressure from speed" : ", no pressure"),
+                      snappedShapeName.map { ", snapped to \($0)" } ?? "")
     }
 
     /// Call after the renderer has finalized the stroke — it still needs the points.

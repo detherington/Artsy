@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		094A65745A8381693D829CF9 /* PressureFromSpeedTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 85BEF4DB23BB7DC6815705C4 /* PressureFromSpeedTests.swift */; };
 		EDA24ED2DAF0D17775A4FBEB /* ArtsyEngine in Frameworks */ = {isa = PBXBuildFile; productRef = 3A06EA635639BA656876EB4D /* ArtsyEngine */; };
 		7812949F138273442D1277D9 /* ArtsyEngine in Frameworks */ = {isa = PBXBuildFile; productRef = 4A938C6F96F9D4BACE3ACF9C /* ArtsyEngine */; };
 		311ABE6545AF16F7D47EA06D /* CanvasDocument+Mac.swift in Sources */ = {isa = PBXBuildFile; fileRef = 60A2E8A9A44706CA5A4D217A /* CanvasDocument+Mac.swift */; };
@@ -104,6 +105,7 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		85BEF4DB23BB7DC6815705C4 /* PressureFromSpeedTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PressureFromSpeedTests.swift; sourceTree = "<group>"; };
 		60A2E8A9A44706CA5A4D217A /* CanvasDocument+Mac.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "CanvasDocument+Mac.swift"; sourceTree = "<group>"; };
 		2D6C5BEE2E8596CF33A28646 /* PencilGradeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PencilGradeTests.swift; sourceTree = "<group>"; };
 		A829962E610F7D639904DC5C /* BrushPreviewCache.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrushPreviewCache.swift; sourceTree = "<group>"; };
@@ -298,6 +300,7 @@
 		B48AF066E85C8962CFFD499C /* ArtsyTests */ = {
 			isa = PBXGroup;
 			children = (
+				85BEF4DB23BB7DC6815705C4 /* PressureFromSpeedTests.swift */,
 				2D6C5BEE2E8596CF33A28646 /* PencilGradeTests.swift */,
 				2A39BDB3A66ACC9CD8FE8318 /* BristleTests.swift */,
 				6BB0C198CA3F458657968930 /* WaterTests.swift */,
@@ -586,6 +589,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				094A65745A8381693D829CF9 /* PressureFromSpeedTests.swift in Sources */,
 				9A3199E1E388E3D93E343AE8 /* PencilGradeTests.swift in Sources */,
 				3C0FC76DDFC70BA93D60B293 /* BristleTests.swift in Sources */,
 				4C6191F508EFA01F3D483EAA /* WaterTests.swift in Sources */,

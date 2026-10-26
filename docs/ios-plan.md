@@ -91,7 +91,21 @@ against the boundary rather than retrofitted to it.
 
 0. **A pressure substitute for pressureless pens** (decision 3), on the Mac first
    where it can be tried with a mouse, since it belongs to the stroke path rather
-   than to any platform. Small. It can come before or after step 1.
+   than to any platform. Small. **Done** (2026-10-25, branch `pressure-from-speed`):
+   `PressureFromSpeed` in the engine's stroke input. When a stroke reports no pressure
+   (a mouse or trackpad on the Mac, the USB-C Pencil on the Duo) and the preference is
+   on (Settings → Tablet → "Press harder when slow", on by default), each sample's
+   pressure comes from its speed: full when still, 0.2 at 2,500 canvas pixels a
+   second, falling away faster at first (a walking pace of 500 px/s presses about
+   0.8), the speed smoothed over 80 ms so the pressure does not flicker, the first
+   sample counted as slow since the pen has just landed. The pressure curve applies
+   on top as for a real pen; a recording keeps the raw samples, so a replay derives
+   the same pressure again; pens with pressure are untouched. Measured with the
+   Pencil at 12 px on the Mac: the same line drawn over two seconds covers more than
+   half again what it covers drawn in a tenth, and with the substitute off, or with a
+   pen's own pressure, the two are equal. The mouse-strokes golden was re-recorded
+   after viewing: waves at a walking pace a touch firmer, fast flicks lighter and
+   thinner, clicks pressing fully. Tilt is left to the brushes' own tilt dynamics.
 1. **The engine as a package, and the engine tests on iPad.** Move the engine layers
    into `ArtsyEngine`; replace `NSImage` and `NSBitmapImageRep` with `CGImage` and
    ImageIO (five sites); `.managed` becomes a platform choice in the texture manager;
