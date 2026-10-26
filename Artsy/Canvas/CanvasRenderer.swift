@@ -469,7 +469,7 @@ final class CanvasRenderer: NSObject, MTKViewDelegate {
         let points = path.points
         guard !points.isEmpty else { return }
 
-        let brush = viewModel.currentBrush
+        let brush = viewModel.strokeBrush
         // An eraser stroke is built like any other; its coverage is subtracted when it is
         // merged, so the colour is irrelevant.
         let color = brush.category == .utility ? StrokeColor.white : viewModel.currentColor
@@ -644,7 +644,7 @@ final class CanvasRenderer: NSObject, MTKViewDelegate {
     /// How the stroke in progress combines with the layer it is on. Nil for a smudge brush,
     /// whose stroke is already in the layer.
     private func strokeOverlay(for viewModel: CanvasViewModel) -> CompositorPipeline.StrokeOverlay? {
-        let brush = viewModel.currentBrush
+        let brush = viewModel.strokeBrush
         var opacity = viewModel.brushOpacity
         var accumulates = false
         if case .stamp(let settings) = brush.rendering {
@@ -787,7 +787,7 @@ final class CanvasRenderer: NSObject, MTKViewDelegate {
             }
             activeLayerIndex = layerStack.activeLayerIndex
             strokeOpacity = viewModel.brushOpacity
-            brushID = viewModel.currentBrush.id
+            brushID = viewModel.strokeBrush.id
         }
     }
 
@@ -1252,12 +1252,12 @@ final class CanvasRenderer: NSObject, MTKViewDelegate {
 
         // Any brush but one that lays water writes the layer's pixels itself (at pen-up, or as
         // it goes), so water on the layer stops where it is first
-        if viewModel?.currentBrush.water == nil || viewModel?.currentBrush.category == .utility,
+        if viewModel?.strokeBrush.water == nil || viewModel?.strokeBrush.category == .utility,
            let layer = viewModel?.layerStack?.activeLayer {
             layer.settleWater()
         }
         // A smudge brush changes the layer as it goes, so keep a copy of it for the undo step.
-        if viewModel?.currentBrush.smudgeSettings != nil, let layer = viewModel?.layerStack?.activeLayer {
+        if viewModel?.strokeBrush.smudgeSettings != nil, let layer = viewModel?.layerStack?.activeLayer {
             if layerBeforeStroke == nil {
                 layerBeforeStroke = try? textureManager.makeCanvasTexture(
                     width: layer.texture.width, height: layer.texture.height, label: "LayerBeforeStroke"
@@ -1270,7 +1270,7 @@ final class CanvasRenderer: NSObject, MTKViewDelegate {
         }
         // Likewise a thick-paint brush changes the layer's height map as it goes, and so
         // does a smudge on a layer that has one.
-        if let brush = viewModel?.currentBrush, let layer = viewModel?.layerStack?.activeLayer,
+        if let brush = viewModel?.strokeBrush, let layer = viewModel?.layerStack?.activeLayer,
            let height = Self.laysThickPaint(brush) ? heightTexture(for: layer, commandBuffer: commandBuffer)
                         : (brush.smudgeSettings != nil ? layer.heightTexture : nil) {
             if heightBeforeStroke == nil {
@@ -1297,7 +1297,7 @@ final class CanvasRenderer: NSObject, MTKViewDelegate {
         if let strokeRegion {
             compositor.clear(activeStrokeTexture, regions: [strokeRegion], commandBuffer: commandBuffer)
             stale.append(strokeRegion)
-            if let brush = viewModel?.currentBrush, Self.laysThickPaint(brush),
+            if let brush = viewModel?.strokeBrush, Self.laysThickPaint(brush),
                let height = viewModel?.layerStack?.activeLayer?.heightTexture, let before = heightBeforeStroke,
                let blit = commandBuffer.makeBlitCommandEncoder() {
                 blit.copy(from: before,
@@ -1344,8 +1344,8 @@ final class CanvasRenderer: NSObject, MTKViewDelegate {
               let layerStack = viewModel.layerStack,
               let activeLayer = layerStack.activeLayer else { return }
 
-        let isErasing = viewModel.currentBrush.category == .utility
-        let isSmudging = viewModel.currentBrush.smudgeSettings != nil
+        let isErasing = viewModel.strokeBrush.category == .utility
+        let isSmudging = viewModel.strokeBrush.smudgeSettings != nil
         let commitStart = DispatchTime.now().uptimeNanoseconds
 
         guard let commandBuffer = context.commandQueue.makeCommandBuffer() else { return }
@@ -1361,21 +1361,21 @@ final class CanvasRenderer: NSObject, MTKViewDelegate {
             viewModel.undoManager.saveRegion(
                 of: activeLayer, in: layerStack, region: strokeRegion,
                 from: isSmudging ? layerBeforeStroke : nil,
-                heightFrom: activeLayer.heightTexture != nil && (Self.laysThickPaint(viewModel.currentBrush) || isSmudging)
+                heightFrom: activeLayer.heightTexture != nil && (Self.laysThickPaint(viewModel.strokeBrush) || isSmudging)
                     ? heightBeforeStroke : nil,
                 context: context,
-                description: isErasing ? "Erase" : viewModel.currentBrush.name,
+                description: isErasing ? "Erase" : viewModel.strokeBrush.name,
                 commandBuffer: commandBuffer
             )
             viewModel.markDirty()
             strokeContentVersion = viewModel.contentVersion
 
             let overlay = strokeOverlay(for: viewModel)
-            if let settings = viewModel.currentBrush.water, !isErasing, !isSmudging {
+            if let settings = viewModel.strokeBrush.water, !isErasing, !isSmudging {
                 // Water that moves: the stroke goes into the layer's water, which rewrites
                 // the layer's pixels as it flows and dries
                 if let region = waterRenderer.inject(
-                    stroke: activeStrokeTexture, region: strokeRegion, brush: viewModel.currentBrush, settings: settings,
+                    stroke: activeStrokeTexture, region: strokeRegion, brush: viewModel.strokeBrush, settings: settings,
                     opacity: overlay?.opacity ?? 1, on: activeLayer, dryingTime: dryingTime, textureManager: textureManager,
                     now: clock(), commandBuffer: commandBuffer
                 ) {
@@ -1405,7 +1405,7 @@ final class CanvasRenderer: NSObject, MTKViewDelegate {
                 )
             }
             // Wet paint stays wet for the brush's share of the drying time, from now
-            let wetness = viewModel.currentBrush.wetness
+            let wetness = viewModel.strokeBrush.wetness
             if wetness > 0, !isErasing, !isSmudging,
                let wetMap = wetTexture(for: activeLayer, commandBuffer: commandBuffer) {
                 let until = clock() - activeLayer.wetEpoch + Double(wetness) * dryingTime

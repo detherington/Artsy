@@ -294,6 +294,9 @@ struct BrushQuickSettings: View {
             PanelSectionLabel(viewModel.currentBrush.name)
             PanelSlider("Size", value: $viewModel.brushSize, range: 1...200, logarithmic: true) { "\(Int($0.rounded()))" }
             PanelSlider("Opacity", value: $viewModel.brushOpacity, range: 0.05...1) { "\(Int(($0 * 100).rounded()))%" }
+            if viewModel.currentBrush.graphite {
+                PencilGradeRow(viewModel: viewModel)
+            }
             HStack(spacing: 12) {
                 Text("Pressure")
                     .font(Chrome.font)
@@ -334,6 +337,39 @@ struct BrushQuickSettings: View {
                 actions.app("showBrushStudio")
             }
         }
+    }
+}
+
+/// A graphite brush's grade, 2H to 6B, as pills a pen can hit: the brush's own values are
+/// its HB, harder grades stay light and fine, softer ones go dark, broad and crumbly.
+struct PencilGradeRow: View {
+    @ObservedObject var viewModel: CanvasViewModel
+
+    static let labelWidth: CGFloat = 48
+
+    var body: some View {
+        HStack(spacing: 6) {
+            Text("Grade")
+                .font(Chrome.font)
+                .foregroundColor(Chrome.secondaryText)
+                .frame(width: Self.labelWidth, alignment: .leading)
+            ForEach(PencilGrade.shown) { grade in
+                let selected = viewModel.pencilGrade == grade
+                Button(action: { viewModel.pencilGrade = grade }) {
+                    Text(grade.rawValue)
+                        .font(Chrome.valueFont)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 36)
+                        .background(RoundedRectangle(cornerRadius: 8).fill(selected ? Chrome.selected : Chrome.control))
+                        .contentShape(RoundedRectangle(cornerRadius: 8))
+                }
+                .buttonStyle(.plain)
+                .foregroundColor(selected ? Chrome.text : Chrome.secondaryText)
+                .help(grade.help)
+            }
+        }
+        .padding(.horizontal, 14)
+        .frame(height: Chrome.target)
     }
 }
 

@@ -7,6 +7,8 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		9A3199E1E388E3D93E343AE8 /* PencilGradeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2D6C5BEE2E8596CF33A28646 /* PencilGradeTests.swift */; };
+		E5F7D2631C9780EB1A31F057 /* PencilGrade.swift in Sources */ = {isa = PBXBuildFile; fileRef = CF9EB18B2200B84585D97D3B /* PencilGrade.swift */; };
 		D969D0FF0B1D76D63007CB5C /* BrushPreviewCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = A829962E610F7D639904DC5C /* BrushPreviewCache.swift */; };
 		1717E7277AF27D67DD22DCBB /* TiltPad.swift in Sources */ = {isa = PBXBuildFile; fileRef = CF83B64FDBB106B70676B892 /* TiltPad.swift */; };
 		0548AFCFA70E6B3F09AE3D59 /* ShortcutsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6266D6BE05C68A98A0E75B5E /* ShortcutsView.swift */; };
@@ -141,6 +143,8 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		2D6C5BEE2E8596CF33A28646 /* PencilGradeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PencilGradeTests.swift; sourceTree = "<group>"; };
+		CF9EB18B2200B84585D97D3B /* PencilGrade.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PencilGrade.swift; sourceTree = "<group>"; };
 		A829962E610F7D639904DC5C /* BrushPreviewCache.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrushPreviewCache.swift; sourceTree = "<group>"; };
 		CF83B64FDBB106B70676B892 /* TiltPad.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TiltPad.swift; sourceTree = "<group>"; };
 		6266D6BE05C68A98A0E75B5E /* ShortcutsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShortcutsView.swift; sourceTree = "<group>"; };
@@ -342,6 +346,7 @@
 		3DAA4D022C58EF9FAEB4B8AC /* Brushes */ = {
 			isa = PBXGroup;
 			children = (
+				CF9EB18B2200B84585D97D3B /* PencilGrade.swift */,
 				9C62A909BCD9D532B7728EE0 /* BrushDescriptor.swift */,
 				72646CFD240043CF20A1222F /* DabPlacer.swift */,
 				5DF19525F83000E8AE6C162A /* BrushDynamics.swift */,
@@ -424,6 +429,7 @@
 		B48AF066E85C8962CFFD499C /* ArtsyTests */ = {
 			isa = PBXGroup;
 			children = (
+				2D6C5BEE2E8596CF33A28646 /* PencilGradeTests.swift */,
 				2A39BDB3A66ACC9CD8FE8318 /* BristleTests.swift */,
 				6BB0C198CA3F458657968930 /* WaterTests.swift */,
 				A264135A219CBD8F095C7728 /* WetDryTests.swift */,
@@ -687,6 +693,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				E5F7D2631C9780EB1A31F057 /* PencilGrade.swift in Sources */,
 				D969D0FF0B1D76D63007CB5C /* BrushPreviewCache.swift in Sources */,
 				1717E7277AF27D67DD22DCBB /* TiltPad.swift in Sources */,
 				0548AFCFA70E6B3F09AE3D59 /* ShortcutsView.swift in Sources */,
@@ -776,6 +783,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				9A3199E1E388E3D93E343AE8 /* PencilGradeTests.swift in Sources */,
 				3C0FC76DDFC70BA93D60B293 /* BristleTests.swift in Sources */,
 				4C6191F508EFA01F3D483EAA /* WaterTests.swift in Sources */,
 				08CEC73C9C2CFFB22535AC10 /* WetDryTests.swift in Sources */,

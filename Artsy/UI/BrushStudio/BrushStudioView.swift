@@ -98,6 +98,7 @@ struct BrushStudioView: View {
     private var shapeSection: some View {
         Section("Shape") {
             slider("Hardness", model.binding(\.hardness), in: 0...1, percent: true)
+            Toggle("Graphite: takes a pencil grade, 2H to 6B, in the brush panel", isOn: model.binding(\.graphite))
 
             if model.stampSettings != nil {
                 Picker("Tip", selection: model.stampBinding(\.tip, default: .round)) {

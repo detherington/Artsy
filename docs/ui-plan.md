@@ -164,7 +164,9 @@ come first.
    card's menu: duplicate (into Mine, selected), reset size and smoothing, export,
    and delete for the user's own with a confirmation. The previews are the bar's
    cache, rendered once per brush at one size and kept in memory; on disk and per size
-   can wait until there are enough brushes to need it.
+   can wait until there are enough brushes to need it. Since 0.8.14 a graphite brush
+   (the Pencil, the Graphite Stick) has a Grade row under its sliders, 2H to 6B as
+   pills: a live control like size, not more cards (`drawing-engine-plan.md`, step 13).
 3. **The colour panel.** Medium. Done: `ColorPanelView` — a 260 pt saturation square
    with a hue strip beside it, the colour being made next to the one the panel opened
    with (a tap goes back to it), H, S, B and hex fields for the keyboard, the recent

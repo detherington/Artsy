@@ -28,6 +28,9 @@ struct RecordedStroke: Codable, Equatable {
     /// The canvas zoom the stroke was drawn at, which adaptive smoothing depends on. Absent
     /// in older recordings, which replay at whatever zoom the replayer has.
     var zoom: Double?
+    /// The pencil grade a graphite brush was at, "2H"..."6B"; nil for other brushes and
+    /// for recordings from before grades.
+    var grade: String?
     var points: [RecordedPoint]
 
     /// Snapshot the view model's current drawing settings; points are added as they arrive.
@@ -42,6 +45,7 @@ struct RecordedStroke: Codable, Equatable {
         self.symmetry = viewModel.symmetryMode.recordingKey
         self.hasPressure = viewModel.strokeHasPressure
         self.zoom = Double(viewModel.transform.scale)
+        self.grade = viewModel.currentBrush.graphite ? viewModel.pencilGrade.rawValue : nil
         self.points = points
     }
 
@@ -59,6 +63,7 @@ struct RecordedStroke: Codable, Equatable {
         viewModel.smoothingStrength = smoothingStrength
         viewModel.symmetryMode = SymmetryMode(recordingKey: symmetry)
         if let zoom { viewModel.transform.scale = CGFloat(zoom) }
+        viewModel.pencilGrade = grade.flatMap(PencilGrade.init(rawValue:)) ?? .hb
         return true
     }
 }

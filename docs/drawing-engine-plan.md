@@ -755,6 +755,44 @@ straight stroke one texture extruded.
   beside it. The relief test compares the lit and shaded halves on average, since a
   groove can make one column on the lit side as dark as the shaded edge.
 
+### 13. Pencil grades (small) — done, untested by hand
+
+More pencils, asked for as HB, 2B and the rest: not as more cards, but as a grade that
+is a live control on a graphite brush, the way its size is.
+
+- **The grade** (`PencilGrade`, `BrushDescriptor.graded(_:)`): 4H to 8B as a softness
+  from 0 to 1, with the seven the panel offers (2H, H, HB, B, 2B, 4B, 6B) as named
+  points; the brush's own values are its HB, and the grade scales them: how much
+  graphite a dab sheds (`flow`: 0.4× at 2H, 1.4× at 6B), how far a touch and a full
+  press reach into the paper (the pressure's opacity range, which for a height-grain
+  brush is also its reach: 0.7× and 0.9× at 2H, 1.6× and 1.15× at 6B), the pressure
+  the valleys take (`grain.depth`: as HB at 2H, 0.7× at 6B), the point's width (0.75×
+  to 1.5×), the edge (crisper to softer) and how uneven the deposit is (0.6× to 1.8×).
+  The first mapping capped a hard grade's opacity at half and got a 2H that barely
+  marked the paper at full pressure (0.13 coverage), because in this engine the
+  pressure's opacity is the reach: a hard lead digs in as well as any and sheds less,
+  so the cap moved to the deposit. Measured on a 12 px Pencil pressed fully: 2H 0.38,
+  HB 0.73, 6B 0.86; 6B at a light touch 0.56, so the soft grade keeps its range.
+- **Where it lives.** `CanvasViewModel.pencilGrade`, remembered per brush like size
+  and smoothing, and across launches in the preferences (`AppPreferences.pencilGrades`,
+  HB kept as the absence of an entry); `strokeBrush` is the current brush at its grade,
+  and it is what the renderer and the stroke's dynamics read. A recording keeps the
+  grade (`RecordedStroke.grade`); an older recording plays at HB. `remembersGrades`
+  is off for tests and previews, so neither reads nor writes the preferences. The
+  brush panel's quick settings show a Grade row of pills for a graphite brush
+  (`BrushDescriptor.graphite`: the Pencil and the Graphite Stick; a toggle in the
+  Studio's Shape section makes any brush one); the Studio's pad draws at the current
+  grade; the panel's tiles are the brushes at HB.
+- **Not done.** Graphite's sheen at heavy pressure (a gloss contribution from the
+  stroke, as thick paint has); soft grades smudging more readily (a friability the
+  Smudge brush would read); Conté and charcoal as hard, medium and soft on the same
+  control; a blending stump as a Smudge preset.
+- **Tests** (`PencilGradeTests`, `ShellTests`, `BrushGoldenTests`): HB is the brush and a
+  brush that is not graphite has no grade; the knobs move the right way from grade to
+  grade; the darkness numbers above; the grade is kept per brush and across launches
+  and a recording round-trips it; a tap on a pill sets the grade; a golden strip of the
+  seven grades, pressed from a touch to full, viewed before it was recorded.
+
 ## At the limits: 8192² with 12 layers
 
 Measured after step 6 opened these limits up (`testLargeCanvasCosts`, debug build, M4 Pro):

@@ -95,6 +95,23 @@ final class BrushGoldenTests: XCTestCase {
 
     /// A mouse has no pressure, so its strokes are eased in and out. Brushes whose size
     /// doesn't respond to pressure (Technical Pen) stay uniform.
+    /// The Pencil at every grade the panel offers, 2H down to 6B, each a stroke pressed
+    /// from a touch to full: hard grades stay light and on the paper's peaks, soft ones go
+    /// dark and broad.
+    func testPencilGrades() throws {
+        let harness = try EngineHarness(width: 512, height: 288)
+        harness.select(.pencil)
+        harness.viewModel.brushSize = 14
+        harness.viewModel.currentColor = .black
+        // The grid's origin is at the bottom, so the strip reads 2H at the top down to 6B
+        for (row, grade) in PencilGrade.shown.enumerated() {
+            harness.viewModel.pencilGrade = grade
+            let y = CGFloat(34 + (PencilGrade.shown.count - 1 - row) * 36)
+            harness.draw(StrokeFixtures.line(from: CGPoint(x: 40, y: y), to: CGPoint(x: 480, y: y), pressure: 0.15...1.0))
+        }
+        Golden.assertMatches(harness.displayed(), named: "pencil-grades")
+    }
+
     func testMouseStrokes() throws {
         let harness = try EngineHarness()
         harness.viewModel.currentColor = ink

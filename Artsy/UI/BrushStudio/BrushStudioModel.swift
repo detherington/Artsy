@@ -114,7 +114,7 @@ final class BrushStudioModel: ObservableObject {
     private func renderPreview() {
         guard let previewRenderer else { return }
         let color = viewModel.currentColor.alpha > 0 ? viewModel.currentColor : .black
-        if let image = previewRenderer.render(brush: brush, color: color, size: viewModel.brushSize) {
+        if let image = previewRenderer.render(brush: brush.graded(viewModel.pencilGrade), color: color, size: viewModel.brushSize) {
             preview = NSImage(cgImage: image, size: previewRenderer.size)
         }
     }

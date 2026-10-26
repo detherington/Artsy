@@ -23,10 +23,22 @@ final class CanvasViewModel: ObservableObject {
             brushSize = sizeByBrush[currentBrush.id] ?? currentBrush.baseSize
             smoothingByBrush[oldValue.id] = smoothingStrength
             smoothingStrength = smoothingByBrush[currentBrush.id] ?? currentBrush.smoothing
+            gradeByBrush[oldValue.id] = pencilGrade
+            pencilGrade = gradeByBrush[currentBrush.id] ?? (remembersGrades ? AppPreferences.shared.pencilGrade(for: currentBrush.id) : .hb)
         }
     }
     private var sizeByBrush: [UUID: Float] = [:]
     private var smoothingByBrush: [UUID: Float] = [:]
+    private var gradeByBrush: [UUID: PencilGrade] = [:]
+    /// The grade a graphite brush paints at (`PencilGrade`): a live control, like the size,
+    /// remembered per brush and across launches. HB for a brush that is not graphite.
+    @Published var pencilGrade: PencilGrade = .hb {
+        didSet { if remembersGrades { AppPreferences.shared.setPencilGrade(pencilGrade, for: currentBrush.id) } }
+    }
+    /// Whether grades are kept in the preferences; off for tests and previews.
+    var remembersGrades = true
+    /// The brush as it paints: the current brush at its grade.
+    var strokeBrush: BrushDescriptor { currentBrush.graded(pencilGrade) }
     @Published var currentColor: StrokeColor = .black
     @Published var pressureCurve: PressureCurve = .linear
     @Published var brushSize: Float = 12
@@ -185,6 +197,7 @@ final class CanvasViewModel: ObservableObject {
         // Apply user preferences
         let prefs = AppPreferences.shared
         self.currentBrush = prefs.defaultBrush
+        self.pencilGrade = prefs.pencilGrade(for: prefs.defaultBrush.id)
         self.brushSize = Float(prefs.defaultBrushSize)
         self.smoothingMode = prefs.smoothingMode
         self.smoothingStrength = prefs.defaultBrush.smoothing
@@ -211,7 +224,7 @@ final class CanvasViewModel: ObservableObject {
         let path = StrokePath(style: StrokePath.Style(
             brushSize: brushSize,
             pressureCurve: pressureCurve,
-            dynamics: currentBrush.pressureDynamics,
+            dynamics: strokeBrush.pressureDynamics,
             tilt: currentBrush.tiltDynamics,
             velocity: currentBrush.velocityDynamics,
             spraysWhileResting: { if case .stamp(let s) = currentBrush.rendering { return s.holdRate > 0 } else { return false } }(),

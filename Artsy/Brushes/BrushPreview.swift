@@ -14,6 +14,7 @@ final class BrushPreview {
         self.size = size
         viewModel = CanvasViewModel(canvasSize: size)
         viewModel.recorder = nil
+        viewModel.remembersGrades = false
         viewModel.smoothingMode = .none
         viewModel.symmetryMode = .off
         viewModel.easesStrokesWithoutPressure = false
