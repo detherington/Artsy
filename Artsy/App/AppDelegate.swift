@@ -1,7 +1,9 @@
 import AppKit
 import Combine
 import MetalKit
+#if !APP_STORE
 import Sparkle
+#endif
 import SwiftUI
 import UniformTypeIdentifiers
 import ArtsyEngine
@@ -13,12 +15,16 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private var newCanvasPanel: NSPanel?
     /// Keeps `viewModel.isDirty` → `window.isDocumentEdited` bindings alive per window.
     private var dirtyObservations: [ObjectIdentifier: AnyCancellable] = [:]
+    #if !APP_STORE
     /// Sparkle updater — starts checking on launch, exposes "Check for Updates…" action.
+    /// The App Store build has none: the store updates it, and the sandbox would not let
+    /// Sparkle replace the app anyway.
     private lazy var updaterController: SPUStandardUpdaterController = SPUStandardUpdaterController(
         startingUpdater: true,
         updaterDelegate: nil,
         userDriverDelegate: nil
     )
+    #endif
 
     /// True when the app was launched only to host the unit tests.
     private static let isHostingTests = ProcessInfo.processInfo.environment.keys.contains { $0.hasPrefix("XCTest") }
@@ -42,7 +48,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // can be replayed here
         UserDefaults.standard.register(defaults: ["recordStrokes": true])
         buildMenuBar()
+        #if !APP_STORE
         _ = updaterController // instantiate → starts background update checks
+        #endif
 
         do {
             metalContext = try MetalContext()
@@ -396,6 +404,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         appMenu.addItem(withTitle: "About Artsy", action: #selector(NSApplication.orderFrontStandardAboutPanel(_:)), keyEquivalent: "")
         appMenu.addItem(NSMenuItem.separator())
 
+        #if !APP_STORE
         // Check for Updates… (Sparkle)
         let checkUpdatesItem = NSMenuItem(
             title: "Check for Updates…",
@@ -406,6 +415,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         appMenu.addItem(checkUpdatesItem)
 
         appMenu.addItem(NSMenuItem.separator())
+        #endif
         // Settings
         appMenu.addItem(withTitle: "Settings...", action: #selector(showSettings), keyEquivalent: ",")
 

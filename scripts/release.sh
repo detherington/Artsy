@@ -43,11 +43,12 @@ say "Bumping version to $VERSION"
 BUILD_NUM=$(( $(/usr/libexec/PlistBuddy -c "Print :CFBundleVersion" Artsy/App/Info.plist) + 1 ))
 /usr/libexec/PlistBuddy -c "Set :CFBundleVersion $BUILD_NUM" Artsy/App/Info.plist
 
-# 2. Clean build Release
+# 2. Clean build Release, Apple silicon only (the engine's Float16 pixels have no x86_64;
+#    the engine package takes its architectures from the command line, not the project)
 say "Building Release"
 rm -rf build
 xcodebuild -project Artsy.xcodeproj -scheme Artsy -configuration Release -derivedDataPath build clean build \
-  CODE_SIGN_IDENTITY="-" CODE_SIGNING_REQUIRED=NO 2>&1 | grep -E "(error:|BUILD)" | tail -3
+  ARCHS=arm64 CODE_SIGN_IDENTITY="-" CODE_SIGNING_REQUIRED=NO 2>&1 | grep -E "(error:|BUILD)" | tail -3
 
 # 3. Sign Sparkle internals + framework + app with hardened runtime
 say "Codesigning (hardened runtime + release entitlements)"
