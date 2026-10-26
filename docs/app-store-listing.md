@@ -6,8 +6,9 @@ done by hand in App Store Connect. The build itself comes from `scripts/release-
 ## Before the first upload, once
 
 1. **The app record.** App Store Connect → My Apps → + → New App: iOS, name "Artsy",
-   primary language English, bundle ID `com.artsy.app` (registered by the first run of
-   the release script, or by hand under Certificates, Identifiers & Profiles), SKU
+   primary language English, bundle ID `com.artsy.app` (registered on the portal on
+   2026-10-26 as a universal App ID, through the App Store Connect API; an archive's
+   automatic provisioning only takes a wildcard profile and registers nothing), SKU
    `artsy-ios`. Full access.
 2. **The privacy policy URL.** The listing needs one. `docs/privacy-policy.md` is the
    text; it needs a home on the web, which the repository's GitHub Pages can be
