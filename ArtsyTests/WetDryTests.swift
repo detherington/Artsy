@@ -1,5 +1,8 @@
 import XCTest
+#if canImport(Artsy)
 @testable import Artsy
+#endif
+@testable import ArtsyEngine
 
 /// Wet and dry: paint that stays wet for a while, a loaded brush that picks up only wet
 /// paint, a wash that blends into wet paint and glazes dry paint, and drying on demand.

@@ -1,7 +1,10 @@
 import XCTest
 import AppKit
 import SwiftUI
+#if canImport(Artsy)
 @testable import Artsy
+#endif
+@testable import ArtsyEngine
 
 /// The chrome around the canvas, driven the way a pen drives it: taps and drags.
 final class ShellTests: XCTestCase {

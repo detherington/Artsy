@@ -1,5 +1,8 @@
 import XCTest
+#if canImport(Artsy)
 @testable import Artsy
+#endif
+@testable import ArtsyEngine
 
 final class UndoTests: XCTestCase {
     private func worstDifference(_ a: PixelGrid, _ b: PixelGrid) -> Float {

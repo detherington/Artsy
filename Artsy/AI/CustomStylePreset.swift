@@ -1,4 +1,5 @@
 import Foundation
+import ArtsyEngine
 
 struct CustomStylePreset: Identifiable, Codable, Equatable {
     let id: UUID

@@ -1,6 +1,9 @@
 import XCTest
 import simd
+#if canImport(Artsy)
 @testable import Artsy
+#endif
+@testable import ArtsyEngine
 
 final class CanvasTransformTests: XCTestCase {
     private let viewSize = CGSize(width: 800, height: 600)

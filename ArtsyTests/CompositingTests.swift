@@ -1,6 +1,9 @@
 import XCTest
 import AppKit
+#if canImport(Artsy)
 @testable import Artsy
+#endif
+@testable import ArtsyEngine
 
 /// Alpha handling from stroke shader to composite. Canvas textures are premultiplied;
 /// these pin down the cases that went wrong when stroke shaders returned straight alpha.
@@ -119,8 +122,8 @@ final class CompositingTests: XCTestCase {
         harness.draw(StrokeFixtures.line(from: CGPoint(x: 128, y: -50), to: CGPoint(x: 128, y: 562), pressure: 1...1))
 
         let thumbnail = try XCTUnwrap(harness.renderer.generateThumbnail(for: harness.drawingLayer))
-        XCTAssertEqual(thumbnail.size, NSSize(width: 64, height: 32))
-        let bitmap = NSBitmapImageRep(cgImage: try XCTUnwrap(thumbnail.cgImage(forProposedRect: nil, context: nil, hints: nil)))
+        XCTAssertEqual(CGSize(width: thumbnail.width, height: thumbnail.height), CGSize(width: 64, height: 32))
+        let bitmap = NSBitmapImageRep(cgImage: thumbnail)
         func brightness(_ x: Int, _ y: Int) -> CGFloat { bitmap.colorAt(x: x, y: y)?.redComponent ?? -1 }
         XCTAssertLessThan(brightness(8, 16), 0.1, "the band")
         XCTAssertGreaterThan(brightness(40, 16), 0.9, "bare layer")
@@ -129,7 +132,8 @@ final class CompositingTests: XCTestCase {
         // A canvas too small to need shrinking still gets one.
         let small = try EngineHarness(width: 100, height: 200)
         small.fill(small.drawingLayer, red: 0, green: 0, blue: 1)
-        XCTAssertEqual(try XCTUnwrap(small.renderer.generateThumbnail(for: small.drawingLayer)).size, NSSize(width: 32, height: 64))
+        let smallThumb = try XCTUnwrap(small.renderer.generateThumbnail(for: small.drawingLayer))
+        XCTAssertEqual(CGSize(width: smallThumb.width, height: smallThumb.height), CGSize(width: 32, height: 64))
     }
 
     // MARK: - Opacity slider

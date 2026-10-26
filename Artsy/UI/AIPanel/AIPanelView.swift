@@ -1,4 +1,5 @@
 import SwiftUI
+import ArtsyEngine
 
 struct AIPanelView: View {
     @ObservedObject var viewModel: CanvasViewModel

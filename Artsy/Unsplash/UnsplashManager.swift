@@ -1,5 +1,6 @@
 import Foundation
 import AppKit
+import ArtsyEngine
 
 @MainActor
 final class UnsplashManager: ObservableObject {

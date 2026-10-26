@@ -1,4 +1,5 @@
 import Foundation
+import ArtsyEngine
 
 final class OpenAIService: AIImageService {
     let name = "OpenAI"

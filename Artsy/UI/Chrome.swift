@@ -1,4 +1,5 @@
 import SwiftUI
+import ArtsyEngine
 
 /// The chrome's one visual language: sizes a pen can hit, the colours of the bar, the
 /// rail and the panels, and the buttons they are made of.

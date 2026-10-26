@@ -1,6 +1,7 @@
 import AppKit
 import Combine
 import SwiftUI
+import ArtsyEngine
 
 /// The window's contents: the canvas with the chrome around it. The tool rail on the
 /// left, the bar along the bottom, the Layers dock on the right when the window is wide

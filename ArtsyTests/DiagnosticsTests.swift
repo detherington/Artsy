@@ -1,6 +1,9 @@
 import XCTest
 import Metal
+#if canImport(Artsy)
 @testable import Artsy
+#endif
+@testable import ArtsyEngine
 
 /// The diagnostics log a session on another Mac brings back.
 final class DiagnosticsTests: XCTestCase {
@@ -23,12 +26,14 @@ final class DiagnosticsTests: XCTestCase {
 
         let text = try String(contentsOf: XCTUnwrap(log.fileURL), encoding: .utf8)
         XCTAssertTrue(text.contains("app      Artsy "), text)
-        XCTAssertTrue(text.contains("on macOS "), text)
+        XCTAssertTrue(text.contains("on \(DiagnosticsLog.platformName) "), text)
         XCTAssertTrue(text.contains("GPU \(EngineHarness.sharedContext.device.name)"), text)
         XCTAssertTrue(text.contains("settings: smoothing"), text)
         XCTAssertTrue(text.contains("stroke   Hard Round 12 px: 40 samples"), text)
         XCTAssertTrue(text.contains("error    saving Test.artsy: Failed to save document"), text)
-        XCTAssertEqual(text.components(separatedBy: "\n").filter { !$0.isEmpty }.count, 7, "one line each")
+        // The app, memory, GPU and settings lines, what the platform adds (the Mac: its
+        // screens), then the stroke and the error
+        XCTAssertEqual(text.components(separatedBy: "\n").filter { !$0.isEmpty }.count, 6 + DiagnosticsLog.platformDetails().count, "one line each")
     }
 
     func testFrameTimingsAreSummarisedEveryFewSeconds() {

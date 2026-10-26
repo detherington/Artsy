@@ -1,4 +1,5 @@
 import AppKit
+import ArtsyEngine
 
 final class TabletEventHandler {
 

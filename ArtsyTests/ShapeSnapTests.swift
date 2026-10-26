@@ -1,5 +1,8 @@
 import XCTest
+#if canImport(Artsy)
 @testable import Artsy
+#endif
+@testable import ArtsyEngine
 
 /// Hold the pen still at the end of a rough stroke and it snaps to the shape it was going for.
 final class ShapeSnapTests: XCTestCase {

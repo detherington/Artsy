@@ -1,5 +1,8 @@
 import XCTest
+#if canImport(Artsy)
 @testable import Artsy
+#endif
+@testable import ArtsyEngine
 
 /// Properties every built-in brush has to have, run over all of them: the sort of thing
 /// that is easy to prove for one brush and then quietly lost on another.

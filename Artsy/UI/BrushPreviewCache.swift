@@ -2,6 +2,7 @@ import AppKit
 import CryptoKit
 import ImageIO
 import UniformTypeIdentifiers
+import ArtsyEngine
 
 /// Stroke previews, one per brush, for the bar and the brush panel: the brush's stroke in
 /// white with its transparency, 180 by 60, for a dark ground. A tile is rendered the first

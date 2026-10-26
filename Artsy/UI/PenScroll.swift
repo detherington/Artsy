@@ -1,5 +1,6 @@
 import AppKit
 import SwiftUI
+import ArtsyEngine
 
 /// A scroll view that scrolls when its content is dragged, the way a list on a phone
 /// does, so a pen can scroll it. A pen's drag reaches AppKit as a mouse drag, not a

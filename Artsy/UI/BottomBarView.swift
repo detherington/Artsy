@@ -1,5 +1,6 @@
 import AppKit
 import SwiftUI
+import ArtsyEngine
 
 /// What the chrome knows about the window it is in.
 final class ChromeState: ObservableObject {

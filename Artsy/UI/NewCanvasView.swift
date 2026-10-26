@@ -1,4 +1,5 @@
 import SwiftUI
+import ArtsyEngine
 
 struct CanvasSizePreset: Identifiable {
     let id = UUID()

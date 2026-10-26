@@ -1,4 +1,5 @@
 import Foundation
+import ArtsyEngine
 
 final class GeminiService: AIImageService {
     let name = "Google"

@@ -1,5 +1,8 @@
 import XCTest
+#if canImport(Artsy)
 @testable import Artsy
+#endif
+@testable import ArtsyEngine
 
 /// A graphite brush's grade: HB is the brush itself, harder grades stay light and fine,
 /// softer ones go dark, broad and crumbly. The grade is remembered per brush and across

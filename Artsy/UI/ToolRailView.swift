@@ -1,4 +1,5 @@
 import SwiftUI
+import ArtsyEngine
 
 /// The tools, down the left of the window, each a button a pen can hit; a second tap
 /// on a tool with modes (select, shape) opens them. Undo and redo are at the bottom:

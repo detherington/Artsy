@@ -1,7 +1,10 @@
 import XCTest
 import AppKit
 import Metal
+#if canImport(Artsy)
 @testable import Artsy
+#endif
+@testable import ArtsyEngine
 
 /// End to end through the real view: mouse events in, pixels out. The other tests call the
 /// renderer directly; this one covers the event handlers and `draw(in:)` around it.

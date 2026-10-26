@@ -1,6 +1,9 @@
 import XCTest
 import CoreGraphics
+#if canImport(Artsy)
 @testable import Artsy
+#endif
+@testable import ArtsyEngine
 
 /// A long random session, as close as a machine gets to someone drawing for an hour: every
 /// brush and tool, layer operations, undo and redo, in a seeded order. Nothing may crash,

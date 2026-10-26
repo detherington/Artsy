@@ -2,6 +2,7 @@ import Foundation
 import AppKit
 import Combine
 import SwiftUI
+import ArtsyEngine
 
 /// The brush being edited in the Brush Studio: a working copy of the canvas's current brush.
 ///

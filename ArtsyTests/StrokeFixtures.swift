@@ -1,5 +1,8 @@
 import CoreGraphics
+#if canImport(Artsy)
 @testable import Artsy
+#endif
+@testable import ArtsyEngine
 
 extension BrushDescriptor {
     /// The brush with its tip one shape rather than a bundle of bristles, for tests about

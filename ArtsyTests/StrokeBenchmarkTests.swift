@@ -1,6 +1,9 @@
 import XCTest
 import Metal
+#if canImport(Artsy)
 @testable import Artsy
+#endif
+@testable import ArtsyEngine
 
 /// Timings for the hot paths of drawing. These print numbers rather than assert on them;
 /// look for the `BENCHMARK` lines in the test log. Debug builds are several times slower on

@@ -1,7 +1,10 @@
 import XCTest
 import AppKit
 import Compression
+#if canImport(Artsy)
 @testable import Artsy
+#endif
+@testable import ArtsyEngine
 
 /// Photoshop and Procreate brush files, built in the tests from the formats' descriptions.
 final class BrushImportTests: XCTestCase {

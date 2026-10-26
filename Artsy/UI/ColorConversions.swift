@@ -1,5 +1,6 @@
 import AppKit
 import SwiftUI
+import ArtsyEngine
 
 // Colour conversions between the engine's StrokeColor (Display P3) and the toolkits.
 

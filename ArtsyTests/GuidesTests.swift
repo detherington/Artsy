@@ -1,6 +1,9 @@
 import XCTest
 import AppKit
+#if canImport(Artsy)
 @testable import Artsy
+#endif
+@testable import ArtsyEngine
 
 /// A grid and guide lines over the canvas, which the pen snaps to.
 final class GuidesTests: XCTestCase {

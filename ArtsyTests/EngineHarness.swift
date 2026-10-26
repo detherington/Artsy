@@ -3,7 +3,10 @@ import Metal
 import CoreGraphics
 import ImageIO
 import UniformTypeIdentifiers
+#if canImport(Artsy)
 @testable import Artsy
+#endif
+@testable import ArtsyEngine
 
 /// Drives the real renderer without a window: replay strokes into it, read pixels back.
 ///

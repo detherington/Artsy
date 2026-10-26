@@ -1,5 +1,8 @@
 import XCTest
+#if canImport(Artsy)
 @testable import Artsy
+#endif
+@testable import ArtsyEngine
 
 /// Stamp brushes: dabs laid along the path, adding up within a stroke.
 final class StampBrushTests: XCTestCase {

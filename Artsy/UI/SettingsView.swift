@@ -1,4 +1,5 @@
 import SwiftUI
+import ArtsyEngine
 
 struct SettingsView: View {
     @State private var selectedTab = 0

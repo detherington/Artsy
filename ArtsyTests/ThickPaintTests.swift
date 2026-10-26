@@ -1,5 +1,8 @@
 import XCTest
+#if canImport(Artsy)
 @testable import Artsy
+#endif
+@testable import ArtsyEngine
 
 /// Thick paint pushed about: a dab moves the paint under it to its rim and ahead of it,
 /// bristles cut grooves, the light reads the surface, and a knife does nothing but push.

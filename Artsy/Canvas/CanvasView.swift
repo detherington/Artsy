@@ -1,6 +1,7 @@
 import AppKit
 import Combine
 import MetalKit
+import ArtsyEngine
 
 class CanvasView: MTKView {
 
