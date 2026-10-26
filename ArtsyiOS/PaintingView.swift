@@ -20,6 +20,9 @@ final class PaintingView: MTKView {
     /// Whether a finger draws; two fingers always pan, pinch and turn.
     var fingerPaints = true
 
+    /// The width the canvas was last fitted or laid out at, to tell a fold or a turn from
+    /// the chrome coming and going.
+    private var lastLayoutWidth: CGFloat = 0
     private var lastPinchScale: CGFloat = 1
     private var lastRotation: CGFloat = 0
     private var lastPan: CGPoint = .zero
@@ -52,6 +55,18 @@ final class PaintingView: MTKView {
     }
 
     required init(coder: NSCoder) { fatalError("init(coder:) is not supported") }
+
+    /// A fold, an unfold or a turn changes the width by a quarter or more: the canvas is
+    /// fitted again. The rail and bar coming and going change it less, and keep the view.
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        let width = bounds.width
+        guard width > 0 else { return }
+        if lastLayoutWidth > 0, abs(width - lastLayoutWidth) / lastLayoutWidth >= 0.25 {
+            viewModel?.zoomToFit(viewSize: bounds.size)
+        }
+        lastLayoutWidth = width
+    }
 
     // MARK: - Strokes
 

@@ -5,6 +5,11 @@ import ArtsyEngine
 final class ChromeState: ObservableObject {
     /// Wide enough for the Layers dock beside the canvas.
     @Published var isWide = false
+    /// Too narrow for the full bar: the quick controls as buttons with their values, the
+    /// panel buttons without labels (an iPad in portrait, a phone).
+    @Published var isCompact = false
+    /// A phone: no rail, the tools in a strip over the canvas, finger-sized targets.
+    @Published var isPhone = false
 }
 
 /// The bar along the bottom of the window: the document, then the four things a painter
@@ -20,6 +25,58 @@ struct BottomBarView: View {
     @State private var showingAdd = false
 
     var body: some View {
+        Group {
+            if chrome.isCompact {
+                compact
+            } else {
+                full
+            }
+        }
+        .padding(.horizontal, chrome.isPhone ? 6 : 10)
+        .frame(height: Chrome.barHeight)
+        .frame(maxWidth: .infinity)
+        .background(Chrome.background)
+    }
+
+    /// The compact bar: the same things, the quick values as buttons that open their
+    /// pill, the panel buttons as icons alone.
+    private var compact: some View {
+        let target = chrome.isPhone ? Chrome.compactTarget : Chrome.target
+        return HStack(spacing: chrome.isPhone ? 6 : 8) {
+            DocumentMenu(viewModel: viewModel, actions: actions, compact: true)
+            BrushPill(viewModel: viewModel, previews: previews, actions: actions, compact: true)
+            ValueButton(title: "Size", value: $viewModel.brushSize, range: 1...200, logarithmic: true, size: target) { "\(Int($0.rounded()))" }
+            ValueButton(title: "Opacity", value: $viewModel.brushOpacity, range: 0.05...1, logarithmic: false, size: target) { "\(Int(($0 * 100).rounded()))%" }
+            ColorSwatchButton(viewModel: viewModel)
+            Spacer(minLength: 4)
+            ChromeButton(systemImage: "square.3.layers.3d", badge: viewModel.layerStack?.layers.count, size: target, help: "Layers") {
+                showingLayers = true
+            }
+            .popover(isPresented: $showingLayers, arrowEdge: Chrome.barPopoverEdge) {
+                LayersPanelView(viewModel: viewModel, renderer: actions.renderer(), dockAvailable: false)
+                    .panelPresentation()
+            }
+            ChromeButton(systemImage: "slider.horizontal.3", size: target, help: "Symmetry, guides and the view") {
+                showingAdjust = true
+            }
+            .popover(isPresented: $showingAdjust, arrowEdge: Chrome.barPopoverEdge) {
+                AdjustPanelView(viewModel: viewModel, actions: actions)
+                    .panelPresentation()
+            }
+            ChromeButton(systemImage: "plus", size: target, help: "AI, stock images and imports") {
+                showingAdd = true
+            }
+            .popover(isPresented: $showingAdd, arrowEdge: Chrome.barPopoverEdge) {
+                AddPanelView(viewModel: viewModel, actions: actions, dismiss: { showingAdd = false })
+                    .panelPresentation()
+            }
+            ChromeButton(systemImage: "arrow.down.right.and.arrow.up.left", size: target, help: "Hide the interface") {
+                viewModel.toggleChrome()
+            }
+        }
+    }
+
+    private var full: some View {
         HStack(spacing: 10) {
             DocumentMenu(viewModel: viewModel, actions: actions)
             Spacer(minLength: 8)
@@ -39,27 +96,26 @@ struct BottomBarView: View {
             }
             .popover(isPresented: $showingLayers, arrowEdge: Chrome.barPopoverEdge) {
                 LayersPanelView(viewModel: viewModel, renderer: actions.renderer(), dockAvailable: chrome.isWide)
+                    .panelPresentation()
             }
             ChromeButton(systemImage: "slider.horizontal.3", label: "Adjust", help: "Symmetry, guides and the view") {
                 showingAdjust = true
             }
             .popover(isPresented: $showingAdjust, arrowEdge: Chrome.barPopoverEdge) {
                 AdjustPanelView(viewModel: viewModel, actions: actions)
+                    .panelPresentation()
             }
             ChromeButton(systemImage: "plus", label: "Add", help: "AI, stock images and imports") {
                 showingAdd = true
             }
             .popover(isPresented: $showingAdd, arrowEdge: Chrome.barPopoverEdge) {
                 AddPanelView(viewModel: viewModel, actions: actions, dismiss: { showingAdd = false })
+                    .panelPresentation()
             }
             ChromeButton(systemImage: "arrow.down.right.and.arrow.up.left", label: "Hide", help: "Hide the interface (Tab)") {
                 viewModel.toggleChrome()
             }
         }
-        .padding(.horizontal, 10)
-        .frame(height: Chrome.barHeight)
-        .frame(maxWidth: .infinity)
-        .background(Chrome.background)
     }
 }
 
@@ -68,6 +124,8 @@ struct BottomBarView: View {
 struct DocumentMenu: View {
     @ObservedObject var viewModel: CanvasViewModel
     let actions: ChromeActions
+    /// The icon alone, with a dot for unsaved changes.
+    var compact = false
 
     var body: some View {
         Menu {
@@ -98,12 +156,16 @@ struct DocumentMenu: View {
             HStack(spacing: 8) {
                 Image(systemName: "line.3.horizontal")
                     .font(.system(size: 16))
-                Text((viewModel.isDirty ? "• " : "") + viewModel.displayName)
-                    .font(Chrome.font)
-                    .lineLimit(1)
+                if compact {
+                    if viewModel.isDirty { Text("•").font(Chrome.font) }
+                } else {
+                    Text((viewModel.isDirty ? "• " : "") + viewModel.displayName)
+                        .font(Chrome.font)
+                        .lineLimit(1)
+                }
             }
             .foregroundColor(Chrome.text)
-            .padding(.horizontal, 10)
+            .padding(.horizontal, compact ? 6 : 10)
             .frame(height: 36)
         }
         .menuStyle(.borderlessButton)
@@ -120,6 +182,8 @@ struct BrushPill: View {
     @ObservedObject var viewModel: CanvasViewModel
     let previews: BrushPreviewCache
     let actions: ChromeActions
+    /// The stroke and the chevron, without the name.
+    var compact = false
     @State private var showing = false
 
     var body: some View {
@@ -131,15 +195,17 @@ struct BrushPill: View {
                         .aspectRatio(contentMode: .fit)
                         .frame(width: 54, height: 18)
                 }
-                Text(viewModel.currentBrush.name)
-                    .font(Chrome.font)
-                    .foregroundColor(Chrome.text)
-                    .lineLimit(1)
+                if !compact {
+                    Text(viewModel.currentBrush.name)
+                        .font(Chrome.font)
+                        .foregroundColor(Chrome.text)
+                        .lineLimit(1)
+                }
                 Image(systemName: "chevron.up")
                     .font(.system(size: 10, weight: .semibold))
                     .foregroundColor(Chrome.secondaryText)
             }
-            .padding(.horizontal, 12)
+            .padding(.horizontal, compact ? 8 : 12)
             .frame(height: 36)
             .background(Capsule().fill(Chrome.control))
             .contentShape(Capsule())
@@ -148,6 +214,43 @@ struct BrushPill: View {
         .help("Brush")
         .popover(isPresented: $showing, arrowEdge: Chrome.barPopoverEdge) {
             BrushPanelView(viewModel: viewModel, previews: previews, actions: actions, dismiss: { showing = false })
+                .panelPresentation()
+        }
+    }
+}
+
+/// A value on the compact bar: its number with its name under it, and a tap for the pill
+/// that drags it, in a popover that stays one on a phone.
+struct ValueButton: View {
+    let title: String
+    @Binding var value: Float
+    let range: ClosedRange<Float>
+    let logarithmic: Bool
+    var size: CGFloat = Chrome.target
+    let format: (Float) -> String
+    @State private var showing = false
+
+    var body: some View {
+        Button(action: { showing = true }) {
+            VStack(spacing: 1) {
+                Text(format(value))
+                    .font(Chrome.valueFont)
+                    .foregroundColor(Chrome.text)
+                Text(title)
+                    .font(.system(size: 9))
+                    .foregroundColor(Chrome.secondaryText)
+            }
+            .frame(width: size, height: size)
+            .background(RoundedRectangle(cornerRadius: 10).fill(Chrome.control))
+            .contentShape(RoundedRectangle(cornerRadius: 10))
+        }
+        .buttonStyle(.plain)
+        .help(title)
+        .popover(isPresented: $showing, arrowEdge: Chrome.barPopoverEdge) {
+            ValuePill(title: title, value: $value, range: range, logarithmic: logarithmic, format: format)
+                .padding(12)
+                .background(Chrome.panel)
+                .popoverStaysPopover()
         }
     }
 }
@@ -245,6 +348,7 @@ struct ColorSwatchButton: View {
                     color: Binding(get: { viewModel.swapBackgroundColor }, set: { viewModel.swapBackgroundColor = $0 }),
                     viewModel: viewModel, dismiss: { showingBackground = false }
                 )
+                .panelPresentation()
             }
             Button(action: { showingForeground = true }) {
                 RoundedRectangle(cornerRadius: 5)
@@ -260,6 +364,7 @@ struct ColorSwatchButton: View {
                                    set: { viewModel.foregroundColor = $0; viewModel.currentColor = $0 }),
                     viewModel: viewModel, dismiss: { showingForeground = false }
                 )
+                .panelPresentation()
             }
         }
         .frame(width: 36, height: 36)

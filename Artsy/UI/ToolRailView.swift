@@ -48,6 +48,11 @@ struct ToolRailView: View {
             modesFor = tool
             return
         }
+        Self.select(tool, in: viewModel)
+    }
+
+    /// Takes the tool, with the brush that goes with it.
+    static func select(_ tool: ToolType, in viewModel: CanvasViewModel) {
         viewModel.currentTool = tool
         switch tool {
         case .brush:
@@ -83,6 +88,34 @@ struct ToolRailView: View {
             }
         }
         .padding(8)
+    }
+}
+
+/// The rail's tools in a strip over the canvas, for a phone, with undo and redo at the
+/// end: finger-sized, in the pill that the hidden chrome also uses.
+struct ToolStripView: View {
+    @ObservedObject var viewModel: CanvasViewModel
+    let actions: ChromeActions
+
+    var body: some View {
+        HStack(spacing: 2) {
+            ForEach(ToolRailView.tools) { tool in
+                ChromeButton(
+                    systemImage: tool == .fill ? nil : tool.iconName,
+                    image: tool == .fill ? "paintbucket" : nil,
+                    isSelected: viewModel.currentTool == tool,
+                    size: Chrome.compactTarget,
+                    help: tool.rawValue
+                ) {
+                    ToolRailView.select(tool, in: viewModel)
+                }
+            }
+            Divider().frame(height: 24).overlay(Chrome.hairline).padding(.horizontal, 2)
+            ChromeButton(systemImage: "arrow.uturn.backward", size: Chrome.compactTarget, help: "Undo", action: actions.undo)
+            ChromeButton(systemImage: "arrow.uturn.forward", size: Chrome.compactTarget, help: "Redo", action: actions.redo)
+        }
+        .padding(4)
+        .background(RoundedRectangle(cornerRadius: 14).fill(Chrome.background.opacity(0.92)))
     }
 }
 

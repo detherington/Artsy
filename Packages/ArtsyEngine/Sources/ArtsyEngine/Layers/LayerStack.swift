@@ -32,6 +32,21 @@ public final class LayerStack: ObservableObject {
         return max(2, min(maxLayers, memoryBudget / 2 / (pixels * 10)))
     }
 
+    /// The largest canvas, per side, a device should take: two layers, the composite with
+    /// its mip levels, the blend scratch and the stroke textures within half the budget,
+    /// so the undo history and a few more layers have the other half. Rounded down to 256
+    /// pixels, never below 1,024 nor above `maxCanvasSide`. The new-canvas dialog offers
+    /// nothing larger; a Mac is capped by the format, a phone by its memory.
+    public static func largestCanvasSide(memoryBudget: Int) -> Int {
+        guard memoryBudget > 0 else { return maxCanvasSide }
+        // Per pixel: two layers at 10 bytes, the composite and its height map with their
+        // mip levels, the blend scratch and two stroke textures
+        let bytesPerPixel = 2 * 10 + 10 * 4 / 3 + 8 * 3
+        let pixels = memoryBudget / 2 / bytesPerPixel
+        let side = Int(Double(pixels).squareRoot()) / 256 * 256
+        return min(maxCanvasSide, max(1024, side))
+    }
+
     /// Where new layers' textures are cleared. Set by whoever renders this stack; a new
     /// texture holds whatever its memory held before.
     public var commandQueue: MTLCommandQueue?

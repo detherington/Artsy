@@ -39,6 +39,12 @@ final class AppModel: ObservableObject {
         previews.warm(BrushLibrary.shared.all) { [weak self] in self?.session?.viewModel.isDrawing ?? false }
     }
 
+    /// The largest canvas, per side, this device takes: by the GPU's working set.
+    var largestCanvasSide: Int {
+        guard let context else { return LayerStack.maxCanvasSide }
+        return LayerStack.largestCanvasSide(memoryBudget: TextureManager.memoryBudget(for: context.device))
+    }
+
     enum Failure: LocalizedError {
         case noEngine
         var errorDescription: String? { "The drawing engine could not start" }

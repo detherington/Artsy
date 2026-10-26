@@ -16,6 +16,18 @@ final class ScaleTests: XCTestCase {
 
     // MARK: - Layers
 
+    func testTheLargestCanvasFollowsTheMemory() {
+        let gigabyte = 1 << 30
+        XCTAssertEqual(LayerStack.largestCanvasSide(memoryBudget: 16 * gigabyte), 8192, "a Mac is capped by the format, not its memory")
+        XCTAssertEqual(LayerStack.largestCanvasSide(memoryBudget: 4 * gigabyte), 5888)
+        XCTAssertEqual(LayerStack.largestCanvasSide(memoryBudget: 1 * gigabyte), 2816)
+        XCTAssertEqual(LayerStack.largestCanvasSide(memoryBudget: 0), 8192, "a device that says nothing is not short of memory")
+        XCTAssertEqual(LayerStack.largestCanvasSide(memoryBudget: 64 << 20), 1024, "never below 1,024")
+        // Two layers at the cap are within the layer limit's own arithmetic
+        let side = LayerStack.largestCanvasSide(memoryBudget: 4 * gigabyte)
+        XCTAssertGreaterThanOrEqual(LayerStack.layerLimit(forCanvasPixels: side * side, memoryBudget: 4 * gigabyte), 2)
+    }
+
     func testTheLayerLimitFollowsTheCanvasSizeAndTheMemory() throws {
         let gigabyte = 1 << 30
         XCTAssertEqual(LayerStack.layerLimit(forCanvasPixels: 2048 * 2048, memoryBudget: 16 * gigabyte), 32)

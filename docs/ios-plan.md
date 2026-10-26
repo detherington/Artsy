@@ -254,7 +254,35 @@ against the boundary rather than retrofitted to it.
      a layer. The Shortcuts sheet still lists the Mac's keys, S, U, T, H, Space and
      ⌥-click among them, which iPad does not answer yet.
 4. **The phone layout.** The third breakpoint, finger-first; canvas size caps by
-   device. Medium.
+   device. Medium. **Done** (2026-10-26, branch `phone-layout`): two breakpoints
+   below the painting display's, by the screen's width, in the chrome's state beside
+   the dock's. Under 1,000 pt (an iPad in portrait, a phone) the bar is the compact
+   one: the document menu as its icon with a dot for unsaved changes, the brush as
+   its stroke alone, size and opacity as buttons showing their values that open the
+   drag pill in a popover (kept a popover on a phone, not the sheet it would become),
+   the colour, and the panel buttons as icons without labels. Under 700 pt (a phone)
+   there is no rail: the tools sit in a strip over the top of the canvas with undo
+   and redo, finger-sized at 40 pt as the bar's buttons are there, and the panels
+   that open from the bar take the panel's colour as the sheets they become on a
+   compact screen. The Mac keeps the full bar whatever its window's width until the
+   pen display is in hand (UI plan step 7). Settings, Shortcuts and the Studio fill
+   the sheet they are given on iPad and iPhone rather than the Mac's fixed window
+   sizes. A fold, an unfold or a turn fits the canvas again: the painting view
+   watches its width and refits when it changes by a quarter or more, which the rail
+   and bar coming and going do not. The new-canvas sheet offers nothing larger than
+   the device takes: `LayerStack.largestCanvasSide(memoryBudget:)` gives the side at
+   which two layers, the composite with its mip levels, the scratch and the stroke
+   textures fit in half the GPU's working set, rounded down to 256, 1,024 at the
+   least and the format's 8,192 at most (5,888 for a 4 GB working set, 2,816 for
+   1 GB; tested); presets beyond it are not offered and a custom size is clamped,
+   with "Up to N × N on this device" said. What the iPhone Duo simulator taught: it
+   has two displays, 1,398×2,034 and 2,007×2,853 at 460 ppi, and runs the app on the
+   inner one at 669×917 pt (3x), which is regular in width, so the bar's panels stay
+   popovers there; the simulator offers no fold, so the outer display's 466×678 pt
+   is untested, and the layout was sized for it on paper (the compact bar at 40 pt
+   targets is 424 pt wide). Verified on the Duo simulator: the phone layout with
+   the strip and compact bar, the size popover, the Layers panel, a stroke, and the
+   turn to landscape.
 5. **Shipping.** Bundle identifiers, the App Store listing, an archive-and-upload
    script, TestFlight for the pen sessions, then review. Small to medium, plus
    Apple's time.

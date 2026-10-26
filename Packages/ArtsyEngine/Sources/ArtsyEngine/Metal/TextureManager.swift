@@ -12,7 +12,9 @@ public final class TextureManager {
     /// scratch textures have to share.
     /// What the GPU says it can hold; a quarter of the machine's memory where it says
     /// nothing (the iOS simulator reports a working set of zero).
-    public var memoryBudget: Int {
+    public var memoryBudget: Int { Self.memoryBudget(for: device) }
+
+    public static func memoryBudget(for device: MTLDevice) -> Int {
         let workingSet = Int(device.recommendedMaxWorkingSetSize)
         return workingSet > 0 ? workingSet : Int(ProcessInfo.processInfo.physicalMemory / 4)
     }
