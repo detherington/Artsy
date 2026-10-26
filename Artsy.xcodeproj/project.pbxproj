@@ -7,6 +7,8 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		0CF5E7B6A65CFA6F66F18BB2 /* PencilTiltTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D897CE034798F52F728C0DCD /* PencilTiltTests.swift */; };
+		7A6EC18DAC4F5ED7A9B1D3F6 /* ArtsyEngine in Frameworks */ = {isa = PBXBuildFile; productRef = 8B7FD29EBD5A6FE8BAC2E4A7 /* ArtsyEngine */; };
 		094A65745A8381693D829CF9 /* PressureFromSpeedTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 85BEF4DB23BB7DC6815705C4 /* PressureFromSpeedTests.swift */; };
 		EDA24ED2DAF0D17775A4FBEB /* ArtsyEngine in Frameworks */ = {isa = PBXBuildFile; productRef = 3A06EA635639BA656876EB4D /* ArtsyEngine */; };
 		7812949F138273442D1277D9 /* ArtsyEngine in Frameworks */ = {isa = PBXBuildFile; productRef = 4A938C6F96F9D4BACE3ACF9C /* ArtsyEngine */; };
@@ -105,6 +107,8 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		D897CE034798F52F728C0DCD /* PencilTiltTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PencilTiltTests.swift; sourceTree = "<group>"; };
+		2B1F7C3E5D9A0F82B4C6E8A1 /* Artsy.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Artsy.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		85BEF4DB23BB7DC6815705C4 /* PressureFromSpeedTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PressureFromSpeedTests.swift; sourceTree = "<group>"; };
 		60A2E8A9A44706CA5A4D217A /* CanvasDocument+Mac.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "CanvasDocument+Mac.swift"; sourceTree = "<group>"; };
 		2D6C5BEE2E8596CF33A28646 /* PencilGradeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PencilGradeTests.swift; sourceTree = "<group>"; };
@@ -194,12 +198,25 @@
 		4C0CCBA518F10051372D8279 /* BrushImportTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrushImportTests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
+/* Begin PBXFileSystemSynchronizedRootGroup section */
+		3C2A8D4F6E0B1A93C5D7F9B2 /* ArtsyiOS */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			explicitFileTypes = {
+			};
+			explicitFolders = (
+			);
+			path = ArtsyiOS;
+			sourceTree = "<group>";
+		};
+/* End PBXFileSystemSynchronizedRootGroup section */
+
 /* Begin PBXGroup section */
 		0400C96FBD03ED8163F6614F /* Products */ = {
 			isa = PBXGroup;
 			children = (
 				F3C850C56BFA6E2F424FDB16 /* Artsy.app */,
 				8B933F490F0C008A1263AE41 /* ArtsyTests.xctest */,
+				2B1F7C3E5D9A0F82B4C6E8A1 /* Artsy.app */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -251,6 +268,7 @@
 			children = (
 				C2912B189A0CE8F46F83BDD7 /* Artsy */,
 				B48AF066E85C8962CFFD499C /* ArtsyTests */,
+				3C2A8D4F6E0B1A93C5D7F9B2 /* ArtsyiOS */,
 				0400C96FBD03ED8163F6614F /* Products */,
 			);
 			sourceTree = "<group>";
@@ -300,6 +318,7 @@
 		B48AF066E85C8962CFFD499C /* ArtsyTests */ = {
 			isa = PBXGroup;
 			children = (
+				D897CE034798F52F728C0DCD /* PencilTiltTests.swift */,
 				85BEF4DB23BB7DC6815705C4 /* PressureFromSpeedTests.swift */,
 				2D6C5BEE2E8596CF33A28646 /* PencilGradeTests.swift */,
 				2A39BDB3A66ACC9CD8FE8318 /* BristleTests.swift */,
@@ -452,6 +471,29 @@
 			productReference = F3C850C56BFA6E2F424FDB16 /* Artsy.app */;
 			productType = "com.apple.product-type.application";
 		};
+		1A0E6B2D4C8F9E71A3B5D7F0 /* ArtsyiOS */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 9C8AE3AFCE6B7AF9CBD3F5B8 /* Build configuration list for PBXNativeTarget "ArtsyiOS" */;
+			buildPhases = (
+				4D3B9E5A7F1C2BA4D6E8A0C3 /* Sources */,
+				5E4CAF6B8A2D3CB5E7F9B1D4 /* Frameworks */,
+				6F5DB07C9B3E4DC6F8A0C2E5 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				3C2A8D4F6E0B1A93C5D7F9B2 /* ArtsyiOS */,
+			);
+			name = ArtsyiOS;
+			packageProductDependencies = (
+				8B7FD29EBD5A6FE8BAC2E4A7 /* ArtsyEngine */,
+			);
+			productName = ArtsyiOS;
+			productReference = 2B1F7C3E5D9A0F82B4C6E8A1 /* Artsy.app */;
+			productType = "com.apple.product-type.application";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -461,6 +503,9 @@
 				BuildIndependentTargetsInParallel = YES;
 				LastUpgradeCheck = 1500;
 				TargetAttributes = {
+					1A0E6B2D4C8F9E71A3B5D7F0 = {
+						ProvisioningStyle = Automatic;
+					};
 					FD4B5848719831076E1F6BD5 = {
 						ProvisioningStyle = Automatic;
 					};
@@ -485,6 +530,7 @@
 			targets = (
 				FD4B5848719831076E1F6BD5 /* Artsy */,
 				E22B2A1EC51D00F70382AB74 /* ArtsyTests */,
+				1A0E6B2D4C8F9E71A3B5D7F0 /* ArtsyiOS */,
 			);
 		};
 /* End PBXProject section */
@@ -521,6 +567,14 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		5E4CAF6B8A2D3CB5E7F9B1D4 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				7A6EC18DAC4F5ED7A9B1D3F6 /* ArtsyEngine in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXResourcesBuildPhase section */
@@ -530,6 +584,13 @@
 			files = (
 				AA5A098CDBEB618185360A3E /* ArtsyDoc.icns in Resources */,
 				211333D0F25AD782C00CACCA /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		6F5DB07C9B3E4DC6F8A0C2E5 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -589,6 +650,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				0CF5E7B6A65CFA6F66F18BB2 /* PencilTiltTests.swift in Sources */,
 				094A65745A8381693D829CF9 /* PressureFromSpeedTests.swift in Sources */,
 				9A3199E1E388E3D93E343AE8 /* PencilGradeTests.swift in Sources */,
 				3C0FC76DDFC70BA93D60B293 /* BristleTests.swift in Sources */,
@@ -629,6 +691,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		4D3B9E5A7F1C2BA4D6E8A0C3 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
@@ -652,6 +721,10 @@
 			productName = ArtsyEngine;
 		};
 		4A938C6F96F9D4BACE3ACF9C /* ArtsyEngine */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = ArtsyEngine;
+		};
+		8B7FD29EBD5A6FE8BAC2E4A7 /* ArtsyEngine */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = ArtsyEngine;
 		};
@@ -875,6 +948,66 @@
 			};
 			name = Release;
 		};
+		AD9BF4BADF7C8BAADCE4A6C9 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 8B29CDK832;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight UIInterfaceOrientationPortrait";
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 0.8.14;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				PRODUCT_BUNDLE_IDENTIFIER = com.artsy.app;
+				PRODUCT_NAME = Artsy;
+				SDKROOT = iphoneos;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
+				SWIFT_VERSION = 5.9;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		BEAC05CBEA8D9CBBEDF5B7DA /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 8B29CDK832;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight UIInterfaceOrientationPortrait";
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 0.8.14;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				PRODUCT_BUNDLE_IDENTIFIER = com.artsy.app;
+				PRODUCT_NAME = Artsy;
+				SDKROOT = iphoneos;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
+				SWIFT_VERSION = 5.9;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -901,6 +1034,15 @@
 			buildConfigurations = (
 				015FA4CE9F0618B8F546662C /* Debug */,
 				814F59F3FC3DAAFE6CA38623 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		9C8AE3AFCE6B7AF9CBD3F5B8 /* Build configuration list for PBXNativeTarget "ArtsyiOS" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				AD9BF4BADF7C8BAADCE4A6C9 /* Debug */,
+				BEAC05CBEA8D9CBBEDF5B7DA /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Debug;
