@@ -71,6 +71,7 @@ struct DocumentMenu: View {
 
     var body: some View {
         Menu {
+            #if os(macOS)
             Button("New Canvas…") { actions.app("showNewCanvasDialog") }
             Button("Open…") { actions.app("handleOpen") }
             Divider()
@@ -78,6 +79,11 @@ struct DocumentMenu: View {
             Button("Export PNG…") { actions.app("handleExportPNG") }
             Button("Export PNG (16-bit)…") { actions.app("handleExportPNG16") }
             Button("Export JPEG…") { actions.app("handleExportJPEG") }
+            #else
+            // The documents are the screen behind this one; saving is continuous
+            Button("Documents") { actions.app("handleOpen") }
+            Button("Save now") { actions.app("handleSave") }
+            #endif
             Divider()
             Text("\(Int(viewModel.canvasSize.width)) × \(Int(viewModel.canvasSize.height)) px, "
                  + ByteCountFormatter.string(fromByteCount: Int64(viewModel.memoryUseBytes), countStyle: .memory) + " in use")

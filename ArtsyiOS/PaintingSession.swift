@@ -3,78 +3,76 @@ import Combine
 import UIKit
 import ArtsyEngine
 
-/// The one document of this first slice: the engine's context, a view model and a
-/// renderer, opened from `Documents/Untitled.artsy` when there is one and made fresh
-/// otherwise, and saved there whenever the app goes away. The painting view and what
-/// the chrome asks of it are made here too, so the screen can compose them.
+/// A document on the screen: its view model and renderer over the app's Metal context,
+/// the painting view, and what the chrome asks of them. Opened from the URL the document
+/// browser hands over, or made blank at a size for a new document; saved to its URL when
+/// it has been drawn on, every half minute between strokes, when the app goes to the
+/// background, and when it closes.
 final class PaintingSession: ObservableObject {
-    let context: MetalContext?
+    let context: MetalContext
     let viewModel: CanvasViewModel
-    let renderer: CanvasRenderer?
-    let paintingView: PaintingView?
+    let renderer: CanvasRenderer
+    let paintingView: PaintingView
     let previews: BrushPreviewCache
     let chrome = ChromeState()
-    let actions: ChromeActions
-    /// What went wrong making the engine, if anything did: shown in place of the canvas.
-    let failure: String?
+    private(set) var actions = ChromeActions()
+    /// Whether the document's URL came under a security scope, given back when it closes.
+    private let scoped: Bool
+    private var autosave: Timer?
+    private var saving = false
 
-    static let canvasSize = CGSize(width: 2048, height: 1536)
-
-    static var documentURL: URL {
-        FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0].appendingPathComponent("Untitled.artsy")
+    enum Source {
+        /// A document on disk, from the browser.
+        case document(URL)
+        /// A new canvas, not yet anywhere.
+        case blank(CGSize)
     }
 
-    init() {
-        var context: MetalContext?
-        var viewModel: CanvasViewModel?
-        var renderer: CanvasRenderer?
-        var failure: String?
-        do {
-            let made = try MetalContext()
-            context = made
-            DiagnosticsLog.shared.launched(device: made.device)
-            if FileManager.default.fileExists(atPath: Self.documentURL.path),
-               let opened = try? CanvasDocument.load(from: Self.documentURL, metalContext: made) {
+    static let autosaveInterval: TimeInterval = 30
+
+    init(_ source: Source, context: MetalContext, previews: BrushPreviewCache, app: @escaping (String) -> Void) throws {
+        self.context = context
+        self.previews = previews
+        switch source {
+        case .document(let url):
+            let scoped = url.startAccessingSecurityScopedResource()
+            do {
+                let opened = try CanvasDocument.load(from: url, metalContext: context)
                 viewModel = opened.viewModel
                 renderer = opened.renderer
-                // The layer list shows what was opened, as on the Mac
-                if let stack = opened.viewModel.layerStack { opened.renderer.updateAllThumbnails(in: stack) }
-            } else {
-                let fresh = CanvasViewModel(canvasSize: Self.canvasSize)
-                let drawn = try CanvasRenderer(context: made, canvasSize: fresh.canvasSize)
-                drawn.viewModel = fresh
-                try drawn.setupLayerStack(for: fresh)
-                viewModel = fresh
-                renderer = drawn
+            } catch {
+                if scoped { url.stopAccessingSecurityScopedResource() }
+                throw error
             }
-        } catch {
-            failure = "\(error)"
-            DiagnosticsLog.shared.error(error, doing: "starting the engine")
+            self.scoped = scoped
+            viewModel.fileURL = url
+            // The layer list shows what was opened, as on the Mac
+            if let stack = viewModel.layerStack { renderer.updateAllThumbnails(in: stack) }
+        case .blank(let size):
+            let fresh = CanvasViewModel(canvasSize: size)
+            let drawn = try CanvasRenderer(context: context, canvasSize: size)
+            drawn.viewModel = fresh
+            try drawn.setupLayerStack(for: fresh)
+            viewModel = fresh
+            renderer = drawn
+            scoped = false
         }
-        let model = viewModel ?? CanvasViewModel(canvasSize: Self.canvasSize)
-        self.context = failure == nil ? context : nil
-        self.renderer = failure == nil ? renderer : nil
-        self.viewModel = model
-        self.failure = failure
-        model.currentBrush = .pencil
+        viewModel.markClean()
+        viewModel.currentBrush = .pencil
+        paintingView = PaintingView(frame: .zero, context: context, viewModel: viewModel, renderer: renderer)
+        actions = Self.actions(for: paintingView, viewModel: viewModel, app: app)
+        autosave = Timer.scheduledTimer(withTimeInterval: Self.autosaveInterval, repeats: true) { [weak self] _ in
+            self?.saveIfDirty()
+        }
+    }
 
-        if let context = self.context, let renderer = self.renderer {
-            let view = PaintingView(frame: .zero, context: context, viewModel: model, renderer: renderer)
-            paintingView = view
-            previews = BrushPreviewCache(renderer: try? BrushPreview(context: context, size: BrushPreviewCache.size))
-            actions = Self.actions(for: view, viewModel: model)
-        } else {
-            paintingView = nil
-            previews = BrushPreviewCache(renderer: nil)
-            actions = ChromeActions()
-        }
-        // The panel's tiles, ready before its first open; never under a stroke
-        previews.warm(BrushLibrary.shared.all) { model.isDrawing }
+    deinit {
+        autosave?.invalidate()
     }
 
     /// What the chrome asks of this screen: the canvas's size and undo, the view model's
-    /// view and guides. Weak, so the chrome keeps nothing alive.
-    private static func actions(for view: PaintingView, viewModel: CanvasViewModel) -> ChromeActions {
+    /// view and guides, the app's actions. Weak, so the chrome keeps nothing alive.
+    private static func actions(for view: PaintingView, viewModel: CanvasViewModel, app: @escaping (String) -> Void) -> ChromeActions {
         var actions = ChromeActions()
         actions.renderer = { [weak view] in view?.renderer }
         actions.undo = { [weak view, weak viewModel] in
@@ -112,17 +110,56 @@ final class PaintingSession: ObservableObject {
             guard let view else { return }
             viewModel?.addGuide(horizontal: horizontal, viewSize: view.bounds.size)
         }
+        actions.app = app
         return actions
     }
 
-    func save() {
-        guard let renderer else { return }
+    // MARK: - Saving
+
+    /// Saves to the document's URL. The canvas is marked clean only if nothing changed
+    /// while the save was in flight.
+    func save(completion: ((Bool) -> Void)? = nil) {
+        guard let url = viewModel.fileURL, !saving else { completion?(false); return }
+        saving = true
+        let version = viewModel.contentVersion
         // Going to the background, the app has only moments before it is suspended; a
         // background task buys the save the seconds it needs
-        let task = UIApplication.shared.beginBackgroundTask(withName: "Save Untitled.artsy")
-        CanvasDocument.saveAsync(renderer: renderer, viewModel: viewModel, to: Self.documentURL) { result in
-            if case .failure(let error) = result { DiagnosticsLog.shared.error(error, doing: "saving Untitled.artsy") }
+        let task = UIApplication.shared.beginBackgroundTask(withName: "Save \(url.lastPathComponent)")
+        CanvasDocument.saveAsync(renderer: renderer, viewModel: viewModel, to: url) { [weak self] result in
+            self?.saving = false
+            var saved = false
+            if case .success = result {
+                saved = true
+                if self?.viewModel.contentVersion == version { self?.viewModel.markClean() }
+            }
             if task != .invalid { UIApplication.shared.endBackgroundTask(task) }
+            completion?(saved)
+        }
+    }
+
+    /// Writes the document at `url`, wherever that is: a new document's first home.
+    func write(to url: URL, completion: @escaping (Result<Void, Error>) -> Void) {
+        CanvasDocument.saveAsync(renderer: renderer, viewModel: viewModel, to: url, completion: completion)
+    }
+
+    /// Between strokes, a dirty document is saved.
+    func saveIfDirty() {
+        guard viewModel.isDirty, !viewModel.isDrawing else { return }
+        save()
+    }
+
+    /// Saves if there is anything to save, then gives the document back.
+    func close(completion: @escaping () -> Void = {}) {
+        autosave?.invalidate()
+        autosave = nil
+        let finish = { [self] in
+            if scoped, let url = viewModel.fileURL { url.stopAccessingSecurityScopedResource() }
+            completion()
+        }
+        if viewModel.isDirty {
+            save { _ in finish() }
+        } else {
+            finish()
         }
     }
 }

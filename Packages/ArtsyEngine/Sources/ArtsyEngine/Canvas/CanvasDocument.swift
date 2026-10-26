@@ -220,14 +220,23 @@ public final class CanvasDocument {
                     try? writeCGImageAsPNG(scaled, to: thumbnailURL)
                 }
 
-                // 4. All of it is there: it takes the document's place
-                do {
-                    if fm.fileExists(atPath: url.path) {
-                        _ = try fm.replaceItemAt(url, withItemAt: bundleURL, backupItemName: nil, options: [])
-                    } else {
-                        try fm.moveItem(at: bundleURL, to: url)
+                // 4. All of it is there: it takes the document's place, under file
+                // coordination so a document in iCloud Drive or another provider's folder
+                // is replaced whole and the provider told
+                var coordinationError: NSError?
+                var replaceError: Error?
+                NSFileCoordinator(filePresenter: nil).coordinate(writingItemAt: url, options: .forReplacing, error: &coordinationError) { target in
+                    do {
+                        if fm.fileExists(atPath: target.path) {
+                            _ = try fm.replaceItemAt(target, withItemAt: bundleURL, backupItemName: nil, options: [])
+                        } else {
+                            try fm.moveItem(at: bundleURL, to: target)
+                        }
+                    } catch {
+                        replaceError = error
                     }
-                } catch {
+                }
+                if let error = coordinationError ?? replaceError {
                     discardStaging()
                     DispatchQueue.main.async { completion(.failure(error)) }
                     return
@@ -245,11 +254,18 @@ public final class CanvasDocument {
     /// `populate`, once a renderer has set the view model's layer stack up: the Mac app
     /// does that through its canvas view, a test through a renderer of its own.
     public static func read(from url: URL) throws -> DocumentData {
-        let docURL = url.appendingPathComponent("document.json")
-        guard FileManager.default.fileExists(atPath: docURL.path) else {
-            throw DocumentError.invalidFormat
+        // Under file coordination, so a provider finishes writing before the read
+        var coordinationError: NSError?
+        var data: Data?
+        var readError: Error?
+        NSFileCoordinator(filePresenter: nil).coordinate(readingItemAt: url, options: [], error: &coordinationError) { source in
+            let docURL = source.appendingPathComponent("document.json")
+            guard FileManager.default.fileExists(atPath: docURL.path) else { return }
+            do { data = try Data(contentsOf: docURL) } catch { readError = error }
         }
-        let doc = try JSONDecoder().decode(DocumentData.self, from: try Data(contentsOf: docURL))
+        if let error = coordinationError ?? readError { throw error }
+        guard let data else { throw DocumentError.invalidFormat }
+        let doc = try JSONDecoder().decode(DocumentData.self, from: data)
         guard (1...LayerStack.maxCanvasSide).contains(doc.canvasWidth),
               (1...LayerStack.maxCanvasSide).contains(doc.canvasHeight) else {
             throw DocumentError.invalidFormat

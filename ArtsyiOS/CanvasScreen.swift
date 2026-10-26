@@ -53,16 +53,8 @@ struct CanvasScreen: View {
         .animation(.easeInOut(duration: 0.2), value: viewModel.isChromeHidden)
     }
 
-    @ViewBuilder
     private var canvas: some View {
-        if let view = session.paintingView {
-            CanvasHost(view: view)
-                .ignoresSafeArea(edges: .top)
-        } else {
-            Text(session.failure ?? "The engine could not start")
-                .foregroundColor(Chrome.text)
-                .padding()
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-        }
+        CanvasHost(view: session.paintingView)
+            .ignoresSafeArea(edges: .top)
     }
 }
