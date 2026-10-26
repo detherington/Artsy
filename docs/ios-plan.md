@@ -137,7 +137,31 @@ against the boundary rather than retrofitted to it.
 2. **A canvas on iPad.** The iOS app with one document and nothing else: the canvas
    view, Pencil input with pressure, tilt, prediction and estimate updates, the
    gestures, the bottom bar with brush, size, opacity and colour. The pen notes come
-   from here. Large.
+   from here. Large. **Done** (2026-10-25, branch `ipad-canvas`), the first slice:
+   an `ArtsyiOS` target (iPad and iPhone, iOS 17, the same bundle identifier as the
+   Mac so the App Store sells one app) of four files and 430 lines over the engine
+   package, its sources a synchronised folder so nothing is registered by hand. The
+   canvas is an `MTKView` with the engine's renderer as its delegate exactly as on the
+   Mac; touches are handed to the engine in the Mac's y-up view space, so the one
+   `CanvasTransform` serves both platforms and the picture needs no flip. The Pencil
+   draws, its force as pressure, its altitude and azimuth as the two tilt components
+   (`PencilTilt`, a pure helper with tests), its roll on a Pencil Pro as rotation,
+   every coalesced sample taken; a stroke counts as having pressure only when the
+   Pencil reports force, so the USB-C Pencil and a finger get their pressure from
+   speed (step 0) without anything else knowing. One finger draws; two fingers pan,
+   pinch and turn through UIKit's recognisers, fingers only, so a resting hand never
+   moves the canvas under the pen. The bar along the bottom: the brush as a menu of
+   the library by category, size and opacity, the colour picker, undo and redo, and
+   the grade row when the brush is graphite. The one document is
+   `Documents/Untitled.artsy`, opened at launch through the headless `load` and saved
+   when the app goes to the background under a background task, since without one
+   the suspension won the race and a relaunch came up blank. Verified on the iPad Pro
+   13-inch (M5) simulator: a finger stroke logs as "pressure from speed, finger" and
+   draws where the finger went; undo and redo; pinch and turn; the brush menu; the
+   strokes back after a relaunch. The tilt tests pass on the simulator and the Mac
+   suite's 285 tests pass unchanged. Left for the pen in hand: predicted touches and
+   the Pencil's late-arriving force and azimuth (estimated-property updates), which
+   the simulator cannot exercise; the phone layout is step 4; the icon, step 5.
 3. **The rest of the painting app.** Documents through the document browser and
    iCloud Drive (the `.artsy` package is shared with the Mac as it is); layers,
    Adjust and Add; the Studio, Settings and Shortcuts as sheets; the keyboard

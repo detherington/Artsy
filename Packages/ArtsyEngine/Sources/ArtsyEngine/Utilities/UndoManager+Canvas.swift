@@ -117,8 +117,8 @@ public final class CanvasUndoManager {
         let description: String
     }
 
-    var canUndo: Bool { !undoStack.isEmpty }
-    var canRedo: Bool { !redoStack.isEmpty }
+    public var canUndo: Bool { !undoStack.isEmpty }
+    public var canRedo: Bool { !redoStack.isEmpty }
 
     /// Save the layer stack's state BEFORE performing an action: every layer's settings and
     /// order, the selection, and the pixels of the layers in `scope`. With `.everything`,
