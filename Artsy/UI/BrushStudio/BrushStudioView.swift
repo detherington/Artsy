@@ -33,7 +33,9 @@ struct BrushStudioView: View {
             }
             .formStyle(.grouped)
         }
+        #if os(macOS)
         .frame(minWidth: 420, idealWidth: 440, minHeight: 560)
+        #endif
         .background(Platform.windowBackground)
     }
 

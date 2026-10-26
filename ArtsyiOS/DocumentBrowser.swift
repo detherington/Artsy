@@ -59,7 +59,8 @@ struct DocumentBrowser: UIViewControllerRepresentable {
                 onCancel: {
                     sheet?.dismiss(animated: true)
                     importHandler(nil, .none)
-                }
+                },
+                maxSide: model.largestCanvasSide
             )
             .preferredColorScheme(.dark)
             let host = UIHostingController(rootView: picker)

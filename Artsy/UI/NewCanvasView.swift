@@ -29,17 +29,22 @@ struct NewCanvasView: View {
     let onCreate: (CGSize) -> Void
     let onOpen: (() -> Void)?
     let onCancel: () -> Void
+    /// The largest side this device takes; presets beyond it are not offered.
+    let maxSide: Int
 
-    init(onCreate: @escaping (CGSize) -> Void, onOpen: (() -> Void)?, onCancel: @escaping () -> Void) {
+    init(onCreate: @escaping (CGSize) -> Void, onOpen: (() -> Void)?, onCancel: @escaping () -> Void,
+         maxSide: Int = LayerStack.maxCanvasSide) {
         self.onCreate = onCreate
         self.onOpen = onOpen
         self.onCancel = onCancel
+        self.maxSide = maxSide
 
         // Initialize from user preferences — pick a preset that matches, or use custom
         let prefs = AppPreferences.shared
         let defW = prefs.defaultCanvasWidth
         let defH = prefs.defaultCanvasHeight
-        if let match = CanvasSizePreset.presets.first(where: { $0.width == defW && $0.height == defH }) {
+        if let match = CanvasSizePreset.presets.first(where: { $0.width == defW && $0.height == defH }),
+           max(match.width, match.height) <= maxSide {
             _selectedPreset = State(initialValue: match)
             _useCustom = State(initialValue: false)
         } else {
@@ -50,10 +55,15 @@ struct NewCanvasView: View {
         _customHeight = State(initialValue: "\(defH)")
     }
 
+    /// The presets this device takes.
+    private var presets: [CanvasSizePreset] {
+        CanvasSizePreset.presets.filter { max($0.width, $0.height) <= maxSide }
+    }
+
     private var resolvedSize: CGSize {
         if useCustom {
-            let w = max(64, min(8192, Int(customWidth) ?? 2048))
-            let h = max(64, min(8192, Int(customHeight) ?? 2048))
+            let w = max(64, min(maxSide, Int(customWidth) ?? 2048))
+            let h = max(64, min(maxSide, Int(customHeight) ?? 2048))
             return CGSize(width: w, height: h)
         } else if let preset = selectedPreset {
             return CGSize(width: preset.width, height: preset.height)
@@ -73,7 +83,7 @@ struct NewCanvasView: View {
                     .foregroundColor(.secondary)
 
                 LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 6) {
-                    ForEach(CanvasSizePreset.presets) { preset in
+                    ForEach(presets) { preset in
                         Button(action: {
                             selectedPreset = preset
                             useCustom = false
@@ -151,7 +161,7 @@ struct NewCanvasView: View {
                 }
 
                 if useCustom {
-                    Text("Max 8192 × 8192")
+                    Text(maxSide < LayerStack.maxCanvasSide ? "Up to \(maxSide) × \(maxSide) on this device" : "Max \(maxSide) × \(maxSide)")
                         .font(.system(size: 9))
                         .foregroundColor(.secondary)
                 }

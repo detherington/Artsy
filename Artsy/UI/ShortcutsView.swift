@@ -96,7 +96,7 @@ struct ShortcutsView: View {
                 .padding(.bottom, 12)
             }
         }
-        .frame(width: 420, height: 640)
+        .sheetFrame(width: 420, height: 640)
         .background(Chrome.panel)
     }
 }

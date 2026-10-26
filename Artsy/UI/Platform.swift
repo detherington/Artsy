@@ -82,6 +82,35 @@ enum Platform {
 }
 
 extension View {
+    /// A panel opened from the bar: a popover, or the sheet it becomes on a phone, in the
+    /// panel's own colour rather than the system's.
+    func panelPresentation() -> some View {
+        #if os(iOS)
+        presentationBackground(Chrome.panel)
+        #else
+        self
+        #endif
+    }
+
+    /// A small popover that stays one on a phone rather than becoming a sheet.
+    func popoverStaysPopover() -> some View {
+        #if os(iOS)
+        presentationCompactAdaptation(.popover)
+        #else
+        self
+        #endif
+    }
+
+    /// A sheet's frame: fixed on the Mac, where the sheet is a window of its own; no
+    /// wider than that on iPad and iPhone, where it fills the sheet it is given.
+    func sheetFrame(width: CGFloat, height: CGFloat) -> some View {
+        #if os(macOS)
+        frame(width: width, height: height)
+        #else
+        frame(maxWidth: width, maxHeight: .infinity)
+        #endif
+    }
+
     /// A toggle as a checkbox on the Mac, a switch where there are no checkboxes.
     func checkboxStyle() -> some View {
         #if canImport(AppKit)

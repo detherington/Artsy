@@ -9,8 +9,16 @@ enum Chrome {
     static let dockWidth: CGFloat = 300
     /// A window at least this wide can hold the Layers dock beside the canvas.
     static let dockMinimumWindowWidth: CGFloat = 1600
+    /// Narrower than this, the bar is the compact one: the quick controls as buttons
+    /// with their values, the panel buttons without labels (an iPad in portrait, a phone).
+    static let compactBarWidth: CGFloat = 1000
+    /// Narrower than this is a phone: no rail, the tools in a strip over the canvas, and
+    /// the bar's targets a finger's rather than a pen's.
+    static let phoneWidth: CGFloat = 700
     /// The least a pen should have to hit.
     static let target: CGFloat = 44
+    /// The least a finger should have to hit, where a phone's bar has no room for more.
+    static let compactTarget: CGFloat = 40
     static let panelWidth: CGFloat = 340
     /// Where a panel's arrow goes when it opens from the bar: on the Mac the panel is
     /// asked for below and flipped above the bar by the system; on iPad it is asked for
@@ -41,6 +49,7 @@ struct ChromeButton: View {
     var label: String? = nil
     var isSelected = false
     var badge: Int? = nil
+    var size: CGFloat = Chrome.target
     let help: String
     let action: () -> Void
 
@@ -64,7 +73,7 @@ struct ChromeButton: View {
                             .lineLimit(1)
                     }
                 }
-                .frame(width: Chrome.target, height: Chrome.target)
+                .frame(width: size, height: size)
                 .background(RoundedRectangle(cornerRadius: 10).fill(isSelected ? Chrome.selected : Color.clear))
 
                 if let badge, badge > 0 {

@@ -159,7 +159,7 @@ struct SettingsView: View {
             .tabItem { Label("Tablet", systemImage: "pencil.tip") }
             .tag(2)
         }
-        .frame(width: 480, height: 520)
+        .sheetFrame(width: 480, height: 520)
         .onAppear {
             openAIKeySaved = KeychainManager.shared.getAPIKey(for: .openAI) != nil
             googleKeySaved = KeychainManager.shared.getAPIKey(for: .google) != nil
