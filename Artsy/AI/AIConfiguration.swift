@@ -1,4 +1,5 @@
 import Foundation
+import ArtsyEngine
 
 final class AIConfiguration: ObservableObject {
     @Published var preferredService: AIServiceType = .openAI

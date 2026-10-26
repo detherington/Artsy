@@ -1,5 +1,6 @@
 import SwiftUI
 import AppKit
+import ArtsyEngine
 
 /// Compact color picker shown in a popover. Continuous interaction (SV square,
 /// hue slider, hex field) updates live; discrete selection (preset swatch,

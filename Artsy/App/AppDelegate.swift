@@ -4,6 +4,7 @@ import MetalKit
 import Sparkle
 import SwiftUI
 import UniformTypeIdentifiers
+import ArtsyEngine
 
 class AppDelegate: NSObject, NSApplicationDelegate {
     var metalContext: MetalContext!
@@ -23,6 +24,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private static let isHostingTests = ProcessInfo.processInfo.environment.keys.contains { $0.hasPrefix("XCTest") }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        // The engine asks the platform for the pen in use and for its own diagnostics lines
+        CanvasViewModel.currentPenKey = { TabletEventHandler.currentPenKey }
+        DiagnosticsLog.platformDetails = {
+            let screens = NSScreen.screens.map { "\(Int($0.frame.width))×\(Int($0.frame.height)) @\($0.backingScaleFactor)x" }
+            return ["screens " + (screens.isEmpty ? "none" : screens.joined(separator: ", "))]
+        }
         if Self.isHostingTests {
             // No windows, menus or update checks — the tests build what they need.
             NSApp.setActivationPolicy(.accessory)
@@ -330,7 +337,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         do {
             // The one loader, the same one the tests exercise: layers, their thickness, guides
-            let (viewModel, canvasView) = try CanvasDocument.load(from: url, metalContext: metalContext)
+            let (viewModel, canvasView) = try CanvasDocument.open(from: url, metalContext: metalContext)
             if let layerStack = viewModel.layerStack {
                 canvasView.renderer.updateAllThumbnails(in: layerStack)
             }

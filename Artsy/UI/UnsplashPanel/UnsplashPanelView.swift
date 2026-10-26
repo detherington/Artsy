@@ -1,4 +1,5 @@
 import SwiftUI
+import ArtsyEngine
 
 struct UnsplashPanelView: View {
     @ObservedObject var manager: UnsplashManager

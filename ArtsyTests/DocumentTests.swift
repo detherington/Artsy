@@ -1,7 +1,10 @@
 import XCTest
 import ImageIO
 import UniformTypeIdentifiers
+#if canImport(Artsy)
 @testable import Artsy
+#endif
+@testable import ArtsyEngine
 
 /// The document on disk: what a save leaves behind, what a load makes of it.
 final class DocumentTests: XCTestCase {

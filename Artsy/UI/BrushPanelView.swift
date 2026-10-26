@@ -1,5 +1,6 @@
 import AppKit
 import SwiftUI
+import ArtsyEngine
 
 /// The brush panel: a strip of categories over a grid of brush cards, each a stroke
 /// preview with the name under it, and the current brush's own settings beneath. A long

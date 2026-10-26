@@ -2,6 +2,7 @@ import Foundation
 import Metal
 import AppKit
 import CoreGraphics
+import ArtsyEngine
 
 /// Cut / Copy / Paste for canvas pixels.
 ///

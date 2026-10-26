@@ -1,6 +1,7 @@
 import AppKit
 import SwiftUI
 import simd
+import ArtsyEngine
 
 /// The paper's lean as a pad: the dot is where the paper leans to, and water runs that
 /// way. Put the pen where the lean should be and the dot follows; the centre is level,

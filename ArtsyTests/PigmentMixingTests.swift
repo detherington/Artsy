@@ -1,5 +1,8 @@
 import XCTest
+#if canImport(Artsy)
 @testable import Artsy
+#endif
+@testable import ArtsyEngine
 
 /// Pigment mixing: brushes whose colour mixes with the paint under it as paint would.
 final class PigmentMixingTests: XCTestCase {

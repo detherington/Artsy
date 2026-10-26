@@ -1,4 +1,5 @@
 import Foundation
+import ArtsyEngine
 
 protocol AIImageService {
     var name: String { get }

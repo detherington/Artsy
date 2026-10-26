@@ -1,6 +1,9 @@
 import XCTest
 import Metal
+#if canImport(Artsy)
 @testable import Artsy
+#endif
+@testable import ArtsyEngine
 
 /// A stroke is drawn piece by piece as samples arrive, and only the pixels it touched are
 /// recomposited each frame. None of that may show: the result has to be the same however

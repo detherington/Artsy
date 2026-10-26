@@ -1,4 +1,5 @@
 import AppKit
+import ArtsyEngine
 
 /// A ring the size of the brush tip, so the area a stroke will cover is visible before
 /// the pen touches down. Drawn white inside black so it reads on canvases of any color.

@@ -1,5 +1,8 @@
 import XCTest
+#if canImport(Artsy)
 @testable import Artsy
+#endif
+@testable import ArtsyEngine
 
 /// Golden-image tests: render fixed strokes through the real engine and compare with the
 /// PNGs in `ArtsyTests/Golden/`. They catch unintended changes to how brushes look.

@@ -1,4 +1,5 @@
 import AppKit
+import ArtsyEngine
 
 /// Cursor pool for the Transform tool. Each cursor is built once from an
 /// SF Symbol with a black halo stacked behind a white fill so it reads on

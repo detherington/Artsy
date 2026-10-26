@@ -1,4 +1,5 @@
 import AppKit
+import ArtsyEngine
 
 /// Cursor pool for each drawing tool. Each NSCursor is built once at startup
 /// from an SF Symbol (or asset image) rendered into an NSImage. A thick

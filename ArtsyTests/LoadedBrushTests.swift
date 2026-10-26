@@ -1,5 +1,8 @@
 import XCTest
+#if canImport(Artsy)
 @testable import Artsy
+#endif
+@testable import ArtsyEngine
 
 /// A loaded brush: paint that runs out along a stroke, picks up what it crosses, and comes
 /// back to its own colour.

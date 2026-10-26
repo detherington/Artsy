@@ -1,5 +1,8 @@
 import XCTest
+#if canImport(Artsy)
 @testable import Artsy
+#endif
+@testable import ArtsyEngine
 
 /// Smudge brushes: dabs that move the paint already on the layer.
 final class SmudgeBrushTests: XCTestCase {

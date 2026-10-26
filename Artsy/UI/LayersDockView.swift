@@ -1,4 +1,5 @@
 import SwiftUI
+import ArtsyEngine
 
 /// Layers beside the canvas on a wide window: the same panel as the pop-up, with a
 /// title and a way to put it back in the bar.

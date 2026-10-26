@@ -1,7 +1,10 @@
 import XCTest
 import SwiftUI
 import AppKit
+#if canImport(Artsy)
 @testable import Artsy
+#endif
+@testable import ArtsyEngine
 
 final class BrushStudioTests: XCTestCase {
     private var directory: URL!

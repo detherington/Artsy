@@ -1,4 +1,5 @@
 import SwiftUI
+import ArtsyEngine
 
 /// Edits the canvas's current brush, with a live preview. See `BrushStudioModel` for how
 /// changes reach the canvas and the library.

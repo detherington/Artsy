@@ -1,5 +1,6 @@
 import AppKit
 import SwiftUI
+import ArtsyEngine
 
 /// The colour panel: a saturation square with a hue strip beside it, the colour being
 /// made next to the one the panel opened with, fields for the keyboard, the recent

@@ -1,6 +1,7 @@
 import AppKit
 import SwiftUI
 import UniformTypeIdentifiers
+import ArtsyEngine
 
 /// What the layers dock and pop-up share: the selected layer's blend mode and opacity,
 /// the buttons that add, duplicate, merge and delete, and the list — rows a pen can hit,
@@ -149,7 +150,7 @@ struct LayerRow: View {
             ZStack {
                 RoundedRectangle(cornerRadius: 4).fill(Color(white: 0.3))
                 if let thumb = layer.thumbnail {
-                    Image(nsImage: thumb)
+                    Image(decorative: thumb, scale: 1)
                         .resizable()
                         .interpolation(.low)
                         .aspectRatio(contentMode: .fit)

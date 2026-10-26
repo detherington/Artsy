@@ -1,5 +1,8 @@
 import XCTest
+#if canImport(Artsy)
 @testable import Artsy
+#endif
+@testable import ArtsyEngine
 
 /// Water that moves: a wash spreads, runs with the tilt, settles its pigment as it dries
 /// — darkest at the edges, more in the paper's valleys — and a wet stroke into it shoves

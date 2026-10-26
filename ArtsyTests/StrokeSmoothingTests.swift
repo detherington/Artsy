@@ -1,5 +1,8 @@
 import XCTest
+#if canImport(Artsy)
 @testable import Artsy
+#endif
+@testable import ArtsyEngine
 
 final class StrokeSmoothingTests: XCTestCase {
     private func sample(_ x: CGFloat, _ y: CGFloat, pressure: Float = 0.6, time: Double) -> StrokePoint {

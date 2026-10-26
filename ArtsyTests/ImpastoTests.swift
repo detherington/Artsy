@@ -1,6 +1,9 @@
 import XCTest
 import Metal
+#if canImport(Artsy)
 @testable import Artsy
+#endif
+@testable import ArtsyEngine
 
 /// Thick paint: height maps written by impasto brushes, lit by the display, and carried
 /// through everything that moves paint.

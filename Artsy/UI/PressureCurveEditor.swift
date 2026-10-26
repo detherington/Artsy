@@ -1,4 +1,5 @@
 import SwiftUI
+import ArtsyEngine
 
 /// Maps the pen's pressure to the pressure the brush sees: a cubic Bézier with two handles
 /// to drag. Flattening the start makes a light touch count for more; steepening the end

@@ -1,6 +1,9 @@
 import XCTest
 import AppKit
+#if canImport(Artsy)
 @testable import Artsy
+#endif
+@testable import ArtsyEngine
 
 final class BrushLibraryTests: XCTestCase {
     private var directory: URL!

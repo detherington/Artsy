@@ -1,5 +1,6 @@
 import Foundation
 import AppKit
+import ArtsyEngine
 
 final class AIResultsManager: ObservableObject {
     @Published var results: [AIGeneratedImage] = []

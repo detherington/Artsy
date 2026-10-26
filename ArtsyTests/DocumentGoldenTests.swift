@@ -1,5 +1,8 @@
 import XCTest
+#if canImport(Artsy)
 @testable import Artsy
+#endif
+@testable import ArtsyEngine
 
 /// A document using every feature, saved and loaded, rendered the way the display shows it.
 /// Protects the file format and the whole render path at once.
@@ -73,7 +76,7 @@ final class DocumentGoldenTests: XCTestCase {
         XCTAssertEqual(loaded.viewModel.layerStack.layers[2].blendMode, .multiply)
         XCTAssertEqual(loaded.viewModel.guides, viewModel.guides)
         XCTAssertNotNil(loaded.viewModel.layerStack.layers[1].heightTexture, "the oil's thickness came back")
-        let reloaded = EngineHarness.shown(by: loaded.canvasView.renderer, relief: 1)
+        let reloaded = EngineHarness.shown(by: loaded.renderer, relief: 1)
         XCTAssertLessThan(worst(rendered, reloaded), 0.02)
     }
 }

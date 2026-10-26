@@ -1,5 +1,8 @@
 import XCTest
+#if canImport(Artsy)
 @testable import Artsy
+#endif
+@testable import ArtsyEngine
 
 final class StrokePathTests: XCTestCase {
     private let style = StrokePath.Style(brushSize: 20, pressureCurve: .linear,

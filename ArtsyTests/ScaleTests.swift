@@ -1,6 +1,9 @@
 import XCTest
 import ImageIO
+#if canImport(Artsy)
 @testable import Artsy
+#endif
+@testable import ArtsyEngine
 
 /// Big canvases and many layers: limits that follow memory, undo history that shares
 /// unchanged layers and stays under a cap, 16-bit export.

@@ -1,4 +1,5 @@
 import AppKit
+import ArtsyEngine
 
 /// Transparent overlay that renders:
 ///   - Marching ants for the active selection

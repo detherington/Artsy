@@ -1,5 +1,8 @@
 import XCTest
+#if canImport(Artsy)
 @testable import Artsy
+#endif
+@testable import ArtsyEngine
 
 /// Strokes that dry as a wash: glazing, wet edges and granulation.
 final class WetMediaTests: XCTestCase {

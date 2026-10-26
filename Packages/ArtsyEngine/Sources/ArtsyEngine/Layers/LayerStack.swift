@@ -1,0 +1,222 @@
+import Foundation
+import Metal
+
+public final class LayerStack: ObservableObject {
+    @Published public var layers: [Layer] = []
+    @Published public var activeLayerIndex: Int = 0
+
+    private let textureManager: TextureManager
+    private let canvasWidth: Int
+    private let canvasHeight: Int
+
+    /// The most layers any canvas may have.
+    public static let maxLayers = 32
+    /// Memory to size the layer limit by, in place of the device's; for tests.
+    public var memoryBudgetOverride: Int?
+
+    /// The largest canvas, per side: what the new-canvas dialog allows and a file may say.
+    public static let maxCanvasSide = 8192
+
+    /// Layers this canvas may have: up to `maxLayers`, fewer when more would not fit in
+    /// memory. A layer costs 8 bytes a pixel (plus 2 for thick paint), and undo history and
+    /// the stroke textures need room beside the layers.
+    public var layerLimit: Int {
+        Self.layerLimit(forCanvasPixels: canvasWidth * canvasHeight,
+                        memoryBudget: memoryBudgetOverride ?? textureManager.memoryBudget)
+    }
+
+    public static func layerLimit(forCanvasPixels pixels: Int, memoryBudget: Int) -> Int {
+        // A device that reports no budget is not short of memory, just silent about it
+        guard memoryBudget > 0 else { return maxLayers }
+        // Half the budget for the layers themselves
+        return max(2, min(maxLayers, memoryBudget / 2 / (pixels * 10)))
+    }
+
+    /// Where new layers' textures are cleared. Set by whoever renders this stack; a new
+    /// texture holds whatever its memory held before.
+    public var commandQueue: MTLCommandQueue?
+
+    public var activeLayer: Layer? {
+        guard activeLayerIndex >= 0, activeLayerIndex < layers.count else { return nil }
+        return layers[activeLayerIndex]
+    }
+
+    public init(textureManager: TextureManager, canvasWidth: Int, canvasHeight: Int) {
+        self.textureManager = textureManager
+        self.canvasWidth = canvasWidth
+        self.canvasHeight = canvasHeight
+    }
+
+    public func createInitialLayer(commandBuffer: MTLCommandBuffer) throws {
+        let layer = try makeLayer(name: "Background")
+        // Fill background white
+        textureManager.clearTexture(layer.texture, commandBuffer: commandBuffer,
+            color: MTLClearColor(red: 1, green: 1, blue: 1, alpha: 1))
+        layers.append(layer)
+
+        let drawingLayer = try makeLayer(name: "Layer 1")
+        layers.append(drawingLayer)
+        activeLayerIndex = 1
+    }
+
+    public func addLayer(above index: Int, name: String? = nil) throws -> Int {
+        guard layers.count < layerLimit else {
+            throw LayerError.maxLayersReached(layerLimit)
+        }
+        let layerName = name ?? "Layer \(layers.count)"
+        let layer = try makeLayer(name: layerName)
+        let insertIndex = min(index + 1, layers.count)
+        layers.insert(layer, at: insertIndex)
+        activeLayerIndex = insertIndex
+        return insertIndex
+    }
+
+    @discardableResult
+    public func removeLayer(at index: Int) -> Layer? {
+        guard layers.count > 1, index >= 0, index < layers.count else { return nil }
+        let layer = layers.remove(at: index)
+        if activeLayerIndex >= layers.count {
+            activeLayerIndex = layers.count - 1
+        }
+        return layer
+    }
+
+    public func moveLayer(from: Int, to: Int) {
+        guard from != to, from >= 0, from < layers.count, to >= 0, to < layers.count else { return }
+        let layer = layers.remove(at: from)
+        layers.insert(layer, at: to)
+        // Update active index to follow the moved layer if needed
+        if activeLayerIndex == from {
+            activeLayerIndex = to
+        } else if from < activeLayerIndex && to >= activeLayerIndex {
+            activeLayerIndex -= 1
+        } else if from > activeLayerIndex && to <= activeLayerIndex {
+            activeLayerIndex += 1
+        }
+    }
+
+    public func mergeDown(at index: Int, renderer: CanvasRenderer) -> Bool {
+        guard index > 0, index < layers.count else { return false }
+        let upper = layers[index]
+        let lower = layers[index - 1]
+
+        guard let commandBuffer = renderer.context.commandQueue.makeCommandBuffer() else { return false }
+        // As the canvas showed it: the upper layer's blend mode against what is under it
+        renderer.compositor.compositeLayer(
+            source: upper.texture,
+            onto: lower.texture,
+            opacity: upper.opacity,
+            blendMode: upper.blendMode,
+            stroke: nil,
+            tempTexture: renderer.blendTempTexture,
+            commandBuffer: commandBuffer
+        )
+        // Thick paint on top of thick paint adds up
+        if let upperHeight = upper.heightTexture,
+           let lowerHeight = renderer.heightTexture(for: lower, commandBuffer: commandBuffer) {
+            renderer.compositor.accumulateHeight(source: upperHeight, onto: lowerHeight, opacity: upper.opacity,
+                                                 commandBuffer: commandBuffer)
+        }
+        commandBuffer.commit()
+        commandBuffer.waitUntilCompleted()
+
+        layers.remove(at: index)
+        if activeLayerIndex >= layers.count {
+            activeLayerIndex = layers.count - 1
+        }
+        renderer.viewModel?.noteContentChanged()
+        return true
+    }
+
+    /// A copy of the layer at `index` just above it, selected: its pixels, its thickness
+    /// and its settings, named after it. The copy is dry.
+    @discardableResult
+    public func duplicateLayer(at index: Int, renderer: CanvasRenderer) throws -> Int {
+        guard index >= 0, index < layers.count else { throw LayerError.duplicateFailed }
+        guard layers.count < layerLimit else { throw LayerError.maxLayersReached(layerLimit) }
+        let source = layers[index]
+        let copy = try makeLayer(name: "\(source.name) copy")
+        copy.isVisible = source.isVisible
+        copy.isLocked = source.isLocked
+        copy.opacity = source.opacity
+        copy.blendMode = source.blendMode
+        guard let commandBuffer = renderer.context.commandQueue.makeCommandBuffer() else { throw LayerError.duplicateFailed }
+        let copyHeight = source.heightTexture == nil ? nil : renderer.heightTexture(for: copy, commandBuffer: commandBuffer)
+        guard let blit = commandBuffer.makeBlitCommandEncoder() else { throw LayerError.duplicateFailed }
+        blit.copy(from: source.texture, to: copy.texture)
+        if let height = source.heightTexture, let copyHeight { blit.copy(from: height, to: copyHeight) }
+        blit.endEncoding()
+        commandBuffer.commit()
+        commandBuffer.waitUntilCompleted()
+        layers.insert(copy, at: index + 1)
+        activeLayerIndex = index + 1
+        renderer.viewModel?.noteContentChanged()
+        renderer.updateThumbnail(for: copy)
+        return index + 1
+    }
+
+    public func flattenAll(renderer: CanvasRenderer) throws -> Layer {
+        let result = try makeLayer(name: "Flattened")
+        guard let commandBuffer = renderer.context.commandQueue.makeCommandBuffer() else {
+            throw LayerError.flattenFailed
+        }
+
+        // Clear to white
+        textureManager.clearTexture(result.texture, commandBuffer: commandBuffer,
+            color: MTLClearColor(red: 1, green: 1, blue: 1, alpha: 1))
+
+        for (index, layer) in layers.enumerated() where layer.isVisible {
+            renderer.compositor.compositeLayer(
+                source: layer.texture,
+                onto: result.texture,
+                opacity: layer.opacity,
+                // The bottom layer has nothing under it to blend with
+                blendMode: index == 0 ? .normal : layer.blendMode,
+                stroke: nil,
+                tempTexture: renderer.blendTempTexture,
+                commandBuffer: commandBuffer
+            )
+            if let height = layer.heightTexture,
+               let resultHeight = renderer.heightTexture(for: result, commandBuffer: commandBuffer) {
+                renderer.compositor.accumulateHeight(source: height, onto: resultHeight, opacity: layer.opacity,
+                                                     commandBuffer: commandBuffer)
+            }
+        }
+        commandBuffer.commit()
+        commandBuffer.waitUntilCompleted()
+
+        layers = [result]
+        activeLayerIndex = 0
+        renderer.viewModel?.noteContentChanged()
+        return result
+    }
+
+    private func makeLayer(name: String) throws -> Layer {
+        let texture = try textureManager.makeCanvasTexture(
+            width: canvasWidth, height: canvasHeight, label: name
+        )
+        if let commandBuffer = commandQueue?.makeCommandBuffer() {
+            textureManager.clearTexture(texture, commandBuffer: commandBuffer)
+            commandBuffer.commit()
+        }
+        return Layer(name: name, texture: texture)
+    }
+}
+
+public enum LayerError: LocalizedError {
+    case maxLayersReached(Int)
+    case flattenFailed
+    case duplicateFailed
+
+    public var errorDescription: String? {
+        switch self {
+        case .maxLayersReached(let limit):
+            return limit < LayerStack.maxLayers
+                ? "A canvas this size can have \(limit) layers in this Mac's memory"
+                : "Maximum of \(limit) layers reached"
+        case .flattenFailed: return "Failed to flatten layers"
+        case .duplicateFailed:
+            return "The layer could not be copied."
+        }
+    }
+}

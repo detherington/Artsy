@@ -1,4 +1,5 @@
 import SwiftUI
+import ArtsyEngine
 
 struct BrushSettingsView: View {
     @ObservedObject var viewModel: CanvasViewModel
