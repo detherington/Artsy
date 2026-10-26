@@ -53,6 +53,7 @@ final class ShellTests: XCTestCase {
         let context = EngineHarness.sharedContext
         let viewModel = CanvasViewModel(canvasSize: CGSize(width: 256, height: 256))
         viewModel.recorder = nil
+        viewModel.remembersGrades = false
         let view = CanvasView(frame: NSRect(x: 0, y: 0, width: 400, height: 300), device: context.device)
         try view.configure(context: context, viewModel: viewModel)
         return (view, viewModel)
@@ -437,6 +438,25 @@ final class ShellTests: XCTestCase {
         let resetY: CGFloat = padTop + TiltControl.height + 30 + 22
         tap(150, resetY, 7)
         XCTAssertEqual(resets, 1, "Reset view asked the window to reset")
+    }
+
+    /// The grade pills under the brush grid: a tap puts a graphite brush at that grade.
+    func testThePencilGradePillsSetTheGrade() throws {
+        let (_, viewModel) = try canvas()
+        viewModel.currentBrush = .pencil
+        let host = NSHostingView(rootView: PencilGradeRow(viewModel: viewModel))
+        show(host, size: NSSize(width: Chrome.panelWidth, height: Chrome.target))
+        settle(host)
+        // The label, then seven pills sharing the width with six-point gaps between
+        let pill = (Chrome.panelWidth - 28 - PencilGradeRow.labelWidth - 6 * 7) / 7
+        func tap(_ grade: PencilGrade, _ t: TimeInterval) {
+            let index = CGFloat(PencilGrade.shown.firstIndex(of: grade)!)
+            click(at: NSPoint(x: 14 + PencilGradeRow.labelWidth + 6 + (pill + 6) * index + pill / 2, y: Chrome.target / 2))
+        }
+        tap(.b2, 1)
+        XCTAssertEqual(viewModel.pencilGrade, .b2, "the fifth pill")
+        tap(.h2, 2)
+        XCTAssertEqual(viewModel.pencilGrade, .h2, "the first")
     }
 
     /// A slider in a panel's list is an AppKit slider underneath, and the pen on it is the

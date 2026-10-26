@@ -19,6 +19,7 @@ final class AppPreferences: ObservableObject {
         static let paletteColors = "paletteColors" // [hex string]
         static let smoothingMode = "smoothingMode" // SmoothingMode raw value
         static let pressureCurves = "pressureCurves" // JSON: [pen key: PressureCurve]
+        static let pencilGrades = "pencilGrades"     // JSON: [brush id: grade]
         static let easeStrokesWithoutPressure = "easeStrokesWithoutPressure"
         static let paintRelief = "paintRelief"
         static let paintGloss = "paintGloss"
@@ -118,6 +119,27 @@ final class AppPreferences: ObservableObject {
         pressureCurves[key] ?? .linear
     }
 
+    /// The pencil grade each graphite brush was left at, by brush id. HB when unset.
+    @Published var pencilGrades: [String: String] {
+        didSet {
+            if let data = try? JSONEncoder().encode(pencilGrades) {
+                defaults.set(data, forKey: Key.pencilGrades)
+            }
+        }
+    }
+
+    func pencilGrade(for brush: UUID) -> PencilGrade {
+        pencilGrades[brush.uuidString].flatMap(PencilGrade.init(rawValue:)) ?? .hb
+    }
+
+    func setPencilGrade(_ grade: PencilGrade, for brush: UUID) {
+        if grade == .hb {
+            if pencilGrades[brush.uuidString] != nil { pencilGrades[brush.uuidString] = nil }
+        } else if pencilGrades[brush.uuidString] != grade.rawValue {
+            pencilGrades[brush.uuidString] = grade.rawValue
+        }
+    }
+
     // MARK: - Init
 
     private init() {
@@ -146,6 +168,8 @@ final class AppPreferences: ObservableObject {
         self.layersDocked = (defaults.object(forKey: Key.layersDocked) as? Bool) ?? true
         self.pressureCurves = defaults.data(forKey: Key.pressureCurves)
             .flatMap { try? JSONDecoder().decode([String: PressureCurve].self, from: $0) } ?? [:]
+        self.pencilGrades = defaults.data(forKey: Key.pencilGrades)
+            .flatMap { try? JSONDecoder().decode([String: String].self, from: $0) } ?? [:]
     }
 
     func pushRecentColor(_ hex: String) {

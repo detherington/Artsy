@@ -31,6 +31,7 @@ final class EngineHarness {
         self.height = height
         viewModel = CanvasViewModel(canvasSize: CGSize(width: width, height: height))
         viewModel.recorder = nil
+        viewModel.remembersGrades = false
         renderer = try CanvasRenderer(context: context, canvasSize: viewModel.canvasSize)
         renderer.viewModel = viewModel
         // Time stands still unless a test moves it, so wet paint stays as wet as it was laid

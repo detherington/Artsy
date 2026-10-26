@@ -44,6 +44,9 @@ struct BrushDescriptor: Codable, Identifiable, Equatable {
     var wetness: Float = 0
     /// Set for a brush whose strokes lay water that moves; nil for paint that stays put.
     var water: Water? = nil
+    /// Graphite: the brush takes a pencil grade, 2H to 6B, as a live control in the brush
+    /// panel (`PencilGrade`); its own values are its HB.
+    var graphite: Bool = false
 
     /// Paint that flows: a stroke lays water and pigment on the layer, and the water moves
     /// — spreading into dry paper, running downhill with the canvas tilt, pooling in the
@@ -113,7 +116,7 @@ struct BrushDescriptor: Codable, Identifiable, Equatable {
 
     enum CodingKeys: String, CodingKey {
         case id, name, category, hardness, baseSize, pressureDynamics, opacity, smoothing, fixedNibAngle
-        case rendering, tiltDynamics, velocityDynamics, mixing, wet, wetness, water
+        case rendering, tiltDynamics, velocityDynamics, mixing, wet, wetness, water, graphite
     }
 }
 
@@ -168,6 +171,7 @@ extension BrushDescriptor {
         wet = try c.decodeIfPresent(Wet.self, forKey: .wet)
         wetness = Self.unit(try c.decodeIfPresent(Float.self, forKey: .wetness) ?? 0)
         water = try c.decodeIfPresent(Water.self, forKey: .water)
+        graphite = try c.decodeIfPresent(Bool.self, forKey: .graphite) ?? false
     }
 }
 
@@ -515,7 +519,8 @@ extension BrushDescriptor {
             sizeJitter: 0.1, opacityJitter: 0.15
         )),
         // Lean the pencil over to shade with its side: a broad, pale, elongated mark
-        tiltDynamics: TiltDynamics(sizeScale: 2.5, opacityScale: 0.55, aspect: 2.0)
+        tiltDynamics: TiltDynamics(sizeScale: 2.5, opacityScale: 0.55, aspect: 2.0),
+        graphite: true
     )
 
     static let inkBrush = BrushDescriptor(
@@ -710,7 +715,8 @@ extension BrushDescriptor {
             grain: .init(mode: .height, scale: 1.0, depth: 0.9),
             opacityJitter: 0.1
         )),
-        tiltDynamics: TiltDynamics(sizeScale: 2.0, opacityScale: 0.6, aspect: 1.8)
+        tiltDynamics: TiltDynamics(sizeScale: 2.0, opacityScale: 0.6, aspect: 1.8),
+        graphite: true
     )
 
     static let conte = BrushDescriptor(
