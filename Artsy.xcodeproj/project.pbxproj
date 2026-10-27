@@ -7,6 +7,8 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		AEA9A275E980969E24EC15E5 /* PhotoCanvasTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B409E6A5FE3844D615C7A326 /* PhotoCanvasTests.swift */; };
+		1B41850C22301C3438AD00E5 /* RecentCanvasesTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6AF980624912D77E729F5946 /* RecentCanvasesTests.swift */; };
 		4A4F0601CD6C158BA7FAAA0E /* container-migration.plist in Resources */ = {isa = PBXBuildFile; fileRef = 0D6C27843CB56D18E7A7D7C8 /* container-migration.plist */; };
 		6FD53E16009C26930F3DEC6D /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 6AA862377DCB3A2A07C44316 /* PrivacyInfo.xcprivacy */; };
 		8C9D0E1F2A3B4C5D6E7F8A9B /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A9B5B66FC7F18B7121C9034F /* Assets.xcassets */; };
@@ -79,6 +81,8 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		B409E6A5FE3844D615C7A326 /* PhotoCanvasTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhotoCanvasTests.swift; sourceTree = "<group>"; };
+		6AF980624912D77E729F5946 /* RecentCanvasesTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecentCanvasesTests.swift; sourceTree = "<group>"; };
 		0D6C27843CB56D18E7A7D7C8 /* container-migration.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "container-migration.plist"; sourceTree = "<group>"; };
 		6AA862377DCB3A2A07C44316 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = "PrivacyInfo.xcprivacy"; sourceTree = "<group>"; };
 		D897CE034798F52F728C0DCD /* PencilTiltTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PencilTiltTests.swift; sourceTree = "<group>"; };
@@ -254,6 +258,8 @@
 		B48AF066E85C8962CFFD499C /* ArtsyTests */ = {
 			isa = PBXGroup;
 			children = (
+				B409E6A5FE3844D615C7A326 /* PhotoCanvasTests.swift */,
+				6AF980624912D77E729F5946 /* RecentCanvasesTests.swift */,
 				D897CE034798F52F728C0DCD /* PencilTiltTests.swift */,
 				85BEF4DB23BB7DC6815705C4 /* PressureFromSpeedTests.swift */,
 				2D6C5BEE2E8596CF33A28646 /* PencilGradeTests.swift */,
@@ -567,6 +573,8 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				AEA9A275E980969E24EC15E5 /* PhotoCanvasTests.swift in Sources */,
+				1B41850C22301C3438AD00E5 /* RecentCanvasesTests.swift in Sources */,
 				0CF5E7B6A65CFA6F66F18BB2 /* PencilTiltTests.swift in Sources */,
 				094A65745A8381693D829CF9 /* PressureFromSpeedTests.swift in Sources */,
 				9A3199E1E388E3D93E343AE8 /* PencilGradeTests.swift in Sources */,
@@ -870,7 +878,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 3;
+				CURRENT_PROJECT_VERSION = 4;
 				DEVELOPMENT_TEAM = 8B29CDK832;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -901,7 +909,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 3;
+				CURRENT_PROJECT_VERSION = 4;
 				DEVELOPMENT_TEAM = 8B29CDK832;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -1040,7 +1048,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 3;
+				CURRENT_PROJECT_VERSION = 4;
 				DEVELOPMENT_TEAM = 8B29CDK832;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;

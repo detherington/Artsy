@@ -12,6 +12,8 @@ public final class AppPreferences: ObservableObject {
     private enum Key {
         static let defaultCanvasWidth = "defaultCanvasWidth"
         static let defaultCanvasHeight = "defaultCanvasHeight"
+        static let lastCanvasWidth = "lastCanvasWidth"
+        static let lastCanvasHeight = "lastCanvasHeight"
         static let skipNewCanvasDialog = "skipNewCanvasDialog"
         static let defaultBrushName = "defaultBrushName"
         static let defaultBrushSize = "defaultBrushSize"
@@ -38,6 +40,16 @@ public final class AppPreferences: ObservableObject {
 
     @Published public var defaultCanvasHeight: Int {
         didSet { defaults.set(defaultCanvasHeight, forKey: Key.defaultCanvasHeight) }
+    }
+
+    /// The size the last canvas was made at, for the start screen's first tile; the
+    /// default size until one has been.
+    @Published public var lastCanvasWidth: Int {
+        didSet { defaults.set(lastCanvasWidth, forKey: Key.lastCanvasWidth) }
+    }
+
+    @Published public var lastCanvasHeight: Int {
+        didSet { defaults.set(lastCanvasHeight, forKey: Key.lastCanvasHeight) }
     }
 
     @Published public var skipNewCanvasDialog: Bool {
@@ -154,6 +166,9 @@ public final class AppPreferences: ObservableObject {
         let h = defaults.integer(forKey: Key.defaultCanvasHeight)
         self.defaultCanvasWidth = w > 0 ? w : 2048
         self.defaultCanvasHeight = h > 0 ? h : 2048
+        let lw = defaults.integer(forKey: Key.lastCanvasWidth), lh = defaults.integer(forKey: Key.lastCanvasHeight)
+        self.lastCanvasWidth = lw > 0 ? lw : (w > 0 ? w : 2048)
+        self.lastCanvasHeight = lh > 0 ? lh : (h > 0 ? h : 2048)
 
         self.skipNewCanvasDialog = defaults.bool(forKey: Key.skipNewCanvasDialog)
         self.defaultBrushName = defaults.string(forKey: Key.defaultBrushName) ?? "Hard Round"
@@ -192,6 +207,11 @@ public final class AppPreferences: ObservableObject {
 
     public var defaultCanvasSize: CGSize {
         CGSize(width: defaultCanvasWidth, height: defaultCanvasHeight)
+    }
+
+    public var lastCanvasSize: CGSize {
+        get { CGSize(width: lastCanvasWidth, height: lastCanvasHeight) }
+        set { lastCanvasWidth = Int(newValue.width); lastCanvasHeight = Int(newValue.height) }
     }
 
     /// Find the BrushDescriptor matching the saved name, falling back to .hardRound.

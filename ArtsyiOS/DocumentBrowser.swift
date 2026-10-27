@@ -8,32 +8,47 @@ extension UTType {
     static let artsyDocument = UTType(exportedAs: "com.artsy.document")
 }
 
-/// The documents: the system's browser over iCloud Drive, On My iPad and any other
-/// provider, which creates, picks and imports `.artsy` documents. A picked document opens
-/// as the canvas screen over it; a new one is made at the size chosen in the Mac's
-/// new-canvas view and moved by the browser to where the user put it.
-struct DocumentBrowser: UIViewControllerRepresentable {
-    let model: AppModel
-
-    func makeUIViewController(context: Context) -> UIDocumentBrowserViewController {
-        let browser = UIDocumentBrowserViewController(forOpening: [.artsyDocument])
+/// The documents elsewhere: the system's browser over iCloud Drive, On My iPad and any
+/// other provider, presented from the start screen for picking, importing or creating
+/// `.artsy` documents where the user wants them. A picked document is handed back to
+/// the start screen, which takes the browser down and opens it; a new one is made at the
+/// size chosen in the size dialog and moved by the browser to where the user put it.
+enum DocumentBrowser {
+    static func make(model: AppModel, onPick: @escaping (URL) -> Void) -> UIDocumentBrowserViewController {
+        let browser = Browser(forOpening: [.artsyDocument])
         browser.allowsDocumentCreation = true
         browser.allowsPickingMultipleItems = false
         browser.shouldShowFileExtensions = false
         browser.browserUserInterfaceStyle = .dark
         browser.overrideUserInterfaceStyle = .dark
-        browser.delegate = context.coordinator
+        let coordinator = Coordinator(model: model, onPick: onPick)
+        coordinator.browser = browser
+        browser.coordinator = coordinator
+        browser.delegate = coordinator
+        browser.additionalTrailingNavigationBarButtonItems = [
+            UIBarButtonItem(barButtonSystemItem: .close, target: coordinator, action: #selector(Coordinator.close))
+        ]
         return browser
     }
 
-    func updateUIViewController(_ browser: UIDocumentBrowserViewController, context: Context) {}
-
-    func makeCoordinator() -> Coordinator { Coordinator(model: model) }
+    /// The browser with its delegate kept alive beside it.
+    final class Browser: UIDocumentBrowserViewController {
+        var coordinator: Coordinator?
+    }
 
     final class Coordinator: NSObject, UIDocumentBrowserViewControllerDelegate {
         let model: AppModel
+        let onPick: (URL) -> Void
+        weak var browser: UIDocumentBrowserViewController?
 
-        init(model: AppModel) { self.model = model }
+        init(model: AppModel, onPick: @escaping (URL) -> Void) {
+            self.model = model
+            self.onPick = onPick
+        }
+
+        @objc func close() {
+            browser?.dismiss(animated: true)
+        }
 
         func documentBrowser(_ controller: UIDocumentBrowserViewController,
                              didRequestDocumentCreationWithHandler importHandler: @escaping (URL?, UIDocumentBrowserViewController.ImportMode) -> Void) {
@@ -42,6 +57,7 @@ struct DocumentBrowser: UIViewControllerRepresentable {
             let picker = NewCanvasView(
                 onCreate: { [weak self] size in
                     sheet?.dismiss(animated: true)
+                    AppPreferences.shared.lastCanvasSize = size
                     let folder = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
                     let url = folder.appendingPathComponent("Untitled.artsy")
                     do {
@@ -74,37 +90,17 @@ struct DocumentBrowser: UIViewControllerRepresentable {
 
         func documentBrowser(_ controller: UIDocumentBrowserViewController, didPickDocumentsAt documentURLs: [URL]) {
             guard let url = documentURLs.first else { return }
-            open(url, from: controller)
+            onPick(url)
         }
 
         func documentBrowser(_ controller: UIDocumentBrowserViewController, didImportDocumentAt sourceURL: URL, toDestinationURL destinationURL: URL) {
-            open(destinationURL, from: controller)
+            onPick(destinationURL)
         }
 
         func documentBrowser(_ controller: UIDocumentBrowserViewController, failedToImportDocumentAt documentURL: URL, error: Error?) {
             if let error { DiagnosticsLog.shared.error(error, doing: "placing \(documentURL.lastPathComponent)") }
-            show("Could not make \(documentURL.lastPathComponent)", error?.localizedDescription ?? "The document could not be placed there.", from: controller)
-        }
-
-        /// The canvas screen over the browser, with the document in it.
-        private func open(_ url: URL, from controller: UIDocumentBrowserViewController) {
-            do {
-                let session = try model.open(url)
-                let screen = CanvasHostingController(rootView: CanvasScreen(session: session))
-                screen.modalPresentationStyle = .fullScreen
-                screen.overrideUserInterfaceStyle = .dark
-                screen.keys = KeyCommands.entries(for: session) { [weak model] name in model?.app(name) }
-                model.presenter = screen
-                model.dismissCanvas = { [weak controller] in controller?.dismiss(animated: true) }
-                controller.present(screen, animated: true)
-            } catch {
-                DiagnosticsLog.shared.error(error, doing: "opening \(url.lastPathComponent)")
-                show("Could not open \(url.deletingPathExtension().lastPathComponent)", error.localizedDescription, from: controller)
-            }
-        }
-
-        private func show(_ title: String, _ message: String, from controller: UIViewController) {
-            let alert = UIAlertController(title: title, message: message, preferredStyle: .alert)
+            let alert = UIAlertController(title: "Could not make \(documentURL.lastPathComponent)",
+                                          message: error?.localizedDescription ?? "The document could not be placed there.", preferredStyle: .alert)
             alert.addAction(UIAlertAction(title: "OK", style: .default))
             controller.present(alert, animated: true)
         }

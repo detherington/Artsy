@@ -138,8 +138,8 @@ struct DocumentMenu: View {
             Button("Export PNG (16-bit)…") { actions.app("handleExportPNG16") }
             Button("Export JPEG…") { actions.app("handleExportJPEG") }
             #else
-            // The documents are the screen behind this one; saving is continuous
-            Button("Documents") { actions.app("handleOpen") }
+            // The start screen is the screen behind this one; saving is continuous
+            Button("Start") { actions.app("handleOpen") }
             Button("Save now") { actions.app("handleSave") }
             Divider()
             Button("Export PNG…") { actions.app("handleExportPNG") }

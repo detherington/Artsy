@@ -1,8 +1,8 @@
 import SwiftUI
 import ArtsyEngine
 
-/// Artsy on iPad and iPhone: the documents, and a canvas over the one that is open, with
-/// the Mac's chrome around it. The engine is the Mac's; see `docs/ios-plan.md`.
+/// Artsy on iPad and iPhone: the start screen, and a canvas over the document that is
+/// open, with the Mac's chrome around it. The engine is the Mac's; see `docs/ios-plan.md`.
 @main
 struct ArtsyApp: App {
     @StateObject private var model = AppModel()
@@ -17,7 +17,7 @@ struct ArtsyApp: App {
                     .background(Chrome.background.ignoresSafeArea())
                     .foregroundColor(Chrome.text)
             } else {
-                DocumentBrowser(model: model)
+                StartScreen(model: model)
                     .ignoresSafeArea()
             }
         }
