@@ -4,8 +4,8 @@ import XCTest
 #endif
 @testable import ArtsyEngine
 
-/// Pressure from speed, for a mouse or a pencil that reports none: still is full, fast is
-/// light, the change is smoothed, and a stroke drawn slowly comes out heavier than the
+/// Pressure from speed, for a mouse, a finger or a pencil that reports none: still is full,
+/// fast is light, the speed is the hand's on the screen, the change is smoothed, and a stroke drawn slowly comes out heavier than the
 /// same stroke drawn quickly, while a pen with pressure of its own is left alone.
 final class PressureFromSpeedTests: XCTestCase {
     func testStillIsFullAndFastIsLightInBetweenFallingAway() {
@@ -34,6 +34,41 @@ final class PressureFromSpeedTests: XCTestCase {
         var later: Float = 0
         for i in 1...40 { later = speed.pressure(for: sample(750, at: 0.27 + Double(i) * 0.01)) }
         XCTAssertGreaterThan(later, 0.95, "still for 400 ms, pressing fully: \(later)")
+    }
+
+    func testTheFirstMovementSetsTheSpeedAtOnceAndARestBeforeItIsStill() {
+        var speed = PressureFromSpeed()
+        func sample(_ x: CGFloat, at t: TimeInterval) -> StrokePoint {
+            StrokePoint(position: CGPoint(x: x, y: 0), pressure: 0, tiltX: 0, tiltY: 0, rotation: 0, timestamp: t)
+        }
+        XCTAssertEqual(speed.pressure(for: sample(0, at: 0)), 1, "landed")
+        XCTAssertEqual(speed.pressure(for: sample(0, at: 0.05)), 1, "resting before it moves")
+        XCTAssertEqual(speed.pressure(for: sample(0, at: 0.10)), 1, "still resting")
+        // The first movement, 1,000 points a second: its pressure, not a step down from full
+        XCTAssertEqual(speed.pressure(for: sample(10, at: 0.11)), PressureFromSpeed.pressure(atSpeed: 1000), accuracy: 0.001,
+                       "the first movement sets the speed outright")
+        // From then on the speed is smoothed: a sudden doubling is not followed at once
+        let next = speed.pressure(for: sample(30, at: 0.12))
+        XCTAssertLessThan(next, PressureFromSpeed.pressure(atSpeed: 1000))
+        XCTAssertGreaterThan(next, PressureFromSpeed.pressure(atSpeed: 2000), "smoothed, not stepped: \(next)")
+    }
+
+    func testTheSpeedIsTheHandsOnTheScreenWhateverTheZoom() {
+        func pressure(zoom: Float, canvasStep: CGFloat) -> Float {
+            var speed = PressureFromSpeed(zoom: zoom)
+            var pressure: Float = 1
+            for i in 0...30 {
+                pressure = speed.pressure(for: StrokePoint(position: CGPoint(x: CGFloat(i) * canvasStep, y: 0), pressure: 0,
+                                                           tiltX: 0, tiltY: 0, rotation: 0, timestamp: Double(i) * 0.01))
+            }
+            return pressure
+        }
+        // 10 points a frame, 1,000 points a second, as the hand feels it: the same pressure
+        // whether a point is one canvas pixel or six
+        XCTAssertEqual(pressure(zoom: 1, canvasStep: 10), pressure(zoom: 1 / 6, canvasStep: 60), accuracy: 0.001)
+        XCTAssertEqual(pressure(zoom: 1, canvasStep: 10), PressureFromSpeed.pressure(atSpeed: 1000), accuracy: 0.001)
+        // The same canvas motion on a phone, zoomed well out, is a slower hand: it presses harder
+        XCTAssertGreaterThan(pressure(zoom: 1 / 6, canvasStep: 10), pressure(zoom: 1, canvasStep: 10) + 0.3)
     }
 
     /// On the canvas: the same line, drawn slowly and quickly, with a pencil whose touch

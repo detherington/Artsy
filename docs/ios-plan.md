@@ -95,10 +95,13 @@ against the boundary rather than retrofitted to it.
    `PressureFromSpeed` in the engine's stroke input. When a stroke reports no pressure
    (a mouse or trackpad on the Mac, the USB-C Pencil on the Duo) and the preference is
    on (Settings → Tablet → "Press harder when slow", on by default), each sample's
-   pressure comes from its speed: full when still, 0.2 at 2,500 canvas pixels a
-   second, falling away faster at first (a walking pace of 500 px/s presses about
-   0.8), the speed smoothed over 80 ms so the pressure does not flicker, the first
-   sample counted as slow since the pen has just landed. The pressure curve applies
+   pressure comes from its speed: full when still, 0.2 at 2,500 screen points a
+   second, falling away faster at first (a walking pace of 500 pt/s presses about
+   0.8), the speed smoothed over 80 ms so the pressure does not flicker, the landing
+   sample and a rest before the first movement counted as still, the first movement
+   setting the speed outright. Screen points, through the zoom, since 2026-10-26: in
+   canvas pixels a finger on a phone was always sprinting and every stroke came out
+   light after a hard landing (`drawing-engine-plan.md` § 14). The pressure curve applies
    on top as for a real pen; a recording keeps the raw samples, so a replay derives
    the same pressure again; pens with pressure are untouched. Measured with the
    Pencil at 12 px on the Mac: the same line drawn over two seconds covers more than
