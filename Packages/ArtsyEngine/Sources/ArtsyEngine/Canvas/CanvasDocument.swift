@@ -113,6 +113,13 @@ public final class CanvasDocument {
         let jsonData = try JSONEncoder().encode(doc)
         do {
             try jsonData.write(to: bundleURL.appendingPathComponent("document.json"))
+            // The time-lapse comes along: its segment in hand finished, the folder linked in
+            if let timelapse = renderer.timelapse {
+                timelapse.finishSegmentAndWait()
+                try TimelapseRecorder.stage(timelapse.directory, into: bundleURL.appendingPathComponent(TimelapseRecorder.folderName))
+            } else {
+                try TimelapseRecorder.stage(TimelapseRecorder.folder(of: url), into: bundleURL.appendingPathComponent(TimelapseRecorder.folderName))
+            }
         } catch {
             discardStaging()
             throw error
@@ -242,7 +249,11 @@ public final class CanvasDocument {
                     return
                 }
                 try? fm.removeItem(at: stagingDir)
-                DispatchQueue.main.async { completion(.success(())) }
+                DispatchQueue.main.async {
+                    // The time-lapse now lives in the document
+                    renderer.timelapse?.moved(to: TimelapseRecorder.folder(of: url))
+                    completion(.success(()))
+                }
             }
         }
         cmdBuf.commit()
@@ -283,7 +294,51 @@ public final class CanvasDocument {
         renderer.viewModel = viewModel
         try renderer.setupLayerStack(for: viewModel)
         try populate(viewModel, from: url, document: doc, metalContext: metalContext)
+        attachTimelapse(to: renderer, documentURL: url)
         return (viewModel, renderer)
+    }
+
+    /// The document's time-lapse recorder onto `renderer`: one that records if the
+    /// document has recorded before and still wants to, or has never and the preference
+    /// says new documents do; one that does not if the document turned it off.
+    public static func attachTimelapse(to renderer: CanvasRenderer, documentURL: URL) {
+        let folder = TimelapseRecorder.folder(of: documentURL)
+        let manifest = TimelapseRecorder.manifest(in: folder)
+        guard manifest?.recording ?? AppPreferences.shared.recordsTimelapse || manifest != nil else { return }
+        do {
+            renderer.timelapse = try TimelapseRecorder(directory: folder, canvasSize: renderer.canvasSize, context: renderer.context,
+                                                       longestSide: AppPreferences.shared.timelapseLongestSide)
+        } catch {
+            DiagnosticsLog.shared.error(error, doing: "starting the time-lapse")
+        }
+    }
+
+    /// Turns the time-lapse on or off for the canvas on `renderer`: a recorder it has takes
+    /// the switch; turned on with none, it records from here on, into the document at
+    /// `documentURL` or, with none, into a temporary folder the next save carries in.
+    public static func setTimelapseRecording(_ on: Bool, renderer: CanvasRenderer, documentURL: URL?) {
+        if let recorder = renderer.timelapse {
+            recorder.setRecording(on)
+            return
+        }
+        guard on else { return }
+        do {
+            let folder = documentURL.map(TimelapseRecorder.folder(of:)) ?? TimelapseRecorder.temporaryFolder()
+            renderer.timelapse = try TimelapseRecorder(directory: folder, canvasSize: renderer.canvasSize, context: renderer.context,
+                                                       longestSide: AppPreferences.shared.timelapseLongestSide,
+                                                       temporary: documentURL == nil)
+        } catch {
+            DiagnosticsLog.shared.error(error, doing: "starting the time-lapse")
+        }
+    }
+
+    /// A recorder for a canvas not yet saved, in a temporary folder that the first save
+    /// moves into the document; nil when the preference says new documents do not record.
+    public static func temporaryTimelapse(for renderer: CanvasRenderer) -> TimelapseRecorder? {
+        guard AppPreferences.shared.recordsTimelapse else { return nil }
+        return try? TimelapseRecorder(directory: TimelapseRecorder.temporaryFolder(), canvasSize: renderer.canvasSize,
+                                      context: renderer.context, longestSide: AppPreferences.shared.timelapseLongestSide,
+                                      temporary: true)
     }
 
     /// The canvas size a document was saved at.

@@ -150,6 +150,8 @@ struct DocumentMenu: View {
             Button("Keyboard Shortcuts…") { actions.app("showShortcuts") }
             #endif
             Divider()
+            TimelapseMenu(actions: actions)
+            Divider()
             Text("\(Int(viewModel.canvasSize.width)) × \(Int(viewModel.canvasSize.height)) px, "
                  + ByteCountFormatter.string(fromByteCount: Int64(viewModel.memoryUseBytes), countStyle: .memory) + " in use")
         } label: {
@@ -172,6 +174,50 @@ struct DocumentMenu: View {
         .menuIndicator(.hidden)
         .fixedSize()
         .help("File")
+    }
+}
+
+/// The Time-lapse submenu: the canvas's own recording switch, Replay, Export at full
+/// length or 30 seconds, Delete, and the recording's length and size.
+struct TimelapseMenu: View {
+    let actions: ChromeActions
+
+    var body: some View {
+        if let recorder = actions.renderer()?.timelapse {
+            TimelapseRecorderMenu(recorder: recorder, actions: actions)
+        } else {
+            Menu("Time-lapse") {
+                Toggle("Record Time-lapse", isOn: Binding(get: { false }, set: { _ in actions.app("timelapseToggleRecording") }))
+                Divider()
+                Text("Nothing recorded yet")
+            }
+        }
+    }
+}
+
+/// The submenu of a canvas with a recorder, following it as it records.
+struct TimelapseRecorderMenu: View {
+    @ObservedObject var recorder: TimelapseRecorder
+    let actions: ChromeActions
+
+    var body: some View {
+        let hasFrames = recorder.frames > 0
+        Menu("Time-lapse") {
+            Toggle("Record Time-lapse", isOn: Binding(get: { recorder.isRecording },
+                                                      set: { _ in actions.app("timelapseToggleRecording") }))
+            Divider()
+            Button("Replay…") { actions.app("timelapseReplay") }
+                .disabled(!hasFrames)
+            Button("Export Full Length…") { actions.app("timelapseExportFull") }
+                .disabled(!hasFrames)
+            Button("Export 30 Seconds…") { actions.app("timelapseExportShort") }
+                .disabled(!hasFrames)
+            Divider()
+            Button("Delete Time-lapse…", role: .destructive) { actions.app("timelapseDelete") }
+                .disabled(!hasFrames)
+            Divider()
+            Text(recorder.summary)
+        }
     }
 }
 
