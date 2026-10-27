@@ -991,12 +991,16 @@ public final class CanvasRenderer: NSObject, MTKViewDelegate {
 
     /// Decode image data, scale to fit canvas preserving aspect, center, and upload to the layer's texture.
     public func fillLayerWithImageFitToCanvas(imageData: Data, layer: Layer) throws {
-        defer { viewModel?.noteContentChanged() }
-        guard let source = CGImageSourceCreateWithData(imageData as CFData, nil),
-              let cgImage = CGImageSourceCreateImageAtIndex(source, 0, nil) else {
+        // Turned by its orientation tag, as a phone's portrait shot needs; at its full size
+        guard let cgImage = PhotoCanvas.image(from: imageData, maxSide: Int.max / 2) else {
             throw ImageImportError.undecodable
         }
+        try fillLayerFitToCanvas(with: cgImage, layer: layer)
+    }
 
+    /// `cgImage` onto `layer`, scaled to fit the canvas and centred, over nothing.
+    public func fillLayerFitToCanvas(with cgImage: CGImage, layer: Layer) throws {
+        defer { viewModel?.noteContentChanged() }
         let canvasW = layer.texture.width
         let canvasH = layer.texture.height
         let imgW = CGFloat(cgImage.width)

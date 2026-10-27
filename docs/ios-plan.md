@@ -177,6 +177,9 @@ against the boundary rather than retrofitted to it.
    then reports some switches to the Pencil's own (`CanvasViewModel.strokeReportsPressure`,
    also from `touchesEstimatedPropertiesUpdated`), and the recording follows. The
    updates are still not applied to samples already drawn. Untested on a Pencil.
+   The document browser stopped being the root on 2026-10-27: the start screen is
+   (`docs/start-screen-plan.md`), with the browser behind Browse… for documents
+   elsewhere, and new canvases written to the app's own Documents folder.
 3. **The rest of the painting app.** Documents through the document browser and
    iCloud Drive (the `.artsy` package is shared with the Mac as it is); layers,
    Adjust and Add; the Studio, Settings and Shortcuts as sheets; the keyboard

@@ -47,7 +47,54 @@ final class AppModel: ObservableObject {
 
     enum Failure: LocalizedError {
         case noEngine
-        var errorDescription: String? { "The drawing engine could not start" }
+        case couldNotWrite
+        var errorDescription: String? {
+            switch self {
+            case .noEngine: return "The drawing engine could not start"
+            case .couldNotWrite: return "The canvas could not be written"
+            }
+        }
+    }
+
+    /// The app's own folder: On My iPad ▸ Artsy in Files, where new canvases go.
+    var documentsDirectory: URL {
+        FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0].standardizedFileURL
+    }
+
+    func isInDocuments(_ url: URL) -> Bool {
+        url.standardizedFileURL.path.hasPrefix(documentsDirectory.path + "/")
+    }
+
+    /// A new canvas of `size`, "Canvas N" in Documents, written and opened; `remember`
+    /// makes the size the start screen's "Same as last" (not for a photo's).
+    func newCanvas(size: CGSize, remember: Bool = true, completion: @escaping (Result<PaintingSession, Error>) -> Void) {
+        if remember { AppPreferences.shared.lastCanvasSize = size }
+        let folder = documentsDirectory
+        var n = 1
+        while FileManager.default.fileExists(atPath: folder.appendingPathComponent("Canvas \(n).artsy").path) { n += 1 }
+        let url = folder.appendingPathComponent("Canvas \(n).artsy")
+        create(size: size, at: url) { [weak self] made in
+            guard let self else { return }
+            guard made else { completion(.failure(Failure.couldNotWrite)); return }
+            do { completion(.success(try self.open(url))) } catch { completion(.failure(error)) }
+        }
+    }
+
+    /// A canvas of the app's own renamed on disk, in the list, and in the open session.
+    func rename(_ entry: RecentCanvases.Entry, to name: String) {
+        guard !name.isEmpty, !name.contains("/"), let url = RecentCanvases.shared.url(of: entry), isInDocuments(url) else { return }
+        let destination = url.deletingLastPathComponent().appendingPathComponent(name).appendingPathExtension("artsy")
+        guard destination.path != url.path else { return }
+        do {
+            try FileManager.default.moveItem(at: url, to: destination)
+        } catch {
+            DiagnosticsLog.shared.error(error, doing: "renaming \(entry.name)")
+            return
+        }
+        RecentCanvases.shared.moved(entry, to: destination)
+        if session?.viewModel.fileURL?.standardizedFileURL.path == url.standardizedFileURL.path {
+            session?.viewModel.fileURL = destination
+        }
     }
 
     /// Opens the document at `url` as the session on the screen.
@@ -58,6 +105,7 @@ final class AppModel: ObservableObject {
             self?.app(name)
         }
         self.session = session
+        RecentCanvases.shared.note(url, size: session.viewModel.canvasSize)
         return session
     }
 

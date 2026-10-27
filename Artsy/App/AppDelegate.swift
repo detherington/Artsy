@@ -13,6 +13,13 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private var tabCounter = 0
     private var savedWindowFrame: NSRect?
     private var newCanvasPanel: NSPanel?
+    /// The start screen's window, while it is up.
+    private var startWindow: NSWindow?
+    /// Set while quitting, so canvases closing on the way out do not bring the start screen back.
+    private var isQuitting = false
+    /// Documents opened from the start screen's list under a security scope (the App Store
+    /// build's sandbox), held while their windows are open.
+    private var scopedRecentURLs: Set<URL> = []
     /// Keeps `viewModel.isDirty` → `window.isDocumentEdited` bindings alive per window.
     private var dirtyObservations: [ObjectIdentifier: AnyCancellable] = [:]
     #if !APP_STORE
@@ -86,7 +93,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         } else if AppPreferences.shared.skipNewCanvasDialog {
             createNewCanvas(size: AppPreferences.shared.defaultCanvasSize)
         } else {
-            showNewCanvasDialog()
+            showStart()
         }
 
         NSApp.activate(ignoringOtherApps: true)
@@ -121,6 +128,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             onCancel: { [weak self] in
                 panel.close()
                 self?.newCanvasPanel = nil
+                self?.showStartIfNothingOpen()
             }
         ))
         panel.contentView = hostView
@@ -128,7 +136,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         panel.makeKeyAndOrderFront(nil)
     }
 
-    func createNewCanvas(size: CGSize) {
+    /// - Parameter remember: whether `size` becomes the start screen's "Same as last";
+    ///   not for a photo's.
+    func createNewCanvas(size: CGSize, remember: Bool = true) {
+        if remember { AppPreferences.shared.lastCanvasSize = size }
         tabCounter += 1
         let title = "Canvas \(tabCounter)"
 
@@ -177,6 +188,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             window.center()
             window.makeKeyAndOrderFront(nil)
         }
+        startWindow?.close()
     }
 
     /// The canvas with the chrome around it; see `MainLayout`.
@@ -201,6 +213,15 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     /// prepend a "•" to the window title so the unsaved indicator is visible in the tab bar.
     private func observeDirty(window: NSWindow, viewModel: CanvasViewModel) {
         let id = ObjectIdentifier(window)
+        NotificationCenter.default.addObserver(forName: NSWindow.willCloseNotification, object: window, queue: .main) { [weak self, weak viewModel] _ in
+            guard let self else { return }
+            self.dirtyObservations[id] = nil
+            if let url = viewModel?.fileURL, self.scopedRecentURLs.remove(url.standardizedFileURL) != nil {
+                url.stopAccessingSecurityScopedResource()
+            }
+            // The last canvas gone, the start screen is back
+            DispatchQueue.main.async { self.showStartIfNothingOpen() }
+        }
         dirtyObservations[id] = viewModel.$isDirty
             .receive(on: RunLoop.main)
             .sink { [weak window] isDirty in
@@ -215,6 +236,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     // MARK: - Quit with unsaved changes
 
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        isQuitting = true
         DiagnosticsLog.shared.note(.app, "quitting")
         DiagnosticsLog.shared.flush()
         // Gather all canvas windows with dirty state.
@@ -245,12 +267,14 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         switch response {
         case .alertFirstButtonReturn: // Save
             // Save every dirty canvas; if any save is cancelled or fails, abort quit.
-            saveAllDirty(dirtyWindows, index: 0) { allSaved in
+            saveAllDirty(dirtyWindows, index: 0) { [weak self] allSaved in
+                if !allSaved { self?.isQuitting = false }
                 NSApp.reply(toApplicationShouldTerminate: allSaved)
             }
             return .terminateLater
 
         case .alertSecondButtonReturn: // Cancel
+            isQuitting = false
             return .terminateCancel
 
         default: // Don't Save
@@ -368,6 +392,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             // Track saved file URL so dirty tracking / quit prompt know this canvas is on disk
             viewModel.fileURL = url
             viewModel.markClean()
+            RecentCanvases.shared.note(url, size: viewModel.canvasSize)
 
             CanvasWindowStore.shared.register(window: window, viewModel: viewModel, canvasView: canvasView)
             observeDirty(window: window, viewModel: viewModel)
@@ -381,6 +406,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 window.center()
             }
             window.makeKeyAndOrderFront(nil)
+            startWindow?.close()
 
         } catch {
             DiagnosticsLog.shared.error(error, doing: "opening \(url.lastPathComponent)")
@@ -389,6 +415,144 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             alert.informativeText = error.localizedDescription
             alert.alertStyle = .critical
             alert.runModal()
+        }
+    }
+
+    // MARK: - The start screen
+
+    /// The start screen in a window of its own: the canvases opened lately and the sizes
+    /// (`StartView`, `docs/start-screen-plan.md`). At launch, back when the last canvas
+    /// closes, and under Window ▸ Start; closing it with nothing else open quits.
+    @objc func showStart() {
+        if let startWindow {
+            startWindow.makeKeyAndOrderFront(nil)
+            return
+        }
+        let window = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 880, height: 620),
+            styleMask: [.titled, .closable, .resizable, .miniaturizable],
+            backing: .buffered,
+            defer: false
+        )
+        window.title = "Start"
+        window.minSize = NSSize(width: 520, height: 400)
+        window.isReleasedWhenClosed = false
+        window.tabbingMode = .disallowed
+        window.contentView = NSHostingView(rootView: StartView(recents: RecentCanvases.shared, actions: startActions()))
+        window.center()
+        window.setFrameAutosaveName("Start")
+        startWindow = window
+        NotificationCenter.default.addObserver(forName: NSWindow.willCloseNotification, object: window, queue: .main) { [weak self] _ in
+            self?.startWindow = nil
+        }
+        window.makeKeyAndOrderFront(nil)
+    }
+
+    /// With the last canvas closed and nothing else up, the start screen; not while quitting.
+    private func showStartIfNothingOpen() {
+        guard !isQuitting, startWindow == nil, newCanvasPanel == nil,
+              !NSApp.windows.contains(where: { $0.isVisible && $0.tabbingIdentifier == "ArtsyCanvas" }) else { return }
+        showStart()
+    }
+
+    private func startActions() -> StartActions {
+        var actions = StartActions()
+        actions.newCanvas = { [weak self] size in self?.createNewCanvas(size: size) }
+        actions.customCanvas = { [weak self] in self?.showNewCanvasDialog() }
+        actions.open = { [weak self] entry in self?.openRecent(entry) }
+        actions.browse = { [weak self] in self?.handleOpen() }
+        actions.browseTitle = "Open…"
+        actions.reveal = { entry in
+            if let url = RecentCanvases.shared.url(of: entry) { NSWorkspace.shared.activateFileViewerSelecting([url]) }
+        }
+        actions.canRename = { RecentCanvases.shared.url(of: $0) != nil }
+        actions.rename = { [weak self] entry, name in self?.rename(entry, to: name) }
+        actions.fromImageFile = { [weak self] in self?.newCanvasFromImageFile() }
+        return actions
+    }
+
+    /// A canvas from an image file: the photo's size, the photo as the first layer under
+    /// an empty one, the window named after the file.
+    private func newCanvasFromImageFile() {
+        let panel = NSOpenPanel()
+        panel.allowedContentTypes = [.image]
+        panel.allowsMultipleSelection = false
+        panel.message = "Choose a photo to paint over"
+        panel.begin { [weak self] response in
+            guard let self, response == .OK, let url = panel.url else { return }
+            guard let data = try? Data(contentsOf: url),
+                  let image = PhotoCanvas.image(from: data, maxSide: LayerStack.maxCanvasSide) else {
+                NSAlert(error: PhotoCanvas.Failure.undecodable).runModal()
+                return
+            }
+            let name = url.deletingPathExtension().lastPathComponent
+            self.createNewCanvas(size: PhotoCanvas.canvasSize(for: image), remember: false)
+            guard let store = self.activeStore else { return }
+            do {
+                try PhotoCanvas.place(image, named: name, in: store.viewModel, renderer: store.canvasView.renderer)
+                store.viewModel.untitledName = name
+                NSApp.keyWindow?.title = "• " + name
+            } catch {
+                DiagnosticsLog.shared.error(error, doing: "placing \(name)")
+                NSAlert(error: error).runModal()
+            }
+        }
+    }
+
+    /// A canvas from the list: its window brought forward if it is open, opened if it is
+    /// still there, else a word and the entry offered for removal.
+    private func openRecent(_ entry: RecentCanvases.Entry) {
+        guard let url = RecentCanvases.shared.url(of: entry) else {
+            let alert = NSAlert()
+            alert.messageText = "\(entry.name) was not found"
+            alert.informativeText = "It may have been moved or deleted."
+            alert.addButton(withTitle: "Remove from Recents")
+            alert.addButton(withTitle: "Keep")
+            if alert.runModal() == .alertFirstButtonReturn { RecentCanvases.shared.remove(entry) }
+            return
+        }
+        let path = url.standardizedFileURL.path
+        if let open = NSApp.windows.first(where: {
+            $0.tabbingIdentifier == "ArtsyCanvas" && CanvasWindowStore.shared.get(for: $0)?.viewModel.fileURL?.standardizedFileURL.path == path
+        }) {
+            open.makeKeyAndOrderFront(nil)
+            startWindow?.close()
+            return
+        }
+        if url.startAccessingSecurityScopedResource() { scopedRecentURLs.insert(url.standardizedFileURL) }
+        openArtsyDocument(at: url)
+    }
+
+    @objc private func openRecentMenuItem(_ sender: NSMenuItem) {
+        guard let id = sender.representedObject as? String,
+              let entry = RecentCanvases.shared.entries.first(where: { $0.id.uuidString == id }) else { return }
+        openRecent(entry)
+    }
+
+    @objc private func clearRecents() {
+        RecentCanvases.shared.removeAll()
+    }
+
+    /// The document renamed on disk, in the list, and in any window that has it open.
+    private func rename(_ entry: RecentCanvases.Entry, to name: String) {
+        guard !name.isEmpty, !name.contains("/"), let url = RecentCanvases.shared.url(of: entry) else { return }
+        let destination = url.deletingLastPathComponent().appendingPathComponent(name).appendingPathExtension("artsy")
+        guard destination.path != url.path else { return }
+        do {
+            try FileManager.default.moveItem(at: url, to: destination)
+        } catch {
+            DiagnosticsLog.shared.error(error, doing: "renaming \(entry.name)")
+            NSAlert(error: error).runModal()
+            return
+        }
+        RecentCanvases.shared.moved(entry, to: destination)
+        let path = url.standardizedFileURL.path
+        for window in NSApp.windows where window.tabbingIdentifier == "ArtsyCanvas" {
+            guard let store = CanvasWindowStore.shared.get(for: window),
+                  store.viewModel.fileURL?.standardizedFileURL.path == path else { continue }
+            store.viewModel.fileURL = destination
+            window.representedURL = destination
+            window.title = (store.viewModel.isDirty ? "• " : "") + name
         }
     }
 
@@ -430,6 +594,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         fileMenu.addItem(withTitle: "New Canvas...", action: #selector(showNewCanvasDialog), keyEquivalent: "n")
         fileMenu.addItem(NSMenuItem.separator())
         fileMenu.addItem(withTitle: "Open...", action: #selector(handleOpen), keyEquivalent: "o")
+        // Open Recent: the start screen's list, filled in as the menu opens
+        let openRecentItem = NSMenuItem(title: "Open Recent", action: nil, keyEquivalent: "")
+        let openRecentMenu = NSMenu(title: "Open Recent")
+        openRecentMenu.delegate = self
+        openRecentItem.submenu = openRecentMenu
+        fileMenu.addItem(openRecentItem)
         fileMenu.addItem(NSMenuItem.separator())
         fileMenu.addItem(withTitle: "Save...", action: #selector(handleSave), keyEquivalent: "s")
         fileMenu.addItem(NSMenuItem.separator())
@@ -549,6 +719,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         windowMenu.item(at: 1)?.keyEquivalentModifierMask = [.command, .shift]
         windowMenu.addItem(withTitle: "Show Previous Tab", action: #selector(NSWindow.selectPreviousTab), keyEquivalent: "{")
         windowMenu.item(at: 2)?.keyEquivalentModifierMask = [.command, .shift]
+        windowMenu.addItem(NSMenuItem.separator())
+        let startItem = NSMenuItem(title: "Start", action: #selector(showStart), keyEquivalent: "n")
+        startItem.keyEquivalentModifierMask = [.command, .shift]
+        windowMenu.addItem(startItem)
         windowMenuItem.submenu = windowMenu
         NSApp.windowsMenu = windowMenu
 
@@ -1018,6 +1192,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 switch result {
                 case .success:
                     store.viewModel.markClean()
+                    RecentCanvases.shared.note(existingURL, size: store.viewModel.canvasSize)
                     targetWindow?.title = existingURL.deletingPathExtension().lastPathComponent
                     completion?(true)
                 case .failure(let error):
@@ -1050,6 +1225,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 case .success:
                     store.viewModel.fileURL = url
                     store.viewModel.markClean()
+                    RecentCanvases.shared.note(url, size: store.viewModel.canvasSize)
                     targetWindow?.title = url.deletingPathExtension().lastPathComponent
                     completion?(true)
                 case .failure(let error):
@@ -1082,10 +1258,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             }
             self.isOpeningFile = false
 
-            // If user cancelled and no windows exist, show the new canvas dialog
-            if NSApp.windows.filter({ $0.isVisible && $0.tabbingIdentifier == "ArtsyCanvas" }).isEmpty {
-                self.showNewCanvasDialog()
-            }
+            // Cancelled with nothing open: the start screen
+            self.showStartIfNothingOpen()
         }
     }
 
@@ -1132,6 +1306,17 @@ final class CanvasWindowStore {
 
 extension AppDelegate: NSMenuDelegate {
     func menuNeedsUpdate(_ menu: NSMenu) {
+        if menu.title == "Open Recent" {
+            menu.removeAllItems()
+            for entry in RecentCanvases.shared.entries.prefix(20) {
+                let item = NSMenuItem(title: entry.name, action: #selector(openRecentMenuItem(_:)), keyEquivalent: "")
+                item.representedObject = entry.id.uuidString
+                menu.addItem(item)
+            }
+            if !menu.items.isEmpty { menu.addItem(NSMenuItem.separator()) }
+            menu.addItem(withTitle: "Clear Menu", action: #selector(clearRecents), keyEquivalent: "")
+            return
+        }
         if menu.title == "Diagnostics" {
             menu.items.first { $0.title == "Record Strokes" }?.state = StrokeRecorder.isEnabledInDefaults ? .on : .off
             return

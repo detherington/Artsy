@@ -136,6 +136,7 @@ final class PaintingSession: ObservableObject {
             var saved = false
             if case .success = result {
                 saved = true
+                if let size = self?.viewModel.canvasSize { RecentCanvases.shared.note(url, size: size) }
                 if self?.viewModel.contentVersion == version { self?.viewModel.markClean() }
             }
             if task != .invalid { UIApplication.shared.endBackgroundTask(task) }
