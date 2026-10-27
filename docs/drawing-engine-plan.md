@@ -827,6 +827,13 @@ row logged the same, so the first stroke was never special, only each stroke's l
 The mouse-strokes golden was re-recorded after viewing: the waves' heads and the short
 flicks, which lay wholly inside the old warm-up, are slimmer; the dots are as they were.
 
+A stroke can also learn mid-way that its input has pressure after all
+(`strokeReportsPressure`, 2026-10-26): the iPad view begins a Pencil stroke without
+pressure only when the landing sample reads zero with no update expected and the Pencil
+has never reported force, and switches the stroke to the Pencil's own pressure the moment
+a force arrives; the samples drawn so far keep theirs, and the recording's `hasPressure`
+follows (`ios-plan.md` step 0).
+
 ## At the limits: 8192² with 12 layers
 
 Measured after step 6 opened these limits up (`testLargeCanvasCosts`, debug build, M4 Pro):

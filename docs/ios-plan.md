@@ -165,6 +165,18 @@ against the boundary rather than retrofitted to it.
    suite's 285 tests pass unchanged. Left for the pen in hand: predicted touches and
    the Pencil's late-arriving force and azimuth (estimated-property updates), which
    the simulator cannot exercise; the phone layout is step 4; the icon, step 5.
+   One of those arrived on 2026-10-26, before any Pencil was in hand: whether a stroke
+   has pressure had been read off its landing sample's force alone, and Apple says a
+   Pencil's force "is estimated at first, and may not always be updated", so a Pencil
+   Pro landing at an estimated zero would have drawn its whole stroke from speed, as
+   if it were the USB-C Pencil. `PaintingView.strokeHasPressure(beginning:)` now says
+   a Pencil stroke has pressure if its landing sample reads a force, if an update to
+   that force is expected (`estimatedPropertiesExpectingUpdates`), or if this Pencil
+   has reported force before in the session; the USB-C Pencil reads zero and expects
+   no update, so it still draws from speed. A stroke that began without pressure and
+   then reports some switches to the Pencil's own (`CanvasViewModel.strokeReportsPressure`,
+   also from `touchesEstimatedPropertiesUpdated`), and the recording follows. The
+   updates are still not applied to samples already drawn. Untested on a Pencil.
 3. **The rest of the painting app.** Documents through the document browser and
    iCloud Drive (the `.artsy` package is shared with the Mac as it is); layers,
    Adjust and Add; the Studio, Settings and Shortcuts as sheets; the keyboard

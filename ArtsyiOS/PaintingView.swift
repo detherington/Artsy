@@ -10,13 +10,19 @@ import ArtsyEngine
 /// Touch points are handed to the engine in the Mac's view space, y up, so the one
 /// transform serves both platforms; the picture itself needs no flip, since a Metal
 /// drawable's y runs the same way on both. A Pencil with pressure gives it; the USB-C
-/// Pencil and a finger give none, and the engine derives one from speed.
+/// Pencil and a finger give none, and the engine derives one from speed. Which a Pencil
+/// is cannot be read off its landing sample alone, whose force is an estimate that may
+/// read zero: see `strokeHasPressure(beginning:)`.
 final class PaintingView: MTKView {
     private weak var viewModel: CanvasViewModel?
     private(set) weak var renderer: CanvasRenderer?
     /// The touch drawing the stroke in progress, if any.
     private var drawingTouch: UITouch?
     private var strokeHasPressure = false
+    /// Whether the Pencil in use has ever reported a force. Once it has, every stroke
+    /// starts with pressure even when its landing sample reads zero, which a Pencil's
+    /// first, estimated force can. Session-wide: the Pencil does not change mid-document.
+    private static var pencilHasReportedForce = false
     /// Whether a finger draws; two fingers always pan, pinch and turn.
     var fingerPaints = true
 
@@ -79,7 +85,7 @@ final class PaintingView: MTKView {
         switch viewModel.currentTool {
         case .brush, .eraser:
             drawingTouch = touch
-            strokeHasPressure = touch.type == .pencil && touch.force > 0
+            strokeHasPressure = strokeHasPressure(beginning: touch)
             renderer.beginStroke()
             viewModel.beginStroke(point: strokePoint(from: touch), hasPressure: strokeHasPressure)
         case .eyedropper:
@@ -96,7 +102,47 @@ final class PaintingView: MTKView {
         guard let touch = drawingTouch, touches.contains(touch), let viewModel else { return }
         // Every sample the Pencil made since the last event, not only the last one
         for sample in event?.coalescedTouches(for: touch) ?? [touch] {
+            noteForce(of: sample)
             viewModel.continueStroke(point: strokePoint(from: sample))
+        }
+    }
+
+    /// The Pencil's real force, arriving after the estimate: too late for the samples
+    /// already drawn, but enough to tell a Pencil with a force sensor from one without.
+    override func touchesEstimatedPropertiesUpdated(_ touches: Set<UITouch>) {
+        guard let touch = drawingTouch, touches.contains(touch) else { return }
+        noteForce(of: touch)
+    }
+
+    /// Whether a stroke beginning with `touch` has pressure of its own. A finger never
+    /// does. A Pencil's force is estimated at first and refined later, so its landing
+    /// sample can read zero even on a Pencil with a force sensor (the first and second
+    /// generations, the Pro): the stroke has pressure if the sample reads a force, if an
+    /// update to it is expected, or if this Pencil has reported force before. The USB-C
+    /// Pencil has no sensor: it reads zero and expects no update, so its strokes take
+    /// their pressure from speed. A stroke that starts without pressure and then reports
+    /// some switches to it (`noteForce`).
+    private func strokeHasPressure(beginning touch: UITouch) -> Bool {
+        guard touch.type == .pencil else { return false }
+        if touch.force > 0 {
+            Self.pencilHasReportedForce = true
+            return true
+        }
+        return Self.pencilHasReportedForce || touch.estimatedPropertiesExpectingUpdates.contains(.force)
+    }
+
+    /// A Pencil sample's force, into the record: a stroke that began without pressure
+    /// takes the Pencil's own from here on.
+    private func noteForce(of touch: UITouch) {
+        guard touch.type == .pencil, touch.force > 0 else { return }
+        if !Self.pencilHasReportedForce {
+            Self.pencilHasReportedForce = true
+            DiagnosticsLog.shared.note(.stroke, "the Pencil reports force")
+        }
+        if !strokeHasPressure, drawingTouch != nil {
+            strokeHasPressure = true
+            viewModel?.strokeReportsPressure()
+            DiagnosticsLog.shared.note(.stroke, "the stroke began without pressure and the Pencil's force arrived: its own pressure from here")
         }
     }
 

@@ -221,6 +221,11 @@ final public class StrokeRecorder {
         current?.points.append(RecordedPoint(point, strokeStart: strokeStart))
     }
 
+    /// The stroke in progress reports pressure after all (`CanvasViewModel.strokeReportsPressure`).
+    public func strokeReportsPressure() {
+        current?.hasPressure = true
+    }
+
     public func endStroke() {
         guard let stroke = current else { return }
         current = nil
