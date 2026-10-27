@@ -296,6 +296,16 @@ public final class CanvasViewModel: ObservableObject {
 
     /// Whether the stroke in progress comes from a device that reports pressure.
     public private(set) var strokeHasPressure = true
+
+    /// The stroke in progress turned out to report pressure after all: a Pencil's force
+    /// is estimated at first and its landing sample can read zero, so the view may have
+    /// begun the stroke without pressure. From here on each sample's own pressure counts
+    /// in place of the one from speed; what is drawn already keeps the pressure it had.
+    public func strokeReportsPressure() {
+        guard isDrawing, !strokeHasPressure else { return }
+        strokeHasPressure = true
+        recorder?.strokeReportsPressure()
+    }
     private var strokeIsSettled = false
 
     /// The pen has lifted: bring the stroke to where it actually lifted, if smoothing left

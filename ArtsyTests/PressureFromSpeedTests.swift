@@ -71,6 +71,37 @@ final class PressureFromSpeedTests: XCTestCase {
         XCTAssertGreaterThan(pressure(zoom: 1 / 6, canvasStep: 10), pressure(zoom: 1, canvasStep: 10) + 0.3)
     }
 
+    /// A Pencil's force is estimated at first and can read zero on landing, so a stroke
+    /// may begin without pressure and learn better: from then on its samples' own
+    /// pressure counts, and the recording says the stroke had pressure.
+    func testAStrokeThatBeganWithoutPressureTakesThePensOwnOnceItReportsIt() throws {
+        let harness = try EngineHarness(width: 120, height: 80)
+        harness.select(.pencil)
+        harness.viewModel.smoothingMode = .none
+        harness.viewModel.pressureFromSpeed = true
+        harness.viewModel.setStrokeRecording(true)
+        defer { harness.viewModel.setStrokeRecording(false) }
+        func sample(_ x: CGFloat, pressure: Float, at t: TimeInterval) -> StrokePoint {
+            StrokePoint(position: CGPoint(x: x, y: 40), pressure: pressure, tiltX: 0, tiltY: 0, rotation: 0, timestamp: t)
+        }
+        harness.renderer.beginStroke()
+        harness.viewModel.beginStroke(point: sample(10, pressure: 0, at: 0), hasPressure: false)
+        harness.viewModel.continueStroke(point: sample(20, pressure: 0.3, at: 0.01))   // 1,000 px/s at zoom 1
+        XCTAssertEqual(try XCTUnwrap(harness.viewModel.activePath?.samples.last?.pressure),
+                       PressureFromSpeed.pressure(atSpeed: 1000), accuracy: 0.001, "no pressure yet: from speed")
+        harness.viewModel.strokeReportsPressure()
+        XCTAssertTrue(harness.viewModel.strokeHasPressure)
+        harness.viewModel.continueStroke(point: sample(30, pressure: 0.3, at: 0.02))
+        XCTAssertEqual(try XCTUnwrap(harness.viewModel.activePath?.samples.last?.pressure), 0.3, accuracy: 0.001,
+                       "the pen's own from here on")
+        harness.renderer.finalizeStroke()
+        harness.viewModel.endStroke()
+        XCTAssertEqual(harness.viewModel.recorder?.recording.strokes.last?.hasPressure, true, "recorded as a pen with pressure")
+        // Reporting pressure outside a stroke, or twice, changes nothing
+        harness.viewModel.strokeReportsPressure()
+        XCTAssertTrue(harness.viewModel.strokeHasPressure)
+    }
+
     /// On the canvas: the same line, drawn slowly and quickly, with a pencil whose touch
     /// decides how far into the paper it reaches.
     func testAStrokeWithoutPressureIsHeavierSlowThanFastAndAPenIsLeftAlone() throws {
