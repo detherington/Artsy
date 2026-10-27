@@ -235,7 +235,7 @@ public final class CanvasViewModel: ObservableObject {
         snapAnchor = nil
         strokeHasPressure = hasPressure
         recorder?.beginStroke(settingsFrom: self, firstPoint: rawPoint)
-        speedPressure = PressureFromSpeed()
+        speedPressure = PressureFromSpeed(zoom: Float(transform.scale))   // the hand's speed is on the screen
         let point = snappedToGuides(substitutingPressure(rawPoint))
         smoother.mode = smoothingMode
         smoother.strength = smoothingStrength

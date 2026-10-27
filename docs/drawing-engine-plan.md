@@ -797,14 +797,35 @@ is a live control on a graphite brush, the way its size is.
 
 Step 0 of `ios-plan.md`, for the iPhone Duo's Pencil and the Mac's mouse alike: an input
 that reports no pressure gets one from how fast it moves (`PressureFromSpeed`): full when
-still, 0.2 at 2,500 canvas pixels a second, smoothed over 80 ms, the first sample slow.
-It sits in the view model's stroke input, after the recorder and before the guides and
-the smoother, so recordings stay raw and replays derive it again; the pressure curve
-applies on top; a pen with pressure is untouched; Settings → Tablet switches it. Tests
-in `PressureFromSpeedTests`: the curve's ends and its monotony, the smoothing's lag on a
-stop, and on the canvas a slow pencil line covering more than half again a fast one,
+still, 0.2 at 2,500 screen points a second, smoothed over 80 ms, the landing sample and
+any rest before the first movement still. It sits in the view model's stroke input,
+after the recorder and before the guides and the smoother, so recordings stay raw and
+replays derive it again (a recording keeps the zoom); the pressure curve applies on top;
+a pen with pressure is untouched; Settings → Tablet switches it. Tests in
+`PressureFromSpeedTests`: the curve's ends and its monotony, the smoothing's lag on a
+stop, the first movement taken outright, the same hand speed pressing the same at any
+zoom, and on the canvas a slow pencil line covering more than half again a fast one,
 with the substitute off and with a real pen the two equal. The mouse-strokes golden was
 re-recorded after viewing.
+
+Two corrections on 2026-10-26, after a finger on iPad and iPhone: "the first touch is a
+hard press, then all the rest are soft." The speed had been in canvas pixels a second,
+and a screen point is three canvas pixels on an iPad with a 2,048 canvas fitted, five or
+six on a phone, so an ordinary finger stroke of 400 points a second read as 1,200 to
+2,400 pixels a second and pressed 0.5 or less, while the landing sample pressed 1.0 (a
+tap is a full dot). Now the speed is the hand's, in screen points, through the zoom the
+stroke is drawn at: 400 points a second presses about 0.8 on any device, at any zoom.
+And the speed had eased up from zero over the 80 ms smoothing, so every stroke started
+with a heavy head a tenth of a second long; the first movement now sets the speed
+outright and the smoothing follows from there. On the Mac the change is slight: the
+canvas is usually fitted at under a point a pixel, so the same mouse motion now reads a
+little slower and presses a little harder. Measured on the iPad Pro 11-inch (M5)
+simulator, a 2,048 canvas fitted at 2.9 pixels a point, the pencil at 8 px: the same
+finger line at 400 points a second logged pressure 0.52 before and 0.82 after; a slow
+line at 100 pt/s 0.92, a quick one at 1,000 pt/s 0.44; and three identical lines in a
+row logged the same, so the first stroke was never special, only each stroke's landing.
+The mouse-strokes golden was re-recorded after viewing: the waves' heads and the short
+flicks, which lay wholly inside the old warm-up, are slimmer; the dots are as they were.
 
 ## At the limits: 8192² with 12 layers
 
