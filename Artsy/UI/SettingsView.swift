@@ -158,6 +158,10 @@ struct SettingsView: View {
             .padding(20)
             .tabItem { Label("Tablet", systemImage: "pencil.tip") }
             .tag(2)
+
+            TimelapseSettingsView()
+            .tabItem { Label("Time-lapse", systemImage: "video") }
+            .tag(3)
         }
         .sheetFrame(width: 480, height: 520)
         .onAppear {
@@ -183,6 +187,53 @@ struct SettingsView: View {
         try? KeychainManager.shared.setAPIKey(unsplashKey, for: .unsplash)
         unsplashKeySaved = true
         unsplashKey = ""
+    }
+}
+
+// MARK: - Time-lapse
+
+/// Whether new canvases record their time-lapse, and the frame size.
+struct TimelapseSettingsView: View {
+    @ObservedObject private var prefs = AppPreferences.shared
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("Time-lapse")
+                .font(.headline)
+
+            GroupBox("Recording") {
+                VStack(alignment: .leading, spacing: 8) {
+                    Toggle("Record new canvases", isOn: $prefs.recordsTimelapse)
+                        .checkboxStyle()
+                    Text("Every change to the canvas becomes a frame of a video kept inside the document, "
+                         + "thirty frames a second. Each canvas keeps its own switch under Time-lapse in the ≡ menu, "
+                         + "where the recording can be replayed, exported or deleted.")
+                        .font(.system(size: 12))
+                        .foregroundColor(.secondary)
+                }
+                .padding(4)
+            }
+
+            GroupBox("Frame size") {
+                VStack(alignment: .leading, spacing: 8) {
+                    Picker("", selection: $prefs.timelapseLongestSide) {
+                        Text("1080p").tag(1920)
+                        Text("4K").tag(3840)
+                    }
+                    .pickerStyle(.segmented)
+                    .labelsHidden()
+                    Text("The longest side of a frame: 1,920 or 3,840 pixels. A smaller canvas records at its own size. "
+                         + "A second of 1080p video is about a megabyte; 4K about four. A canvas opened after a change "
+                         + "records at the new size from then on.")
+                        .font(.system(size: 12))
+                        .foregroundColor(.secondary)
+                }
+                .padding(4)
+            }
+
+            Spacer()
+        }
+        .padding(20)
     }
 }
 

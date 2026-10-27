@@ -34,6 +34,20 @@ extension AppModel {
             importBrushes()
         case "handleImportTexture":
             importTextures()
+        case "timelapseToggleRecording":
+            if let session {
+                let renderer = session.renderer
+                CanvasDocument.setTimelapseRecording(!(renderer.timelapse?.isRecording ?? false), renderer: renderer,
+                                                     documentURL: session.viewModel.fileURL)
+            }
+        case "timelapseReplay":
+            replayTimelapse()
+        case "timelapseExportFull":
+            exportTimelapse(length: .full)
+        case "timelapseExportShort":
+            exportTimelapse(length: .thirtySeconds)
+        case "timelapseDelete":
+            deleteTimelapse()
         default:
             DiagnosticsLog.shared.note(.app, "\(name) is not on iPad yet")
         }
@@ -147,6 +161,71 @@ extension AppModel {
         sheet.popoverPresentationController?.sourceRect = CGRect(x: 40, y: presenter.view.bounds.height - 30, width: 1, height: 1)
         sheet.popoverPresentationController?.permittedArrowDirections = .down
         present(sheet)
+    }
+
+    // MARK: - Time-lapse
+
+    /// Takes down whatever is on top of the canvas screen, if anything is.
+    private func dismissTop(completion: @escaping () -> Void) {
+        guard let top, top !== presenter else { completion(); return }
+        top.dismiss(animated: true, completion: completion)
+    }
+
+    /// The recording so far in a sheet over the canvas, with Export and Done.
+    private func replayTimelapse() {
+        guard let session, let recorder = session.renderer.timelapse else { return }
+        let name = session.viewModel.displayName
+        Task { @MainActor [weak self] in
+            do {
+                let movie = try await recorder.movie()
+                let width: CGFloat = 900
+                let view = TimelapsePlayerView(movie: movie, name: name, export: { [weak self] length in
+                    self?.dismissTop { self?.exportTimelapse(length: length) }
+                }, done: { [weak self] in self?.dismissTop {} })
+                self?.present(sheet: view, size: CGSize(width: width, height: width * movie.size.height / movie.size.width + 80))
+            } catch {
+                self?.show(error, doing: "replaying the time-lapse")
+            }
+        }
+    }
+
+    /// The movie as an MP4 in a folder of its own, its progress in a sheet, then the share
+    /// sheet: Save Video puts it in Photos, and Files, Mail and the rest are there too.
+    private func exportTimelapse(length: TimelapseMovie.Length) {
+        guard let session, let recorder = session.renderer.timelapse else { return }
+        let name = session.viewModel.displayName
+        let export = TimelapseExport()
+        present(sheet: TimelapseExportView(export: export, name: name), size: CGSize(width: 400, height: 150))
+        export.task = Task { @MainActor [weak self] in
+            var exported: URL?
+            var failure: Error?
+            do {
+                let movie = try await recorder.movie(length: length)
+                let url = try Self.scratchFolder()
+                    .appendingPathComponent(length == .full ? "\(name) Time-lapse.mp4" : "\(name) Time-lapse 30 s.mp4")
+                try await movie.export(to: url) { fraction in
+                    DispatchQueue.main.async { export.fraction = fraction }
+                }
+                exported = url
+            } catch is CancellationError {
+            } catch {
+                failure = error
+            }
+            let url = exported, error = failure
+            self?.dismissTop {
+                if let url { self?.share([url]) } else if let error { self?.show(error, doing: "exporting the time-lapse") }
+            }
+        }
+    }
+
+    private func deleteTimelapse() {
+        guard let session, let recorder = session.renderer.timelapse else { return }
+        let alert = UIAlertController(title: "Delete the time-lapse of \(session.viewModel.displayName)?",
+                                      message: "The recording so far, \(recorder.summary), is removed from the document. "
+                                               + "This cannot be undone.", preferredStyle: .alert)
+        alert.addAction(UIAlertAction(title: "Delete", style: .destructive) { _ in recorder.deleteRecording() })
+        alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+        present(alert)
     }
 
     // MARK: - Import

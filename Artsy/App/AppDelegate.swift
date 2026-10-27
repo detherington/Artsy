@@ -160,6 +160,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             viewModel.untitledName = title
             let canvasView = CanvasView(frame: NSRect(x: 0, y: 0, width: 800, height: 600), device: metalContext.device)
             try canvasView.configure(context: metalContext, viewModel: viewModel)
+            // The time-lapse of a canvas not yet saved goes to a temporary folder until it is
+            canvasView.renderer.timelapse = CanvasDocument.temporaryTimelapse(for: canvasView.renderer)
 
             window.contentView = layout(canvasView: canvasView, viewModel: viewModel)
 
@@ -608,6 +610,14 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         let exportJPEGItem = NSMenuItem(title: "Export JPEG...", action: #selector(handleExportJPEG), keyEquivalent: "e")
         exportJPEGItem.keyEquivalentModifierMask = [.command, .shift]
         fileMenu.addItem(exportJPEGItem)
+        fileMenu.addItem(NSMenuItem.separator())
+        // Time-lapse: filled in as it opens, from the front canvas's recorder
+        let timelapseItem = NSMenuItem(title: "Time-lapse", action: nil, keyEquivalent: "")
+        let timelapseMenu = NSMenu(title: "Time-lapse")
+        timelapseMenu.delegate = self
+        timelapseMenu.autoenablesItems = false
+        timelapseItem.submenu = timelapseMenu
+        fileMenu.addItem(timelapseItem)
         fileMenu.addItem(NSMenuItem.separator())
         fileMenu.addItem(withTitle: "Close Tab", action: #selector(NSWindow.close), keyEquivalent: "w")
         fileMenuItem.submenu = fileMenu
@@ -1317,6 +1327,33 @@ extension AppDelegate: NSMenuDelegate {
             menu.addItem(withTitle: "Clear Menu", action: #selector(clearRecents), keyEquivalent: "")
             return
         }
+        if menu.title == "Time-lapse" {
+            menu.removeAllItems()
+            let store = activeStore
+            let recorder = store?.canvasView.renderer.timelapse
+            let hasFrames = (recorder?.frames ?? 0) > 0
+            let summary = NSMenuItem(title: recorder?.summary ?? "Nothing recorded yet", action: nil, keyEquivalent: "")
+            summary.isEnabled = false
+            menu.addItem(summary)
+            menu.addItem(NSMenuItem.separator())
+            let record = NSMenuItem(title: "Record Time-lapse", action: #selector(timelapseToggleRecording), keyEquivalent: "")
+            record.state = recorder?.isRecording == true ? .on : .off
+            record.isEnabled = store != nil
+            menu.addItem(record)
+            menu.addItem(NSMenuItem.separator())
+            for (title, action) in [("Replay...", #selector(timelapseReplay)),
+                                    ("Export Full Length...", #selector(timelapseExportFull)),
+                                    ("Export 30 Seconds...", #selector(timelapseExportShort))] {
+                let item = NSMenuItem(title: title, action: action, keyEquivalent: "")
+                item.isEnabled = hasFrames
+                menu.addItem(item)
+            }
+            menu.addItem(NSMenuItem.separator())
+            let delete = NSMenuItem(title: "Delete Time-lapse...", action: #selector(timelapseDelete), keyEquivalent: "")
+            delete.isEnabled = hasFrames
+            menu.addItem(delete)
+            return
+        }
         if menu.title == "Diagnostics" {
             menu.items.first { $0.title == "Record Strokes" }?.state = StrokeRecorder.isEnabledInDefaults ? .on : .off
             return
@@ -1332,5 +1369,95 @@ extension AppDelegate: NSMenuDelegate {
                 if item.tag > 0 { item.state = Int(guides.gridSpacing) == item.tag ? .on : .off }
             }
         }
+    }
+}
+
+// MARK: - Time-lapse
+
+extension AppDelegate {
+    /// The front canvas's own switch, flipped; a canvas with no recorder gets one when
+    /// turned on.
+    @objc private func timelapseToggleRecording() {
+        guard let store = activeStore, let renderer = store.canvasView.renderer else { return }
+        CanvasDocument.setTimelapseRecording(!(renderer.timelapse?.isRecording ?? false), renderer: renderer,
+                                             documentURL: store.viewModel.fileURL)
+    }
+
+    /// The recording so far in a window of its own, with Export and Done.
+    @objc private func timelapseReplay() {
+        guard let store = activeStore, let recorder = store.canvasView.renderer.timelapse else { return }
+        let name = store.viewModel.displayName
+        Task { @MainActor [weak self] in
+            do {
+                let movie = try await recorder.movie()
+                let window = NSWindow(contentRect: .zero, styleMask: [.titled, .closable, .resizable], backing: .buffered, defer: false)
+                window.title = "Time-lapse — " + name
+                window.appearance = NSAppearance(named: .darkAqua)
+                window.isReleasedWhenClosed = false
+                window.contentViewController = NSHostingController(rootView: TimelapsePlayerView(
+                    movie: movie, name: name, export: { [weak self] length in
+                        self?.exportTimelapse(recorder, length: length, named: name)
+                    }, done: { [weak window] in window?.close() }))
+                // Sized to the frame, as wide as 960 or what the screen allows
+                let width = min(960, (NSScreen.main?.visibleFrame.width ?? 1200) - 120)
+                window.setContentSize(NSSize(width: width, height: width * movie.size.height / movie.size.width + 72))
+                window.center()
+                window.makeKeyAndOrderFront(nil)
+            } catch {
+                DiagnosticsLog.shared.error(error, doing: "replaying the time-lapse")
+                NSAlert(error: error).runModal()
+            }
+        }
+    }
+
+    @objc private func timelapseExportFull() { exportTimelapse(length: .full) }
+    @objc private func timelapseExportShort() { exportTimelapse(length: .thirtySeconds) }
+
+    private func exportTimelapse(length: TimelapseMovie.Length) {
+        guard let store = activeStore, let recorder = store.canvasView.renderer.timelapse else { return }
+        exportTimelapse(recorder, length: length, named: store.viewModel.displayName)
+    }
+
+    /// The movie as an MP4 where the save panel says, its progress in a small window
+    /// with Cancel.
+    private func exportTimelapse(_ recorder: TimelapseRecorder, length: TimelapseMovie.Length, named name: String) {
+        let panel = NSSavePanel()
+        panel.allowedContentTypes = [.mpeg4Movie]
+        panel.nameFieldStringValue = length == .full ? "\(name) Time-lapse.mp4" : "\(name) Time-lapse 30 s.mp4"
+        panel.begin { response in
+            guard response == .OK, let url = panel.url else { return }
+            let export = TimelapseExport()
+            let progress = NSWindow(contentViewController: NSHostingController(rootView: TimelapseExportView(export: export, name: name)))
+            progress.title = "Export Time-lapse"
+            progress.styleMask = [.titled]
+            progress.appearance = NSAppearance(named: .darkAqua)
+            progress.isReleasedWhenClosed = false
+            progress.center()
+            progress.makeKeyAndOrderFront(nil)
+            export.task = Task { @MainActor in
+                defer { progress.close() }
+                do {
+                    let movie = try await recorder.movie(length: length)
+                    try await movie.export(to: url) { fraction in
+                        DispatchQueue.main.async { export.fraction = fraction }
+                    }
+                } catch is CancellationError {
+                } catch {
+                    DiagnosticsLog.shared.error(error, doing: "exporting the time-lapse")
+                    NSAlert(error: error).runModal()
+                }
+            }
+        }
+    }
+
+    @objc private func timelapseDelete() {
+        guard let store = activeStore, let recorder = store.canvasView.renderer.timelapse else { return }
+        let alert = NSAlert()
+        alert.messageText = "Delete the time-lapse of \(store.viewModel.displayName)?"
+        alert.informativeText = "The recording so far, \(recorder.summary), is removed from the document. This cannot be undone."
+        alert.addButton(withTitle: "Delete").hasDestructiveAction = true
+        alert.addButton(withTitle: "Cancel")
+        guard alert.runModal() == .alertFirstButtonReturn else { return }
+        recorder.deleteRecording()
     }
 }

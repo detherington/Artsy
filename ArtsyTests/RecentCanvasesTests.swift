@@ -37,6 +37,25 @@ final class RecentCanvasesTests: XCTestCase {
         return url
     }
 
+    func testADocumentWhoseFolderMovedIsStillOneEntry() throws {
+        // iOS moves the app's container when the app is updated: the document's path changes
+        // under it, and the bookmark still finds it
+        let home = folder.appendingPathComponent("Container A/Documents", isDirectory: true)
+        try FileManager.default.createDirectory(at: home, withIntermediateDirectories: true)
+        let before = home.appendingPathComponent("Moved.artsy")
+        try FileManager.default.createDirectory(at: before, withIntermediateDirectories: true)
+        try Data("{}".utf8).write(to: before.appendingPathComponent("document.json"))
+        let recents = RecentCanvases(fileURL: folder.appendingPathComponent("recent.json"))
+        recents.note(before, size: CGSize(width: 10, height: 10))
+        let movedHome = folder.appendingPathComponent("Container B/Documents", isDirectory: true)
+        try FileManager.default.createDirectory(at: movedHome.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try FileManager.default.moveItem(at: home, to: movedHome)
+        let after = movedHome.appendingPathComponent("Moved.artsy")
+        recents.note(after, size: CGSize(width: 10, height: 10))
+        XCTAssertEqual(recents.entries.count, 1, "the same document, found by its bookmark")
+        XCTAssertEqual(recents.entries[0].path, after.standardizedFileURL.path)
+    }
+
     func testNewestFirstOneADocumentAndCapped() throws {
         let store = RecentCanvases(fileURL: nil, limit: 3)
         let a = try makeDocument(named: "A"), b = try makeDocument(named: "B")

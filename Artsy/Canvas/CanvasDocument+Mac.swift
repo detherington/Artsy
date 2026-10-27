@@ -10,6 +10,7 @@ extension CanvasDocument {
         let canvasView = CanvasView(frame: NSRect(x: 0, y: 0, width: 800, height: 600), device: metalContext.device)
         try canvasView.configure(context: metalContext, viewModel: viewModel)
         try populate(viewModel, from: url, document: doc, metalContext: metalContext)
+        attachTimelapse(to: canvasView.renderer, documentURL: url)
         return (viewModel, canvasView)
     }
 }

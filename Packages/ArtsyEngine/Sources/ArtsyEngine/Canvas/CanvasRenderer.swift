@@ -32,6 +32,11 @@ public final class CanvasRenderer: NSObject, MTKViewDelegate {
     public var activeStrokeTexture: MTLTexture!
     public var strokeTailTexture: MTLTexture!
     public var compositeTexture: MTLTexture!
+    /// The canvas's time-lapse, taking a frame after each settled change; nil for a
+    /// canvas that records none.
+    public var timelapse: TimelapseRecorder? {
+        didSet { viewModel?.objectWillChange.send() }
+    }
     public var blendTempTexture: MTLTexture!
     /// Every visible layer's paint thickness added up, for the display to light.
     public var compositeHeightTexture: MTLTexture!
@@ -328,7 +333,18 @@ public final class CanvasRenderer: NSObject, MTKViewDelegate {
 
     /// Encode everything up to `compositeTexture`: the in-progress stroke, then every layer.
     /// Separate from `draw(in:)` so a frame can be rendered without a view (tests, stroke replay).
+    /// A change composited with no stroke in progress is a frame of the time-lapse.
     public func encodeFrame(into commandBuffer: MTLCommandBuffer) {
+        encodeComposite(into: commandBuffer)
+        guard let timelapse, let viewModel, lastFrameRecomposited, !viewModel.isDrawing,
+              viewModel.transformSession == nil, viewModel.floatingTexture == nil else { return }
+        let background = viewModel.canvasBackgroundColor
+        timelapse.capture(composite: compositeTexture, contentVersion: viewModel.contentVersion,
+                          background: (background.r, background.g, background.b), compositor: compositor,
+                          commandBuffer: commandBuffer, now: clock())
+    }
+
+    private func encodeComposite(into commandBuffer: MTLCommandBuffer) {
         guard let viewModel = viewModel, let layerStack = viewModel.layerStack else { return }
 
         encodeActiveStroke(into: commandBuffer)

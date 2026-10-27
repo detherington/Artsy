@@ -27,6 +27,8 @@ public final class AppPreferences: ObservableObject {
         static let pressureFromSpeed = "pressureFromSpeed"
         static let paintRelief = "paintRelief"
         static let paintGloss = "paintGloss"
+        static let recordsTimelapse = "recordsTimelapse"
+        static let timelapseLongestSide = "timelapseLongestSide"
         static let dryingTime = "dryingTime"
         static let snapShapesOnHold = "snapShapesOnHold"
         static let layersDocked = "layersDocked"
@@ -54,6 +56,17 @@ public final class AppPreferences: ObservableObject {
 
     @Published public var skipNewCanvasDialog: Bool {
         didSet { defaults.set(skipNewCanvasDialog, forKey: Key.skipNewCanvasDialog) }
+    }
+
+    /// Whether a new document records its time-lapse; each document keeps its own switch
+    /// from then on.
+    @Published public var recordsTimelapse: Bool {
+        didSet { defaults.set(recordsTimelapse, forKey: Key.recordsTimelapse) }
+    }
+
+    /// The longest side of a time-lapse frame: 1,920 (1080p) or 3,840 (4K).
+    @Published public var timelapseLongestSide: Int {
+        didSet { defaults.set(timelapseLongestSide, forKey: Key.timelapseLongestSide) }
     }
 
     @Published public var defaultBrushName: String {
@@ -171,6 +184,9 @@ public final class AppPreferences: ObservableObject {
         self.lastCanvasHeight = lh > 0 ? lh : (h > 0 ? h : 2048)
 
         self.skipNewCanvasDialog = defaults.bool(forKey: Key.skipNewCanvasDialog)
+        self.recordsTimelapse = (defaults.object(forKey: Key.recordsTimelapse) as? Bool) ?? true
+        let side = defaults.integer(forKey: Key.timelapseLongestSide)
+        self.timelapseLongestSide = side > 0 ? side : TimelapseRecorder.defaultLongestSide
         self.defaultBrushName = defaults.string(forKey: Key.defaultBrushName) ?? "Hard Round"
 
         let savedSize = defaults.double(forKey: Key.defaultBrushSize)

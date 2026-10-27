@@ -49,7 +49,10 @@ public final class RecentCanvases: ObservableObject {
         var entry = Entry(id: UUID(), bookmark: Self.bookmark(of: url), path: url.path,
                           name: url.deletingPathExtension().lastPathComponent,
                           width: Int(size.width), height: Int(size.height), openedAt: date)
-        if let index = entries.firstIndex(where: { $0.path == url.path }) {
+        // The same document by its path, or by its bookmark when the path has changed: iOS
+        // moves the app's container when the app is updated
+        if let index = entries.firstIndex(where: { $0.path == url.path })
+            ?? entries.firstIndex(where: { self.url(of: $0)?.standardizedFileURL.path == url.path }) {
             entry.id = entries[index].id
             entries.remove(at: index)
         }
