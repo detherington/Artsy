@@ -228,14 +228,30 @@ public final class CanvasViewModel: ObservableObject {
 
     /// - Parameter hasPressure: false for a mouse or trackpad, whose "pressure" is a constant.
     public func beginStroke(point rawPoint: StrokePoint, hasPressure: Bool = true) {
+        beginStroke(point: rawPoint, input: hasPressure ? .pen : .hand)
+    }
+
+    /// - Parameter input: what is drawing: a pen with pressure of its own, a pen without
+    ///   (the USB-C Apple Pencil), or a hand, a mouse or a trackpad. The two without pressure
+    ///   take theirs from speed, each at its own pace. A pen without pressure also starts
+    ///   out with the Soft curve, unless a curve was chosen for this pen, and widens as it
+    ///   leans without fading, since fading stood for the lighter touch of a pen laid on its
+    ///   side, which this pen cannot tell from pressing.
+    public func beginStroke(point rawPoint: StrokePoint, input: StrokeInput) {
         guard rawPoint.isFinite else { return }   // a tablet glitch, not a stroke
         // A shape the last stroke was left snapped to has nothing to do with this one
         snappedPath = nil
         snappedShapeName = nil
         snapAnchor = nil
-        strokeHasPressure = hasPressure
+        strokeInput = input
+        strokeHasPressure = input.hasPressure
+        if input == .penWithoutPressure, pressureCurve == .linear,
+           AppPreferences.shared.pressureCurves[Self.currentPenKey()] == nil {
+            pressureCurve = .soft   // a pen that cannot press gets the curve that presses easily
+        }
         recorder?.beginStroke(settingsFrom: self, firstPoint: rawPoint)
-        speedPressure = PressureFromSpeed(zoom: Float(transform.scale))   // the hand's speed is on the screen
+        speedPressure = PressureFromSpeed(zoom: Float(transform.scale),   // the hand's speed is on the screen
+                                          pace: input == .penWithoutPressure ? .pen : .hand)
         let point = snappedToGuides(substitutingPressure(rawPoint))
         smoother.mode = smoothingMode
         smoother.strength = smoothingStrength
@@ -245,10 +261,10 @@ public final class CanvasViewModel: ObservableObject {
             brushSize: brushSize,
             pressureCurve: pressureCurve,
             dynamics: strokeBrush.pressureDynamics,
-            tilt: currentBrush.tiltDynamics,
+            tilt: input == .penWithoutPressure ? currentBrush.tiltDynamics?.withoutFading : currentBrush.tiltDynamics,
             velocity: currentBrush.velocityDynamics,
             spraysWhileResting: { if case .stamp(let s) = currentBrush.rendering { return s.holdRate > 0 } else { return false } }(),
-            easeLength: hasPressure || !easesStrokesWithoutPressure ? 0 : Self.easeLength(forBrushSize: brushSize)
+            easeLength: input.hasPressure || !easesStrokesWithoutPressure ? 0 : Self.easeLength(forBrushSize: brushSize)
         ))
         path.append(smoother.filter(point))
         activePath = path
@@ -296,6 +312,8 @@ public final class CanvasViewModel: ObservableObject {
 
     /// Whether the stroke in progress comes from a device that reports pressure.
     public private(set) var strokeHasPressure = true
+    /// What is drawing the stroke in progress.
+    public private(set) var strokeInput: StrokeInput = .pen
 
     /// The stroke in progress turned out to report pressure after all: a Pencil's force
     /// is estimated at first and its landing sample can read zero, so the view may have
@@ -304,6 +322,7 @@ public final class CanvasViewModel: ObservableObject {
     public func strokeReportsPressure() {
         guard isDrawing, !strokeHasPressure else { return }
         strokeHasPressure = true
+        strokeInput = .pen
         recorder?.strokeReportsPressure()
     }
     private var strokeIsSettled = false
@@ -396,7 +415,7 @@ public final class CanvasViewModel: ObservableObject {
                       currentBrush.name, brushSize, samples.count, duration, duration > 0 ? Double(samples.count) / duration : 0,
                       Double(length), pressures.min() ?? 0, pressures.max() ?? 0, tilt, path.holdDuration,
                       restSamplesInStroke > 0 ? ", \(restSamplesInStroke) rest samples" : "",
-                      strokeHasPressure ? "" : (pressureFromSpeed ? ", pressure from speed" : ", no pressure"),
+                      strokeHasPressure ? "" : (pressureFromSpeed ? (strokeInput == .penWithoutPressure ? ", pressure from a pen's speed" : ", pressure from speed") : ", no pressure"),
                       snappedShapeName.map { ", snapped to \($0)" } ?? "")
     }
 

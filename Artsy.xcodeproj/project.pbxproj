@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		BEB2D84A37C8598F4367325B /* TimelapseTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8485B7790360F4446DED4DBD /* TimelapseTests.swift */; };
+		91ECF0ED897F81F6D9DC1BFA /* PenWithoutPressureTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D2DF3D11A65CB2653F6D45D0 /* PenWithoutPressureTests.swift */; };
 		AEA9A275E980969E24EC15E5 /* PhotoCanvasTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B409E6A5FE3844D615C7A326 /* PhotoCanvasTests.swift */; };
 		1B41850C22301C3438AD00E5 /* RecentCanvasesTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6AF980624912D77E729F5946 /* RecentCanvasesTests.swift */; };
 		4A4F0601CD6C158BA7FAAA0E /* container-migration.plist in Resources */ = {isa = PBXBuildFile; fileRef = 0D6C27843CB56D18E7A7D7C8 /* container-migration.plist */; };
@@ -83,6 +84,7 @@
 
 /* Begin PBXFileReference section */
 		8485B7790360F4446DED4DBD /* TimelapseTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimelapseTests.swift; sourceTree = "<group>"; };
+		D2DF3D11A65CB2653F6D45D0 /* PenWithoutPressureTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PenWithoutPressureTests.swift; sourceTree = "<group>"; };
 		B409E6A5FE3844D615C7A326 /* PhotoCanvasTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhotoCanvasTests.swift; sourceTree = "<group>"; };
 		6AF980624912D77E729F5946 /* RecentCanvasesTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecentCanvasesTests.swift; sourceTree = "<group>"; };
 		0D6C27843CB56D18E7A7D7C8 /* container-migration.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "container-migration.plist"; sourceTree = "<group>"; };
@@ -261,6 +263,7 @@
 			isa = PBXGroup;
 			children = (
 				8485B7790360F4446DED4DBD /* TimelapseTests.swift */,
+				D2DF3D11A65CB2653F6D45D0 /* PenWithoutPressureTests.swift */,
 				B409E6A5FE3844D615C7A326 /* PhotoCanvasTests.swift */,
 				6AF980624912D77E729F5946 /* RecentCanvasesTests.swift */,
 				D897CE034798F52F728C0DCD /* PencilTiltTests.swift */,
@@ -577,6 +580,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				BEB2D84A37C8598F4367325B /* TimelapseTests.swift in Sources */,
+				91ECF0ED897F81F6D9DC1BFA /* PenWithoutPressureTests.swift in Sources */,
 				AEA9A275E980969E24EC15E5 /* PhotoCanvasTests.swift in Sources */,
 				1B41850C22301C3438AD00E5 /* RecentCanvasesTests.swift in Sources */,
 				0CF5E7B6A65CFA6F66F18BB2 /* PencilTiltTests.swift in Sources */,

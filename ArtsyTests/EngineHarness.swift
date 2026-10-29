@@ -177,9 +177,14 @@ final class EngineHarness {
     /// - Parameter hasPressure: false to draw as a mouse would (the samples' pressure is
     ///   then a constant the engine may ease in and out).
     func draw(_ points: [StrokePoint], pointsPerFrame: Int = 3, hasPressure: Bool = true) {
+        draw(points, pointsPerFrame: pointsPerFrame, input: hasPressure ? .pen : .hand)
+    }
+
+    /// - Parameter input: a pen, a pen without pressure (the USB-C Pencil) or a hand.
+    func draw(_ points: [StrokePoint], pointsPerFrame: Int = 3, input: StrokeInput) {
         guard let first = points.first else { return }
         renderer.beginStroke()
-        viewModel.beginStroke(point: first, hasPressure: hasPressure)
+        viewModel.beginStroke(point: first, input: input)
         for (index, point) in points.dropFirst().enumerated() {
             viewModel.continueStroke(point: point)
             if (index + 1) % pointsPerFrame == 0 { renderFrame() }
@@ -193,7 +198,7 @@ final class EngineHarness {
             XCTFail("Unknown brush \"\(stroke.brushName)\" in recorded stroke", file: file, line: line)
             return
         }
-        draw(stroke.points.map(\.strokePoint), pointsPerFrame: pointsPerFrame, hasPressure: stroke.hasPressure ?? true)
+        draw(stroke.points.map(\.strokePoint), pointsPerFrame: pointsPerFrame, input: stroke.strokeInput)
     }
 
     // MARK: - Readback
