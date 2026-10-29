@@ -129,4 +129,29 @@ final class StrokeSmoothingTests: XCTestCase {
         XCTAssertLessThan(heavy, medium)
         XCTAssertLessThan(heavy, 0.2)
     }
+
+    /// The predicted samples a frame ahead go through the filter as the real ones would,
+    /// without moving it on: the real samples that follow are filtered as if nothing had
+    /// been previewed.
+    func testPreviewingLeavesTheSmootherWhereItWas() {
+        for mode in SmoothingMode.allCases {
+            let plain = smoother(mode), previewed = smoother(mode)
+            for step in 0..<20 {
+                let point = sample(CGFloat(step) * 5, 50 + (step % 2 == 0 ? 2 : -2), time: Double(step) * 0.008)
+                _ = plain.filter(point)
+                _ = previewed.filter(point)
+            }
+            let next = (20..<23).map { sample(CGFloat($0) * 5, 50, time: Double($0) * 0.008) }
+            let preview = previewed.preview(next)
+            XCTAssertEqual(preview.count, 3)
+            for step in 0..<3 {
+                let real = plain.filter(next[step]), after = previewed.filter(next[step])
+                XCTAssertEqual(preview[step].position.x, real.position.x, accuracy: 1e-9, "\(mode.rawValue): the preview is what the filter would do")
+                XCTAssertEqual(preview[step].position.y, real.position.y, accuracy: 1e-9, mode.rawValue)
+                XCTAssertEqual(preview[step].pressure, real.pressure, accuracy: 1e-6, mode.rawValue)
+                XCTAssertEqual(after.position.x, real.position.x, accuracy: 1e-9, "\(mode.rawValue): and leaves it to do just that")
+                XCTAssertEqual(after.position.y, real.position.y, accuracy: 1e-9, mode.rawValue)
+            }
+        }
+    }
 }

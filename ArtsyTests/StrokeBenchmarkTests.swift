@@ -75,6 +75,72 @@ final class StrokeBenchmarkTests: XCTestCase {
         harness.viewModel.endStroke()
     }
 
+    /// What a frame costs with a paint brush on the move, by brush size: Oil as it is, then
+    /// Oil without its push, without its thickness, and without its load, to say where the
+    /// time goes. A fast stroke (≈ 25 px per frame at 120 a second) over paint on 2048².
+    func testPaintBrushFrameCost() throws {
+        func variant(_ name: String, _ change: (inout StampSettings) -> Void) -> (String, BrushDescriptor) {
+            var brush = BrushDescriptor.oil
+            guard case .stamp(var settings) = brush.rendering else { return (name, brush) }
+            change(&settings)
+            brush.rendering = .stamp(settings)
+            return (name, brush)
+        }
+        let variants = [
+            ("oil", BrushDescriptor.oil),
+            variant("oil, no push") { $0.impasto?.squeeze = 0 },
+            variant("oil, no thickness") { $0.impasto = nil },
+            variant("oil, no load") { $0.load = nil },
+            variant("oil, colour only") { $0.impasto = nil; $0.load = nil },
+            ("acrylic", BrushDescriptor.acrylic),
+            ("palette knife", BrushDescriptor.paletteKnife),
+            ("soft round", BrushDescriptor.softRound),
+        ]
+        // The 4096² canvas tells whether a pass's cost follows the canvas or the dab
+        let runs = variants.map { ($0.0, $0.1, 2048, [Float(60), 150, 300, 500]) }
+            + [("oil", BrushDescriptor.oil, 4096, [Float(60), 150, 500]),
+               (variants[1].0, variants[1].1, 4096, [Float(60), 150, 500]),
+               (variants[2].0, variants[2].1, 4096, [Float(60), 150, 500]),
+               ("acrylic", BrushDescriptor.acrylic, 4096, [Float(60), 150, 500]),
+               ("soft round", BrushDescriptor.softRound, 4096, [Float(60), 500])]
+        for (name, brush, canvas, sizes) in runs {
+            for size in sizes {
+                let harness = try EngineHarness(width: canvas, height: canvas)
+                harness.fill(harness.drawingLayer, red: 0.8, green: 0.3, blue: 0.2)
+                harness.select(brush)
+                harness.viewModel.brushSize = size
+                var x = 300.0
+                var timestamp = 0.0
+                func nextPoint() -> StrokePoint {
+                    x += 25
+                    timestamp += 1.0 / 120
+                    return StrokePoint(position: CGPoint(x: x, y: 1000 + 200 * sin(x / 300)), pressure: 0.8,
+                                       tiltX: 0, tiltY: 0, rotation: 0, timestamp: timestamp)
+                }
+                harness.renderer.beginStroke()
+                harness.viewModel.beginStroke(point: nextPoint())
+                harness.viewModel.continueStroke(point: nextPoint())
+                harness.renderFrame()
+
+                var cpu: [Double] = []
+                var gpu: [Double] = []
+                for _ in 0..<40 {
+                    harness.viewModel.continueStroke(point: nextPoint())
+                    let commandBuffer = harness.context.commandQueue.makeCommandBuffer()!
+                    cpu.append(milliseconds { harness.renderer.encodeFrame(into: commandBuffer) })
+                    commandBuffer.commit()
+                    commandBuffer.waitUntilCompleted()
+                    gpu.append((commandBuffer.gpuEndTime - commandBuffer.gpuStartTime) * 1000)
+                }
+                harness.renderer.finalizeStroke()
+                harness.viewModel.endStroke()
+                let sortedGPU = gpu.sorted()
+                print(String(format: "BENCHMARK paint-frame (%@) | %-18@ | %d² | %3.0f px | cpu %5.2f ms | gpu p50 %6.2f ms p95 %6.2f ms max %6.2f ms",
+                             build, name, canvas, size, median(cpu), median(gpu), sortedGPU[sortedGPU.count * 95 / 100], sortedGPU[sortedGPU.count - 1]))
+            }
+        }
+    }
+
     /// Cost of one frame of smudging, which lays every dab straight into the layer with
     /// three encoders each. A fast stroke (≈ 25 px per frame) with the built-in Smudge at
     /// 36 px, and the same with a 200 px brush, over paint.

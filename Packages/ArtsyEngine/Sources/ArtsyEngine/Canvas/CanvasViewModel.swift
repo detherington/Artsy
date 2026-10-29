@@ -127,9 +127,9 @@ public final class CanvasViewModel: ObservableObject {
     private var speedPressure = PressureFromSpeed()
 
     /// The sample with its pressure from its speed, for an input that reports none.
-    private func substitutingPressure(_ point: StrokePoint) -> StrokePoint {
+    private func substitutingPressure(_ point: StrokePoint, from speed: inout PressureFromSpeed) -> StrokePoint {
         guard !strokeHasPressure, pressureFromSpeed else { return point }
-        let pressure = speedPressure.pressure(for: point)
+        let pressure = speed.pressure(for: point)
         return StrokePoint(position: point.position, pressure: pressure, tiltX: point.tiltX, tiltY: point.tiltY,
                            rotation: point.rotation, timestamp: point.timestamp)
     }
@@ -252,7 +252,7 @@ public final class CanvasViewModel: ObservableObject {
         recorder?.beginStroke(settingsFrom: self, firstPoint: rawPoint)
         speedPressure = PressureFromSpeed(zoom: Float(transform.scale),   // the hand's speed is on the screen
                                           pace: input == .penWithoutPressure ? .pen : .hand)
-        let point = snappedToGuides(substitutingPressure(rawPoint))
+        let point = snappedToGuides(substitutingPressure(rawPoint, from: &speedPressure))
         smoother.mode = smoothingMode
         smoother.strength = smoothingStrength
         smoother.zoom = transform.scale
@@ -298,6 +298,7 @@ public final class CanvasViewModel: ObservableObject {
         guard isDrawing, let last = lastInput else { return }
         defer { sampleArrivedSinceFrame = false; lastFrameTime = time }
         guard !sampleArrivedSinceFrame, let lastFrame = lastFrameTime else { return }
+        predictStroke([])   // a resting pen is going nowhere
         restSamplesInStroke += 1
         feed(StrokePoint(
             position: last.position, pressure: last.pressure, tiltX: last.tiltX, tiltY: last.tiltY,
@@ -347,10 +348,28 @@ public final class CanvasViewModel: ObservableObject {
         guard rawPoint.isFinite else { return }
         recorder?.append(rawPoint)
         guard isDrawing else { return }
-        let point = snappedToGuides(substitutingPressure(rawPoint))
+        let point = snappedToGuides(substitutingPressure(rawPoint, from: &speedPressure))
         lastInput = point
         activePath?.append(smoother.filter(point))
         checkShapeSnap()
+    }
+
+    /// Where the pen is expected next, a frame ahead: the predicted touches iOS offers
+    /// with each event, readied like the real samples (pressure from speed, the guides,
+    /// smoothing) without moving any of that on. The renderer draws the stroke's tail
+    /// through them, and only the tail, so a wrong guess costs one frame and nothing is
+    /// committed on its word. Replaced by the next event's; cleared while the pen rests.
+    public private(set) var predictedSamples: [StrokePoint] = []
+    /// Goes up every time `predictedSamples` changes, for the renderer.
+    public private(set) var predictionVersion = 0
+
+    public func predictStroke(_ samples: [StrokePoint]) {
+        guard isDrawing else { return }
+        if samples.isEmpty, predictedSamples.isEmpty { return }
+        var speed = speedPressure
+        let readied = samples.filter(\.isFinite).map { snappedToGuides(substitutingPressure($0, from: &speed)) }
+        predictedSamples = smoother.preview(readied)
+        predictionVersion += 1
     }
 
     /// Snap the stroke to a shape once the pen has held still long enough at its end; snap
@@ -423,6 +442,7 @@ public final class CanvasViewModel: ObservableObject {
     public func endStroke() {
         smoother.end()
         recorder?.endStroke()
+        predictedSamples = []
         activePath = nil
         snappedPath = nil
         snappedShapeName = nil

@@ -13,7 +13,7 @@ public enum SmoothingMode: String, CaseIterable, Identifiable, Codable {
 // Adaptive smoothing: strong at slow speeds, weak at fast speeds.
 // Feels natural — deliberate slow movements get stabilized, fast confident strokes stay sharp.
 
-final class OneEuroFilter {
+struct OneEuroFilter {
     private var xFilter: LowPassFilter
     private var yFilter: LowPassFilter
     private var dxFilter: LowPassFilter
@@ -41,7 +41,7 @@ final class OneEuroFilter {
         self.dyFilter = LowPassFilter()
     }
 
-    func reset() {
+    mutating func reset() {
         xFilter = LowPassFilter()
         yFilter = LowPassFilter()
         dxFilter = LowPassFilter()
@@ -50,7 +50,7 @@ final class OneEuroFilter {
         lastInterval = 1.0 / 200
     }
 
-    func filter(point: CGPoint, timestamp: TimeInterval) -> CGPoint {
+    mutating func filter(point: CGPoint, timestamp: TimeInterval) -> CGPoint {
         guard let lastTime = lastTimestamp else {
             lastTimestamp = timestamp
             xFilter.initialize(value: point.x)
@@ -96,16 +96,16 @@ final class OneEuroFilter {
     }
 }
 
-private final class LowPassFilter {
+private struct LowPassFilter {
     var lastValue: Double = 0
     private var initialized = false
 
-    func initialize(value: Double) {
+    mutating func initialize(value: Double) {
         lastValue = value
         initialized = true
     }
 
-    func filter(value: Double, alpha: Double) -> Double {
+    mutating func filter(value: Double, alpha: Double) -> Double {
         if !initialized {
             initialize(value: value)
             return value
@@ -121,7 +121,7 @@ private final class LowPassFilter {
 // The drawing point only moves when the pen pulls it beyond the string length.
 // Great for inking — produces very smooth, deliberate lines.
 
-final class LazyBrushFilter {
+struct LazyBrushFilter {
     private var anchor: CGPoint?
     let radius: Double  // String length in pixels
 
@@ -129,11 +129,11 @@ final class LazyBrushFilter {
         self.radius = radius
     }
 
-    func reset() {
+    mutating func reset() {
         anchor = nil
     }
 
-    func filter(point: CGPoint) -> CGPoint {
+    mutating func filter(point: CGPoint) -> CGPoint {
         guard let anchor = anchor else {
             self.anchor = point
             return point
@@ -159,7 +159,7 @@ final class LazyBrushFilter {
 
 // MARK: - Moving Average Filter
 
-final class MovingAverageFilter {
+struct MovingAverageFilter {
     private var buffer: [CGPoint] = []
     let windowSize: Int
 
@@ -167,11 +167,11 @@ final class MovingAverageFilter {
         self.windowSize = max(2, windowSize)
     }
 
-    func reset() {
+    mutating func reset() {
         buffer.removeAll()
     }
 
-    func filter(point: CGPoint) -> CGPoint {
+    mutating func filter(point: CGPoint) -> CGPoint {
         buffer.append(point)
         if buffer.count > windowSize {
             buffer.removeFirst()
@@ -185,6 +185,8 @@ final class MovingAverageFilter {
 
 // MARK: - Stroke Smoother (unified interface)
 
+/// The filters are value types, so `preview` can run samples through a copy of the one in
+/// use and leave the real one where it was.
 final public class StrokeSmoother {
     public var mode: SmoothingMode = .none
     public var strength: Float = 0.5  // 0.0 to 1.0
@@ -259,6 +261,15 @@ final public class StrokeSmoother {
         lastInput = point
         lastOutput = output
         return output
+    }
+
+    /// `points` as `filter` would return them, had they come next, without the filter
+    /// moving on: for the predicted samples a frame ahead of the pen, which are drawn and
+    /// thrown away. The real samples that follow are filtered from where it stands now.
+    public func preview(_ points: [StrokePoint]) -> [StrokePoint] {
+        let state = (oneEuro, lazyBrush, movingAvg, lastInput, lastOutput, smoothedPressure)
+        defer { (oneEuro, lazyBrush, movingAvg, lastInput, lastOutput, smoothedPressure) = state }
+        return points.map(filter)
     }
 
     /// When the pen lifts, the smoothed position can still be short of where the pen was.

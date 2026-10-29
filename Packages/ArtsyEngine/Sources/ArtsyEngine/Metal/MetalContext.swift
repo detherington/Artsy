@@ -64,7 +64,9 @@ public final class MetalContext {
     /// A loaded brush's carry: filled at pen-down, and brought up to date as the brush goes
     public let loadedBrushFillPipelineState: MTLComputePipelineState
     public let loadedBrushTransferPipelineState: MTLComputePipelineState
-    /// Thick paint pushed out from under a dab to its rim
+    /// Thick paint pushed out from under a dab to its rim: the rays from its centre
+    /// integrated first, then the push itself
+    public let impastoRayPipelineState: MTLComputePipelineState
     public let impastoPushPipelineState: MTLComputePipelineState
 
     // Vertex descriptors
@@ -300,6 +302,7 @@ public final class MetalContext {
         self.mipPipelineState = try device.makeComputePipelineState(function: Self.function("mipKernel", in: library))
         self.loadedBrushFillPipelineState = try device.makeComputePipelineState(function: Self.function("loadedBrushFillKernel", in: library))
         self.loadedBrushTransferPipelineState = try device.makeComputePipelineState(function: Self.function("loadedBrushTransferKernel", in: library))
+        self.impastoRayPipelineState = try device.makeComputePipelineState(function: Self.function("impastoRayKernel", in: library))
         self.impastoPushPipelineState = try device.makeComputePipelineState(function: Self.function("impastoPushKernel", in: library))
 
         guard let texturesDifferFunc = library.makeFunction(name: "texturesDifferKernel") else {
