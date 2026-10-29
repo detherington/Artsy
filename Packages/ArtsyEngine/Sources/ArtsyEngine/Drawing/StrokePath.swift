@@ -74,7 +74,7 @@ final public class StrokePath {
     private var settledBaseCount = 0
 
     /// Distance between emitted points, in canvas pixels.
-    private let stepDistance: CGFloat = 1.0
+    private static let stepDistance: CGFloat = 1.0
 
     public init(style: Style) {
         self.style = style
@@ -144,13 +144,31 @@ final public class StrokePath {
     /// `settledCount` as far as it can go.
     private func resolvePoints() {
         let total = base[base.count - 1].distance
+        points.removeSubrange(settledCount...)
+        points += Self.resolve(base[settledCount...], total: total, style: style)
+
+        if style.easeLength <= 0 {
+            settledCount = settledBaseCount
+        } else if total >= style.easeLength * 2 {
+            // The ease-out trails the end of the stroke, so only points further back than
+            // that are final — and only once the stroke is long enough that the ease-in
+            // has stopped stretching.
+            let limit = total - style.easeLength
+            var count = settledCount
+            while count < settledBaseCount, base[count].distance <= limit { count += 1 }
+            settledCount = count
+        }
+    }
+
+    /// `base` as drawn: each point's pressure through the ease, over a stroke `total` long,
+    /// and the curve, into width and opacity, with tilt and speed on top.
+    private static func resolve(_ base: ArraySlice<Base>, total: CGFloat, style: Style) -> [InterpolatedPoint] {
         // Short strokes ease over half their length each way, so their middle still
         // reaches full pressure and a tap (no length at all) is not eased away.
         let ease = min(style.easeLength, total / 2)
-
-        points.removeSubrange(settledCount...)
-        for index in settledCount..<base.count {
-            let b = base[index]
+        var points: [InterpolatedPoint] = []
+        points.reserveCapacity(base.count)
+        for b in base {
             var pressure = b.rawPressure
             if ease > 0 {
                 let t = Float(min(1, min(b.distance, total - b.distance) / ease))
@@ -184,24 +202,60 @@ final public class StrokePath {
                 speed: b.speed
             ))
         }
+        return points
+    }
 
-        if style.easeLength <= 0 {
-            settledCount = settledBaseCount
-        } else if total >= style.easeLength * 2 {
-            // The ease-out trails the end of the stroke, so only points further back than
-            // that are final — and only once the stroke is long enough that the ease-in
-            // has stopped stretching.
-            let limit = total - style.easeLength
-            var count = settledCount
-            while count < settledBaseCount, base[count].distance <= limit { count += 1 }
-            settledCount = count
+    // MARK: - Looking ahead
+
+    /// The points the stroke would have if `predicted` came next, for drawing its tail a
+    /// frame ahead of the pen (the predicted touches iOS offers): the settled points as
+    /// they are, the provisional segment reshaped by the first predicted sample, and the
+    /// segments on through the rest. Nothing here changes; the stroke settles as the real
+    /// samples come, and the tail is drawn afresh every frame. The same as `points` when
+    /// there is nothing to predict.
+    public func points(predicting predicted: [StrokePoint]) -> [InterpolatedPoint] {
+        guard !predicted.isEmpty, !samples.isEmpty else { return points }
+        // The provisional segment's neighbours on both sides are the last three samples
+        let kept = Array(samples.suffix(3))
+        var all = kept, allSpeeds = Array(speeds.suffix(3))
+        for sample in predicted where sample.isFinite {
+            let last = all[all.count - 1]
+            let moved = hypot(sample.position.x - last.position.x, sample.position.y - last.position.y)
+            guard moved > 0.01 else { continue }
+            let dt = Float(max(sample.timestamp - last.timestamp, 0.0005))
+            let previous = allSpeeds[allSpeeds.count - 1]
+            allSpeeds.append(previous + (Float(moved) / dt - previous) * dt / (dt + 0.04))
+            all.append(sample)
         }
+        guard all.count > kept.count else { return points }
+
+        // From the end of the last settled segment, if there is one, on through the
+        // provisional segment (the last two kept samples) and the predicted ones
+        var ahead: [Base] = []
+        if settledBaseCount > 0 { ahead.append(base[settledBaseCount - 1]) }
+        let seeded = ahead.count
+        for i in max(0, kept.count - 2)..<(all.count - 1) {
+            Self.emitSegment(i, samples: all, speeds: allSpeeds, into: &ahead)
+        }
+        guard ahead.count > seeded else { return points }
+        let total = ahead[ahead.count - 1].distance
+        // With easing, the points past `settledCount` are settled in place but not yet in
+        // pressure: they are resolved again against the longer stroke, as the real ones are
+        return Array(points[..<settledCount])
+            + Self.resolve(base[settledCount..<settledBaseCount], total: total, style: style)
+            + Self.resolve(ahead[seeded...], total: total, style: style)
     }
 
     // MARK: - Geometry
 
     /// Append the points of the segment from `samples[i]` to `samples[i + 1]`.
     private func emitSegment(_ i: Int) {
+        Self.emitSegment(i, samples: samples, speeds: speeds, into: &base)
+    }
+
+    /// Append to `base` the points of the segment from `samples[i]` to `samples[i + 1]`,
+    /// `speeds` being the samples' smoothed speeds.
+    private static func emitSegment(_ i: Int, samples: [StrokePoint], speeds: [Float], into base: inout [Base]) {
         let last = samples.count - 1
         let p0 = samples[max(0, i - 1)].position
         let p1 = samples[i]
@@ -242,7 +296,7 @@ final public class StrokePath {
     /// Centripetal spacing (knot intervals of √distance) keeps the curve from overshooting or
     /// looping when samples are unevenly spaced — a long move followed by a short one — which
     /// the uniform form does. With evenly spaced samples the two are identical.
-    private func centripetalTangents(p0: CGPoint, p1: CGPoint, p2: CGPoint, p3: CGPoint) -> (CGPoint, CGPoint) {
+    private static func centripetalTangents(p0: CGPoint, p1: CGPoint, p2: CGPoint, p3: CGPoint) -> (CGPoint, CGPoint) {
         func knot(_ a: CGPoint, _ b: CGPoint) -> CGFloat { sqrt(hypot(b.x - a.x, b.y - a.y)) }
         let d01 = knot(p0, p1), d12 = knot(p1, p2), d23 = knot(p2, p3)
         let chord = CGPoint(x: p2.x - p1.x, y: p2.y - p1.y)
@@ -258,7 +312,7 @@ final public class StrokePath {
         return (tangent(p0, p1, p2, dab: d01, dbc: d12), tangent(p1, p2, p3, dab: d12, dbc: d23))
     }
 
-    private func hermite(t: CGFloat, p1: CGPoint, m1: CGPoint, p2: CGPoint, m2: CGPoint) -> CGPoint {
+    private static func hermite(t: CGFloat, p1: CGPoint, m1: CGPoint, p2: CGPoint, m2: CGPoint) -> CGPoint {
         let t2 = t * t
         let t3 = t2 * t
         let h00 = 2 * t3 - 3 * t2 + 1
@@ -269,7 +323,7 @@ final public class StrokePath {
                        y: h00 * p1.y + h10 * m1.y + h01 * p2.y + h11 * m2.y)
     }
 
-    private func hermiteTangent(t: CGFloat, p1: CGPoint, m1: CGPoint, p2: CGPoint, m2: CGPoint) -> CGPoint {
+    private static func hermiteTangent(t: CGFloat, p1: CGPoint, m1: CGPoint, p2: CGPoint, m2: CGPoint) -> CGPoint {
         let t2 = t * t
         let h00 = 6 * t2 - 6 * t
         let h10 = 3 * t2 - 4 * t + 1

@@ -54,6 +54,8 @@ public final class CanvasRenderer: NSObject, MTKViewDelegate {
     /// Stamp brushes that spray while resting: dabs already laid per rest, by sample index.
     private var restDabsLaid: [Int: Int] = [:]
     private var renderedRevision = 0
+    /// Which of the view model's predictions the tail was last drawn through.
+    private var renderedPrediction = 0
     /// Which path the stroke textures hold: a stroke that snaps to a shape swaps paths.
     private var renderedPathID: ObjectIdentifier?
     /// What the composite texture holds: the scene it was built from and the content
@@ -479,11 +481,17 @@ public final class CanvasRenderer: NSObject, MTKViewDelegate {
             restartStroke(into: commandBuffer)
         }
         renderedPathID = ObjectIdentifier(path)
-        guard finishing || path.revision != renderedRevision else { return }
+        guard finishing || path.revision != renderedRevision || viewModel.predictionVersion != renderedPrediction else { return }
         renderedRevision = path.revision
+        renderedPrediction = viewModel.predictionVersion
 
         let points = path.points
         guard !points.isEmpty else { return }
+        // The tail is drawn on through where the pen is expected next, when that is known
+        // (iOS predicts touches a frame ahead); what settles never comes from there. A stroke
+        // snapped to a shape is drawn as the shape, which the pen is not on.
+        let tailPoints = finishing || viewModel.predictedSamples.isEmpty || viewModel.snappedPath != nil
+            ? points : path.points(predicting: viewModel.predictedSamples)
 
         let brush = viewModel.strokeBrush
         // An eraser stroke is built like any other; its coverage is subtracted when it is
@@ -521,7 +529,7 @@ public final class CanvasRenderer: NSObject, MTKViewDelegate {
                 let tailStart = committedThrough ?? 0
                 let tailHasStartCap = committedThrough == nil
                 drawTail = { encoder in
-                    renderer.encode(points: points, range: tailStart...(points.count - 1), brush: brush, color: color,
+                    renderer.encode(points: tailPoints, range: tailStart...(tailPoints.count - 1), brush: brush, color: color,
                                     startCap: tailHasStartCap, endCap: true,
                                     mirrors: mirrors, encoder: encoder, canvasSize: size)
                 }
@@ -601,7 +609,8 @@ public final class CanvasRenderer: NSObject, MTKViewDelegate {
             // the same place. A loaded brush's tail is drawn from the carry as it stands.
             if !finishing {
                 var tailPlacer = placer
-                let dabs = tailPlacer.dabs(along: points, upTo: pathEnd, brush: brush, settings: settings)
+                let dabs = tailPlacer.dabs(along: tailPoints, upTo: tailPoints[tailPoints.count - 1].distance,
+                                           brush: brush, settings: settings)
                 if !dabs.isEmpty {
                     let carries = loaded ? paintRenderer.carriesInUse : nil
                     drawTail = { encoder in
@@ -1351,6 +1360,7 @@ public final class CanvasRenderer: NSObject, MTKViewDelegate {
         dabPlacer = nil
         restDabsLaid = [:]
         renderedRevision = 0
+        renderedPrediction = 0
         tailRegions = []
         strokeRegion = nil
         pendingRegions = []

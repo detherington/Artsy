@@ -284,4 +284,46 @@ final class CanvasViewModelTests: XCTestCase {
         XCTAssertTrue(older.applySettings(to: other.viewModel))
         XCTAssertEqual(other.viewModel.transform.scale, 2, "an older recording leaves the zoom as it is")
     }
+
+    /// iOS offers where the pen will be next frame. The tail is drawn on through it, so the
+    /// stroke shows a frame closer to the pen; none of it is committed, so the stroke that
+    /// lands is the one the pen drew, whatever was predicted.
+    func testPredictedTouchesDrawTheTailAheadAndCommitNothing() throws {
+        func sample(_ x: CGFloat, _ t: Double) -> StrokePoint {
+            StrokePoint(position: CGPoint(x: x, y: 50), pressure: 0.8, tiltX: 0, tiltY: 0, rotation: 0, timestamp: t)
+        }
+        var layers: [PixelGrid] = []
+        for predicts in [false, true] {
+            let harness = try EngineHarness(width: 300, height: 100)
+            harness.viewModel.brushSize = 12
+            let viewModel = harness.viewModel
+            harness.renderer.beginStroke()
+            viewModel.beginStroke(point: sample(20, 100))
+            for step in 1...10 { viewModel.continueStroke(point: sample(20 + CGFloat(step) * 10, 100 + Double(step) * 0.008)) }
+            // The pen is at x = 120; UIKit expects it at 130 and then 140
+            if predicts { viewModel.predictStroke([sample(130, 100.088), sample(140, 100.096)]) }
+            XCTAssertEqual(viewModel.predictedSamples.count, predicts ? 2 : 0)
+            let shown = harness.displayed()
+            XCTAssertLessThan(shown.at(x: 100, y: 50).x, 0.2, "drawn up to the pen")
+            if predicts {
+                XCTAssertLessThan(shown.at(x: 135, y: 50).x, 0.2, "and on through the prediction")
+            } else {
+                XCTAssertEqual(shown.at(x: 135, y: 50).x, 1, accuracy: 0.01)
+            }
+            XCTAssertEqual(shown.at(x: 150, y: 50).x, 1, accuracy: 0.01, "and no further")
+
+            // The pen went on to 128, not 130; the frame it rests before clears the prediction
+            viewModel.continueStroke(point: sample(128, 100.088))
+            viewModel.holdStroke(at: 100.09)
+            viewModel.holdStroke(at: 100.1)
+            XCTAssertTrue(viewModel.predictedSamples.isEmpty, "a resting pen has no prediction")
+            harness.renderer.finalizeStroke()
+            viewModel.endStroke()
+            let after = harness.displayed()
+            XCTAssertEqual(after.at(x: 135, y: 50).x, 1, accuracy: 0.01, "nothing of the prediction was committed")
+            XCTAssertLessThan(after.at(x: 126, y: 50).x, 0.2, "the stroke ends where the pen did")
+            layers.append(harness.pixels(of: harness.drawingLayer.texture))
+        }
+        XCTAssertEqual(layers[0].values, layers[1].values, "the stroke that lands is the one the pen drew")
+    }
 }

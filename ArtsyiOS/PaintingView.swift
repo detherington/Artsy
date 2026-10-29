@@ -106,6 +106,9 @@ final class PaintingView: MTKView {
             noteForce(of: sample)
             viewModel.continueStroke(point: strokePoint(from: sample))
         }
+        // And where UIKit expects it to be next: drawn in the tail this frame, and gone
+        // when the real samples come, so the stroke shows a frame closer to the pen
+        viewModel.predictStroke((event?.predictedTouches(for: touch) ?? []).map(strokePoint(from:)))
     }
 
     /// The Pencil's real force, arriving after the estimate: too late for the samples

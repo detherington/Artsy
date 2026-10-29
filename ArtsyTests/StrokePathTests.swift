@@ -245,4 +245,52 @@ final class StrokePathTests: XCTestCase {
         XCTAssertEqual(path.points.count, 1)
         XCTAssertEqual(path.points[0].position, CGPoint(x: 50, y: 50))
     }
+
+    /// iOS says where the pen will be next frame. The points through there are for the tail
+    /// only: the path itself does not move on, and when the real sample comes the provisional
+    /// segment settles to just what the prediction had drawn there.
+    func testPredictedSamplesExtendThePointsWithoutChangingThePath() {
+        // A gentle curve sampled 8 px apart at 125 a second
+        let samples = (0..<40).map { i in
+            StrokePoint(position: CGPoint(x: 20 + 8 * Double(i), y: 100 + 30 * sin(Double(i) / 6)), pressure: 0.6,
+                        tiltX: 0, tiltY: 0, rotation: 0, timestamp: Double(i) * 0.008)
+        }
+        let path = StrokePath(style: style)
+        samples.prefix(30).forEach(path.append)
+        let before = (points: path.points.count, settled: path.settledCount, revision: path.revision)
+        let predicted = Array(samples[30..<33])
+
+        let ahead = path.points(predicting: predicted)
+        XCTAssertEqual(path.points.count, before.points)
+        XCTAssertEqual(path.settledCount, before.settled)
+        XCTAssertEqual(path.revision, before.revision)
+        XCTAssertGreaterThan(ahead.count, path.points.count)
+        for index in 0..<path.settledCount {
+            XCTAssertEqual(ahead[index].position, path.points[index].position, "settled points stay where they are")
+        }
+        let end = ahead[ahead.count - 1]
+        XCTAssertEqual(end.position.x, predicted[2].position.x, accuracy: 0.01, "and the tail reaches the last prediction")
+        XCTAssertEqual(end.position.y, predicted[2].position.y, accuracy: 0.01)
+        XCTAssertGreaterThan(end.distance, path.points[path.points.count - 1].distance + 20, "three samples further on")
+        XCTAssertEqual(path.points(predicting: []).count, path.points.count, "nothing to predict, the points as they are")
+
+        // The provisional segment, reshaped by the first predicted sample, is what the path
+        // settles it to once that sample really comes
+        let settledBefore = path.settledCount
+        path.append(predicted[0])
+        XCTAssertGreaterThan(path.settledCount, settledBefore)
+        for index in settledBefore..<path.settledCount {
+            XCTAssertEqual(ahead[index].position.x, path.points[index].position.x, accuracy: 1e-6)
+            XCTAssertEqual(ahead[index].position.y, path.points[index].position.y, accuracy: 1e-6)
+            XCTAssertEqual(ahead[index].width, path.points[index].width, accuracy: 1e-5)
+        }
+
+        // A pen that has only landed: the tail runs from the tap through the prediction
+        let tap = StrokePath(style: style)
+        tap.append(samples[0])
+        let fromTap = tap.points(predicting: Array(samples[1..<3]))
+        XCTAssertEqual(tap.points.count, 1)
+        XCTAssertGreaterThan(fromTap.count, 12, "two samples' worth of points, a pixel apart")
+        XCTAssertEqual(fromTap[0].position, samples[0].position)
+    }
 }

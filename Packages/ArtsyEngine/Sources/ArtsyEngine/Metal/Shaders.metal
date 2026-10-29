@@ -1198,10 +1198,11 @@ kernel void loadedBrushTransferKernel(
 // A dab pressed into paint already there pushes some of it out: to the rim of the dab, and
 // more ahead of it than behind, so a stroke drives a wave of paint before it that it leaves
 // as a ridge where it stops, and a second stroke ploughs a furrow through the first. Per
-// dab, on the layer's height map, from a copy of the patch under the dab: inside the tip a
-// share of the height is taken away; in a band just outside it, what was taken along the
-// ray from the dab's centre is put down, falling off with distance from the tip. The sums
-// are arranged so that what the band gains is what the tip lost.
+// dab, on the layer's height map: inside the tip a share of the height is taken away; in a
+// band just outside it, what was taken along the ray from the dab's centre is put down,
+// falling off with distance from the tip. The sums are arranged so that what the band gains
+// is what the tip lost. The rays are integrated from the height map before the push writes
+// it, and the push reads only the pixel it writes, so no copy of the patch is needed.
 
 struct ImpastoPushParams {
     float2 center;         // the dab, in canvas pixels
@@ -1209,7 +1210,7 @@ struct ImpastoPushParams {
     float  angle;
     float  aspect;
     float2 canvasSize;
-    uint2  patchOrigin;    // where the copy of the height map starts, in layer pixels (top-left origin)
+    uint2  patchOrigin;    // the patch of the height map under the dab and its band, in layer pixels (top-left origin)
     uint2  patchSize;
     float  hardness;
     int    tipIsTexture;
@@ -1223,6 +1224,7 @@ struct ImpastoPushParams {
     float  gap;
     float  along;          // how far along the stroke the dab sits, in diameters
     uint   strokeSeed;
+    uint   rayCount;       // directions the rays are integrated along (see impastoRayKernel)
 };
 
 // The tip's coverage for the push: the bundle's, where it is at this dab, or the one shape's.
@@ -1231,12 +1233,51 @@ static inline float pushCoverage(float2 uv, constant ImpastoPushParams &p, textu
                               : tipCoverageFlat(uv, p.hardness, p.tipIsTexture, tip, tipSampler);
 }
 
-kernel void impastoPushKernel(
-    texture2d<float, access::write> height [[texture(0)]],
-    texture2d<float> before [[texture(1)]],
+// What the band gains along one ray from the dab's centre: the paint the texels under the
+// tip along it lost, each step standing for a ring of texels at its radius. Integrated once
+// per direction, `rayCount` directions round the dab, and read by the push kernel for every
+// pixel of the band on that ray. It used to be summed again for every band pixel, and
+// since a step on a bristle brush costs a dozen clumps' worth of hashing and sines, a big
+// dab's push ran to seconds of GPU a frame on a phone; now the sum is a few thousand steps
+// per dab whatever its size. In the dab's own space, where the tip is the disc of radius
+// a half: direction i is at angle 2π i / rayCount.
+kernel void impastoRayKernel(
+    device float *rays [[buffer(1)]],
+    texture2d<float> height [[texture(0)]],
     texture2d<float> tip [[texture(2)]],
     sampler tipSampler [[sampler(0)]],
     constant ImpastoPushParams &p [[buffer(0)]],
+    uint index [[thread_position_in_grid]]
+) {
+    if (index >= p.rayCount) return;
+    float theta = float(index) / float(p.rayCount) * 6.2831853;
+    float2 dir = float2(cos(theta), sin(theta));
+    float c = cos(p.angle), sn = sin(p.angle);
+    float share = p.squeeze * p.press;
+    const float edge = 0.5;
+    int steps = int(clamp(p.size * 0.5, 4.0, 64.0));
+    float sum = 0.0;
+    for (int i = 0; i < steps; i++) {
+        float s = (float(i) + 0.5) / float(steps) * edge;
+        float2 q = dir * s;
+        float cover = pushCoverage(q + 0.5, p, tip, tipSampler);
+        if (cover <= 0.0) continue;
+        float2 stretched = q * float2(p.size * p.aspect, p.size);
+        float2 qCanvas = p.center + float2(stretched.x * c - stretched.y * sn, stretched.x * sn + stretched.y * c);
+        float2 texel = float2(qCanvas.x, p.canvasSize.y - qCanvas.y);
+        float hs = height.read(uint2(clamp(texel, float2(0.0), p.canvasSize - 1.0))).r;
+        // A step stands for a ring of texels at radius s; its paint, for the band's ring here
+        sum += hs * share * cover * s * (edge / float(steps));
+    }
+    rays[index] = sum;
+}
+
+kernel void impastoPushKernel(
+    texture2d<float, access::read_write> height [[texture(0)]],
+    texture2d<float> tip [[texture(2)]],
+    sampler tipSampler [[sampler(0)]],
+    constant ImpastoPushParams &p [[buffer(0)]],
+    const device float *rays [[buffer(1)]],
     uint2 gid [[thread_position_in_grid]]
 ) {
     if (gid.x >= p.patchSize.x || gid.y >= p.patchSize.y) return;
@@ -1247,12 +1288,13 @@ kernel void impastoPushKernel(
     float c = cos(p.angle), sn = sin(p.angle);
     float2 local = float2(d.x * c + d.y * sn, -d.x * sn + d.y * c) / float2(p.size * p.aspect, p.size);
     float2 uv = local + 0.5;
-    float h = before.read(gid).r;
+    float h = height.read(pixel).r;
     float inside = (all(uv >= 0.0) && all(uv <= 1.0)) ? pushCoverage(uv, p, tip, tipSampler) : 0.0;
     float share = p.squeeze * p.press;
     float lost = h * share * inside;
 
-    // Gained: along the ray from the centre through here, what the texels under the tip lost
+    // Gained: along the ray from the centre through here, what the texels under the tip
+    // lost (impastoRayKernel), between the two directions integrated either side of it
     float gained = 0.0;
     const float edge = 0.5;
     float rho = length(local);
@@ -1261,20 +1303,10 @@ kernel void impastoPushKernel(
         float falloff = 1.0 - saturate((rho - edge) / p.band);
         float2 dirCanvas = normalize(float2(dir.x * c - dir.y * sn, dir.x * sn + dir.y * c));
         float bias = 1.0 + p.forward * dot(dirCanvas, p.heading);
-        int steps = int(clamp(p.size * 0.5, 4.0, 64.0));
-        float sum = 0.0;
-        for (int i = 0; i < steps; i++) {
-            float s = (float(i) + 0.5) / float(steps) * edge;
-            float2 q = dir * s;
-            float cover = pushCoverage(q + 0.5, p, tip, tipSampler);
-            if (cover <= 0.0) continue;
-            float2 stretched = q * float2(p.size * p.aspect, p.size);
-            float2 qCanvas = p.center + float2(stretched.x * c - stretched.y * sn, stretched.x * sn + stretched.y * c);
-            float2 texel = float2(qCanvas.x, p.canvasSize.y - qCanvas.y) - float2(p.patchOrigin);
-            float hs = before.read(uint2(clamp(texel, float2(0.0), float2(p.patchSize) - 1.0))).r;
-            // A step stands for a ring of texels at radius s; its paint, for the band's ring here
-            sum += hs * share * cover * s * (edge / float(steps));
-        }
+        float turn = atan2(dir.y, dir.x) / 6.2831853;
+        float at = (turn - floor(turn)) * float(p.rayCount);
+        uint below = uint(at) % p.rayCount, above = (below + 1) % p.rayCount;
+        float sum = mix(rays[below], rays[above], at - floor(at));
         // Spread over the band's width, a triangle in profile
         gained = falloff * bias * sum / ((edge + p.band / 3.0) * p.band * 0.5);
     }

@@ -271,8 +271,14 @@ public final class PaintRenderer {
 /// with its own.
 final class ImpastoPusher {
     private let context: MetalContext
-    /// A copy of the patch of the height map under a dab, for the push to read while it writes.
-    private var backdrop: MTLTexture?
+    /// What the band gains along each ray from the dab's centre, one float per direction,
+    /// integrated once per dab (impastoRayKernel) and read by the push for every band pixel.
+    private let rays: MTLBuffer?
+    /// The most directions a dab's rays are integrated along: eight per pixel of its size
+    /// up to this, so the band's outer rim has a ray or more per pixel on any dab up to
+    /// 512 px and one per 1.2 px at 1,000 px, with the push reading between the two
+    /// nearest.
+    static let mostRays = 4096
     /// The band outside the tip that pushed paint lands in, as a fraction of the dab's size.
     static let band: Float = 0.3
     /// How much more of it goes ahead of the brush than behind, 0...1.
@@ -280,6 +286,14 @@ final class ImpastoPusher {
 
     init(context: MetalContext) {
         self.context = context
+        rays = context.device.makeBuffer(length: Self.mostRays * MemoryLayout<Float>.stride, options: .storageModePrivate)
+        rays?.label = "Push rays"
+    }
+
+    /// How many directions a dab of `size` (its diameter by its aspect) has its rays
+    /// integrated along.
+    static func rayCount(forSize size: Float) -> Int {
+        min(mostRays, max(64, Int((size * 8).rounded(.up))))
     }
 
     /// The share of the paint under one dab that it pushes out, for a brush whose `squeeze`
@@ -310,6 +324,7 @@ final class ImpastoPusher {
         var gap: Float
         var along: Float
         var strokeSeed: UInt32
+        var rayCount: UInt32
     }
 
     /// Push the paint under `dab`, one copy per entry in `mirrors`.
@@ -324,7 +339,8 @@ final class ImpastoPusher {
             hardness: brush.hardness, tipIsTexture: tipIsTexture, press: min(press, 1), squeeze: min(squeeze, 1),
             heading: .zero, forward: Self.forward, band: Self.band,
             bristleCount: Int32(bristleCount), fan: dab.fan, gap: dab.gap,
-            along: dab.pathDistance / max(dab.size, 1), strokeSeed: UInt32(dab.strokeSeed)
+            along: dab.pathDistance / max(dab.size, 1), strokeSeed: UInt32(dab.strokeSeed),
+            rayCount: UInt32(Self.rayCount(forSize: dab.size * max(dab.aspect, 1)))
         )
         let reach = CGFloat(dab.size * max(dab.aspect, 1)) * 0.7072 * CGFloat(1 + 2 * Self.band) + 2
         for mirror in mirrors {
@@ -336,7 +352,7 @@ final class ImpastoPusher {
             let heading = SIMD2(Float(going.x - center.x), Float(going.y - center.y))
             params.heading = simd_length(heading) > 0 ? simd_normalize(heading) : .zero
 
-            // The patch of the height map under the dab and its band, copied for the kernel to read
+            // The patch of the height map under the dab and its band
             let width = height.width, h = height.height
             let minX = max(0, Int((center.x - reach).rounded(.down)))
             let maxX = min(width, Int((center.x + reach).rounded(.up)))
@@ -344,33 +360,20 @@ final class ImpastoPusher {
             let maxY = min(h, h - Int((center.y - reach).rounded(.down)))
             guard maxX > minX, maxY > minY else { continue }
             let patch = MTLScissorRect(x: minX, y: minY, width: maxX - minX, height: maxY - minY)
-            if backdrop == nil || backdrop!.width < patch.width || backdrop!.height < patch.height {
-                let side = 256 << (0...8).first { patch.width <= 256 << $0 && patch.height <= 256 << $0 }!
-                let desc = MTLTextureDescriptor.texture2DDescriptor(
-                    pixelFormat: .r16Float, width: min(side, max(width, patch.width)),
-                    height: min(side, max(h, patch.height)), mipmapped: false
-                )
-                desc.usage = [.shaderRead]
-                desc.storageMode = .private
-                backdrop = context.device.makeTexture(descriptor: desc)
-                backdrop?.label = "Push backdrop"
-            }
-            guard let backdrop, let blit = commandBuffer.makeBlitCommandEncoder() else { return }
-            blit.copy(from: height, sourceSlice: 0, sourceLevel: 0,
-                      sourceOrigin: MTLOrigin(x: patch.x, y: patch.y, z: 0),
-                      sourceSize: MTLSize(width: patch.width, height: patch.height, depth: 1),
-                      to: backdrop, destinationSlice: 0, destinationLevel: 0, destinationOrigin: MTLOrigin(x: 0, y: 0, z: 0))
-            blit.endEncoding()
-
             params.patchOrigin = SIMD2(UInt32(patch.x), UInt32(patch.y))
             params.patchSize = SIMD2(UInt32(patch.width), UInt32(patch.height))
-            guard let encoder = commandBuffer.makeComputeCommandEncoder() else { return }
-            encoder.setComputePipelineState(context.impastoPushPipelineState)
+            guard let rays, let encoder = commandBuffer.makeComputeCommandEncoder() else { return }
+            // The rays first, from the height map as it stands, then the push that reads
+            // them and writes the map: the encoder runs the two in order
+            encoder.setComputePipelineState(context.impastoRayPipelineState)
+            encoder.setBuffer(rays, offset: 0, index: 1)
             encoder.setTexture(height, index: 0)
-            encoder.setTexture(backdrop, index: 1)
             encoder.setTexture(tip, index: 2)
             encoder.setSamplerState(context.tipSampler, index: 0)
             encoder.setBytes(&params, length: MemoryLayout<Params>.stride, index: 0)
+            encoder.dispatchThreads(MTLSize(width: Int(params.rayCount), height: 1, depth: 1),
+                                    threadsPerThreadgroup: MTLSize(width: 64, height: 1, depth: 1))
+            encoder.setComputePipelineState(context.impastoPushPipelineState)
             encoder.dispatchThreads(MTLSize(width: patch.width, height: patch.height, depth: 1),
                                     threadsPerThreadgroup: MTLSize(width: 16, height: 16, depth: 1))
             encoder.endEncoding()
