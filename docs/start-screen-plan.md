@@ -117,3 +117,23 @@ Steps 1 to 4 built on the branch `start-screen`.
   and empty and the photo's corners the right colours. Seen on the iPad simulator:
   Photos… over the start screen, a 1668 × 2420 screenshot picked, a canvas of that
   size with the photo upright and three layers. Not tried: Files… and the Mac panel.
+
+## This screen (2026-10-29)
+
+Darrell asked for a canvas at the resolution of the device the app is on, as one of
+the sizes at launch. The New row gains **This screen** after "Same as last" and before
+the presets: the pixels of the display the app is on, the way the device is held, so an
+iPad in landscape offers a landscape canvas and a phone a portrait one, and a canvas
+made from it fills the screen 1:1. On the Mac it is the display the Start window is on
+at its own scale (a 3072 × 1728 display at 2x offers 6144 × 3456), and it follows the
+window to another display. On iPad and iPhone it is the window scene's screen at its
+native scale, which on a foldable is the display that is open; before the view is in a
+window, the scene's. `StartView` takes `screenPixels`, a closure asked whenever the
+screen draws, so a turn or a fold is followed; nil (the tests, or no screen) offers no
+tile. The tile is left out when the device cannot take the size or when the size used
+last already is the screen's, as a preset that repeats the last size is.
+
+Checked: `RecentCanvasesTests.testTheStartScreenOffersThisScreensPixels` (the tile's
+place and pixels, the way the screen is turned, none without a screen, none past the
+device's largest side, none when the last size is the screen's). Seen on the iPhone Duo
+simulator.

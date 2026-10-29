@@ -440,7 +440,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         window.minSize = NSSize(width: 520, height: 400)
         window.isReleasedWhenClosed = false
         window.tabbingMode = .disallowed
-        window.contentView = NSHostingView(rootView: StartView(recents: RecentCanvases.shared, actions: startActions()))
+        // "This screen" is the display the Start window is on, at its own scale
+        window.contentView = NSHostingView(rootView: StartView(recents: RecentCanvases.shared, screenPixels: { [weak window] in
+            guard let screen = window?.screen ?? NSScreen.main else { return nil }
+            return CGSize(width: (screen.frame.width * screen.backingScaleFactor).rounded(),
+                          height: (screen.frame.height * screen.backingScaleFactor).rounded())
+        }, actions: startActions()))
         window.center()
         window.setFrameAutosaveName("Start")
         startWindow = window

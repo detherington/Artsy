@@ -29,14 +29,22 @@ struct StartView: View {
     @ObservedObject var recents: RecentCanvases
     /// The largest side this device takes; sizes beyond it are not offered.
     let maxSide: Int
+    /// The pixels of the screen the app is on, as it is held now, for the "This screen"
+    /// size; nil when there is no screen to ask. Asked again whenever the screen draws,
+    /// so a turn or a fold is followed.
+    let screenPixels: () -> CGSize?
     let actions: StartActions
     @ObservedObject private var prefs = AppPreferences.shared
     @State private var renaming: RecentCanvases.Entry?
     @State private var newName = ""
+    /// Goes up when the window moves to another screen, so the sizes are asked again.
+    @State private var screenChanges = 0
 
-    init(recents: RecentCanvases, maxSide: Int = LayerStack.maxCanvasSide, actions: StartActions) {
+    init(recents: RecentCanvases, maxSide: Int = LayerStack.maxCanvasSide, screenPixels: @escaping () -> CGSize? = { nil },
+         actions: StartActions) {
         self.recents = recents
         self.maxSide = maxSide
+        self.screenPixels = screenPixels
         self.actions = actions
     }
 
@@ -75,6 +83,9 @@ struct StartView: View {
         }
         .background(Chrome.background.ignoresSafeArea())
         .foregroundColor(Chrome.text)
+        #if os(macOS)
+        .onReceive(NotificationCenter.default.publisher(for: NSWindow.didChangeScreenNotification)) { _ in screenChanges += 1 }
+        #endif
         .alert("Rename", isPresented: Binding(get: { renaming != nil }, set: { if !$0 { renaming = nil } }),
                presenting: renaming) { entry in
             TextField("Name", text: $newName)
@@ -96,20 +107,33 @@ struct StartView: View {
 
     // MARK: - New canvas
 
-    private struct Size: Identifiable {
+    struct Size: Identifiable, Equatable {
         let id: String
         let name: String
         let width: Int
         let height: Int
     }
 
-    /// The size used last, then the presets the device takes, less the one that is the last.
     private var sizes: [Size] {
-        let last = prefs.lastCanvasSize
+        _ = screenChanges
+        return Self.sizes(last: prefs.lastCanvasSize, screen: screenPixels(), maxSide: maxSide)
+    }
+
+    /// The sizes offered: the size used last; this screen's pixels, the way the device is
+    /// held, when there is a screen to ask; then the presets. A size the device cannot
+    /// take is left out, and so is one that repeats an earlier tile.
+    static func sizes(last: CGSize, screen: CGSize?, maxSide: Int) -> [Size] {
         var sizes = [Size(id: "last", name: "Same as last", width: Int(last.width), height: Int(last.height))]
-        for preset in CanvasSizePreset.presets where max(preset.width, preset.height) <= maxSide
-            && !(preset.width == sizes[0].width && preset.height == sizes[0].height) {
-            sizes.append(Size(id: preset.name, name: preset.name, width: preset.width, height: preset.height))
+        func offer(_ size: Size) {
+            guard max(size.width, size.height) <= maxSide, size.width > 0, size.height > 0,
+                  !sizes.contains(where: { $0.width == size.width && $0.height == size.height }) else { return }
+            sizes.append(size)
+        }
+        if let screen {
+            offer(Size(id: "screen", name: "This screen", width: Int(screen.width.rounded()), height: Int(screen.height.rounded())))
+        }
+        for preset in CanvasSizePreset.presets {
+            offer(Size(id: preset.name, name: preset.name, width: preset.width, height: preset.height))
         }
         return sizes
     }

@@ -121,6 +121,27 @@ final class RecentCanvasesTests: XCTestCase {
         XCTAssertEqual(noReds, 0, "nothing in the list, nothing red")
     }
 
+    /// "This screen" is the device's own pixels, offered after the size used last and
+    /// before the presets, and only when there is a screen, the device takes the size,
+    /// and no earlier tile is the same.
+    func testTheStartScreenOffersThisScreensPixels() {
+        let last = CGSize(width: 2048, height: 2048)
+        let sizes = StartView.sizes(last: last, screen: CGSize(width: 2752, height: 2064), maxSide: 4096)
+        XCTAssertEqual(sizes.map(\.name).prefix(3), ["Same as last", "This screen", "Small"])
+        XCTAssertEqual(sizes[1].width, 2752)
+        XCTAssertEqual(sizes[1].height, 2064)
+        XCTAssertFalse(sizes.contains { $0.name == "Medium" }, "the preset that is the last size is not repeated")
+        XCTAssertFalse(sizes.contains { $0.name == "Huge" }, "nor one the device cannot take")
+
+        let turned = StartView.sizes(last: last, screen: CGSize(width: 2064, height: 2752), maxSide: 4096)
+        XCTAssertEqual(turned[1].width, 2064, "the screen the way it is held")
+        XCTAssertNil(StartView.sizes(last: last, screen: nil, maxSide: 4096).first { $0.name == "This screen" })
+        XCTAssertNil(StartView.sizes(last: last, screen: CGSize(width: 6144, height: 3456), maxSide: 4096).first { $0.name == "This screen" },
+                     "a screen with more pixels than the device takes as a canvas")
+        XCTAssertNil(StartView.sizes(last: CGSize(width: 2752, height: 2064), screen: CGSize(width: 2752, height: 2064), maxSide: 4096)
+                        .first { $0.name == "This screen" }, "the last size already is the screen's")
+    }
+
     /// The view on screen for a moment, then its pixels counted: those near white and
     /// those near the thumbnail's red.
     private func render(_ view: StartView, width: CGFloat) throws -> (reds: Int, whites: Int) {

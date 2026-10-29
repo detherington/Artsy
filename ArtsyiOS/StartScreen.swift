@@ -42,7 +42,18 @@ final class StartController: UIHostingController<StartView> {
         actions.rename = { [weak self] entry, name in self?.model.rename(entry, to: name) }
         actions.fromPhotos = { [weak self] in self?.newCanvasFromPhotos() }
         actions.fromImageFile = { [weak self] in self?.newCanvasFromImageFile() }
-        rootView = StartView(recents: .shared, maxSide: model.largestCanvasSide, actions: actions)
+        rootView = StartView(recents: .shared, maxSide: model.largestCanvasSide,
+                             screenPixels: { [weak self] in self?.screenPixels }, actions: actions)
+    }
+
+    /// The pixels of the screen this controller is on, the way the device is held: on a
+    /// foldable the display that is open. Before the view is in a window, the scene's.
+    private var screenPixels: CGSize? {
+        let screen = view.window?.windowScene?.screen
+            ?? UIApplication.shared.connectedScenes.lazy.compactMap { $0 as? UIWindowScene }.first?.screen
+        guard let screen else { return nil }
+        let scale = screen.nativeScale
+        return CGSize(width: (screen.bounds.width * scale).rounded(), height: (screen.bounds.height * scale).rounded())
     }
 
     /// A picker's delegate while the picker is up.
