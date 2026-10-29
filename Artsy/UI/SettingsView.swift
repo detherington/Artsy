@@ -267,7 +267,7 @@ struct PressurelessInputSettings: View {
 
                 Toggle("Press harder when slow", isOn: $prefs.pressureFromSpeed)
 
-                Text("A mouse, a trackpad or a pencil without pressure gets its pressure from speed: a slow line presses hard, a quick hatch lies light. The pressure curve applies on top. Pens with pressure are not affected.")
+                Text("A mouse, a trackpad or a pencil without pressure gets its pressure from speed: a slow line presses hard, a quick hatch lies light. A pencil without pressure keeps more of its weight, since a pen moves faster than a finger, and starts out with the Soft curve. The pressure curve applies on top. Pens with pressure are not affected.")
                     .font(.system(size: 13))
                     .foregroundColor(.secondary)
                     .fixedSize(horizontal: false, vertical: true)

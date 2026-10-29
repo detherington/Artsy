@@ -31,6 +31,10 @@ public struct RecordedStroke: Codable, Equatable {
     public var symmetry: String
     /// False for a mouse or trackpad. Absent in older recordings, which were all treated as pens.
     public var hasPressure: Bool?
+    /// What drew the stroke. Absent in older recordings, where `hasPressure` decides.
+    public var input: StrokeInput?
+    /// What drew the stroke, for a replay: `input`, else a pen, or a hand where `hasPressure` is false.
+    public var strokeInput: StrokeInput { input ?? ((hasPressure ?? true) ? .pen : .hand) }
     /// The canvas zoom the stroke was drawn at, which adaptive smoothing depends on. Absent
     /// in older recordings, which replay at whatever zoom the replayer has.
     public var zoom: Double?
@@ -50,6 +54,7 @@ public struct RecordedStroke: Codable, Equatable {
         self.smoothingStrength = viewModel.smoothingStrength
         self.symmetry = viewModel.symmetryMode.recordingKey
         self.hasPressure = viewModel.strokeHasPressure
+        self.input = viewModel.strokeInput
         self.zoom = Double(viewModel.transform.scale)
         self.grade = viewModel.currentBrush.graphite ? viewModel.pencilGrade.rawValue : nil
         self.points = points
@@ -224,6 +229,7 @@ final public class StrokeRecorder {
     /// The stroke in progress reports pressure after all (`CanvasViewModel.strokeReportsPressure`).
     public func strokeReportsPressure() {
         current?.hasPressure = true
+        current?.input = .pen
     }
 
     public func endStroke() {

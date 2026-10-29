@@ -23,6 +23,11 @@ public struct TiltDynamics: Codable, Equatable {
         self.opacityScale = opacityScale
         self.aspect = aspect
     }
+
+    /// The same lean without the fading, for a pen that has tilt but no pressure: leaning
+    /// still broadens and lengthens the mark, but a lighter mark stood for the lighter
+    /// touch of a pen laid on its side, which such a pen cannot tell from pressing.
+    public var withoutFading: TiltDynamics { TiltDynamics(sizeScale: sizeScale, opacityScale: 1, aspect: aspect) }
 }
 
 /// How a brush responds to the speed of the stroke: a loaded brush thins as it is swept faster.

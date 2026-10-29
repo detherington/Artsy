@@ -87,7 +87,8 @@ final class PaintingView: MTKView {
             drawingTouch = touch
             strokeHasPressure = strokeHasPressure(beginning: touch)
             renderer.beginStroke()
-            viewModel.beginStroke(point: strokePoint(from: touch), hasPressure: strokeHasPressure)
+            viewModel.beginStroke(point: strokePoint(from: touch),
+                                  input: strokeHasPressure ? .pen : (touch.type == .pencil ? .penWithoutPressure : .hand))
         case .eyedropper:
             pickColor(at: canvasPoint(of: touch))
         case .fill:
@@ -169,11 +170,12 @@ final class PaintingView: MTKView {
 
     /// A touch as a stroke sample in canvas space: its point in the engine's y-up view
     /// space through the canvas transform, its force as pressure, its altitude and azimuth
-    /// as the two tilt components, its roll (a Pencil Pro) as rotation.
+    /// as the two tilt components, its roll (a Pencil Pro) as rotation. A finger, or a
+    /// Pencil without a force sensor, gets a constant the view model may replace from speed.
     private func strokePoint(from touch: UITouch) -> StrokePoint {
         guard viewModel != nil else { return StrokePoint(position: .zero, pressure: 0, tiltX: 0, tiltY: 0, rotation: 0, timestamp: touch.timestamp) }
         let canvas = canvasPoint(of: touch)
-        let pressure: Float = touch.type == .pencil && touch.maximumPossibleForce > 0
+        let pressure: Float = touch.type == .pencil && strokeHasPressure && touch.maximumPossibleForce > 0
             ? Float(min(max(touch.force / touch.maximumPossibleForce, 0), 1)) : 0.7
         var tilt: (x: Float, y: Float) = (0, 0)
         if touch.type == .pencil {
