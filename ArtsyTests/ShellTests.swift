@@ -657,6 +657,48 @@ final class ShellTests: XCTestCase {
         XCTAssertFalse(viewModel.isChromeHidden)
     }
 
+    /// The compact bar on a window too narrow for all of it, an iPhone upright at 402 pt,
+    /// drops the Size and Opacity buttons, whose sliders the Brushes panel carries, and
+    /// keeps the way to hide the interface at its right end; at 466 pt, a window with no
+    /// insets, every button fits and Hide is still the last.
+    func testTheCompactBarDropsTheQuickValuesWhereTheyDoNotFit() throws {
+        let viewModel = CanvasViewModel(canvasSize: CGSize(width: 256, height: 256))
+        viewModel.recorder = nil
+        let chrome = ChromeState()
+        chrome.isCompact = true
+        chrome.isPhone = true
+        let previews = BrushPreviewCache(renderer: nil, directory: nil)
+        let host = NSHostingView(rootView: BottomBarView(viewModel: viewModel, chrome: chrome, previews: previews, actions: ChromeActions()))
+        show(host, size: NSSize(width: 402, height: Chrome.barHeight))
+        for width in [CGFloat(402), 466] {
+            window.setContentSize(NSSize(width: width, height: Chrome.barHeight))
+            settle(host)
+            // Hide is the last button, a compact target inset 6 from the edge
+            viewModel.isChromeHidden = false
+            click(at: NSPoint(x: width - 6 - Chrome.compactTarget / 2, y: Chrome.barHeight / 2))
+            XCTAssertTrue(viewModel.isChromeHidden, "Hide is at the right end of a \(Int(width))-pt bar")
+        }
+    }
+
+    /// A panel opened as a sheet on a phone shows no way out of itself, so its header
+    /// gets a Done button then, and only then: a popover is dismissed by a tap outside.
+    func testThePanelHeaderShowsDoneOnlyForASheet() throws {
+        var done = 0
+        let asSheet = NSHostingView(rootView: PanelHeader("Layers").environment(\.panelDismissal, { done += 1 }))
+        show(asSheet, size: NSSize(width: Chrome.panelWidth, height: Chrome.target))
+        settle(asSheet)
+        // Done is the last thing in the header, a capsule about 60 wide inset 14
+        let doneAt = NSPoint(x: Chrome.panelWidth - 14 - 30, y: Chrome.target / 2)
+        click(at: doneAt)
+        XCTAssertEqual(done, 1, "Done at the header's right end")
+
+        let asPopover = NSHostingView(rootView: PanelHeader("Layers"))
+        show(asPopover, size: NSSize(width: Chrome.panelWidth, height: Chrome.target))
+        settle(asPopover)
+        click(at: doneAt)
+        XCTAssertEqual(done, 1, "no Done in a popover")
+    }
+
     /// The size pill spreads the small sizes out; the opacity pill is even.
     func testThePillsMapTheTrackToTheirRanges() {
         XCTAssertEqual(ValuePill.value(at: 0, in: 1...200, logarithmic: true), 1, accuracy: 0.001)

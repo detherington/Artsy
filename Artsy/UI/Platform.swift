@@ -83,13 +83,24 @@ enum Platform {
 
 extension View {
     /// A panel opened from the bar: a popover, or the sheet it becomes on a phone, in the
-    /// panel's own colour rather than the system's.
+    /// panel's own colour rather than the system's, with the grabber that says a sheet
+    /// can be pulled down.
     func panelPresentation() -> some View {
         #if os(iOS)
         presentationBackground(Chrome.panel)
+            .presentationDragIndicator(.visible)
         #else
         self
         #endif
+    }
+
+    /// A panel opened from a control: a popover, or on a phone the sheet it becomes.
+    /// The sheet fills the screen and shows no way out of itself, so its header gets a
+    /// Done button (`PanelHeader`, through the environment) where a popover, dismissed by
+    /// a tap outside it, gets none. The presenting view's size class tells the two apart:
+    /// a popover's own contents are compact either way.
+    func panelPopover<Panel: View>(isPresented: Binding<Bool>, @ViewBuilder panel: @escaping () -> Panel) -> some View {
+        modifier(PanelPopover(isPresented: isPresented, panel: panel))
     }
 
     /// A small popover that stays one on a phone rather than becoming a sheet.
@@ -131,5 +142,32 @@ extension View {
         #else
         toggleStyle(.switch)
         #endif
+    }
+}
+
+struct PanelPopover<Panel: View>: ViewModifier {
+    @Binding var isPresented: Bool
+    @ViewBuilder let panel: () -> Panel
+    #if os(iOS)
+    @Environment(\.horizontalSizeClass) private var sizeClass
+    #endif
+
+    /// Whether the popover becomes a sheet here: a phone, or an iPad window too narrow
+    /// for popovers.
+    private var becomesSheet: Bool {
+        #if os(iOS)
+        return sizeClass == .compact
+        #else
+        return false
+        #endif
+    }
+
+    func body(content: Content) -> some View {
+        let dismissal: (() -> Void)? = becomesSheet ? { isPresented = false } : nil
+        return content.popover(isPresented: $isPresented, arrowEdge: Chrome.barPopoverEdge) {
+            panel()
+                .panelPresentation()
+                .environment(\.panelDismissal, dismissal)
+        }
     }
 }

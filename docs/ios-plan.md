@@ -389,6 +389,34 @@ iPhone 18 Pro upright, the Colour sheet filling the page sheet; iPhone Duo simul
 (the 466 by 678 pt display), Brushes, Colour, Layers, Adjust and Add each filling the
 sheet inside the screen's safe area, the Smooth and Amount rows of the brush settings
 now reachable. The whole Mac suite, where the panels keep their fixed frames: 327 tests,
-3 skipped, 0 failures. Seen on the way and left alone: on the 402-pt-wide iPhone upright the
-compact bar is wider than the screen, the Hide button off its right edge and Add half
-cut; the bar fits the Duo's 466 pt.
+3 skipped, 0 failures.
+
+**The compact bar fits too (2026-10-30).** Seen on the way: on the 402-pt-wide iPhone
+upright the compact bar was wider than the screen, the Hide button off its right edge
+and Add half cut; the whole bar wants about 460 pt. The bar now picks, by
+`ViewThatFits`, the full compact bar where it fits and otherwise the same bar without
+the Size and Opacity buttons, whose sliders are in the Brushes panel's quick settings;
+the way to hide the interface stays at the right end, since a phone has no Tab. The
+Duo's outer display gets the shorter bar as well: its status column on the right is a
+safe-area inset, and inside it the bar has 375 pt, where before Add and Hide sat under
+the column; the inner display, 669 pt, keeps every button.
+`ShellTests.testTheCompactBarDropsTheQuickValuesWhereTheyDoNotFit` clicks Hide at the
+right end of a 402-pt bar and a 466-pt one. Checked on the iPhone 18 Pro simulator
+upright (the bar ends with Hide inside the screen, and Hide hides the interface) and the
+Duo (the shorter bar). The whole Mac suite: 328 tests, 3 skipped, 0 failures.
+
+**A way out of a sheet (2026-10-30).** Darrell found no obvious way to dismiss a panel on
+the closed Duo: a panel opened from the bar becomes a sheet there, filling the screen,
+and the swipe down that dismisses it is not something the sheet shows. The bar's, the
+pill's and the swatch's panels now open through `panelPopover`, which knows from the
+presenting view's size class whether the popover is becoming a sheet (a popover's own
+contents are compact either way) and, when it is, hands the panel a dismissal through
+the environment; `PanelHeader` then carries a Done button after whatever else is in its
+right end (Studio…, the eyedropper), and a popover, which a tap outside dismisses, gets
+none. The sheet also shows the system's grabber at its top, the hint for the swipe.
+Checked on 2026-10-30: `ShellTests.testThePanelHeaderShowsDoneOnlyForASheet` (a click at the
+header's right end dismisses when the environment carries a dismissal and does nothing
+when it does not); the whole Mac suite, 329 tests, 3 skipped, 0 failures; on the Duo
+simulator the Layers, Brushes (beside Studio…) and Colour (beside the eyedropper) sheets
+each show the grabber and Done, and Done closes them; on the iPad Pro simulator the Layers
+popover has neither.
