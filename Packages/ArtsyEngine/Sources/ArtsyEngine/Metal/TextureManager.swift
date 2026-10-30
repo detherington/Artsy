@@ -9,14 +9,34 @@ public final class TextureManager {
     }
 
     /// Memory the GPU can work with comfortably, per Metal; what layers, undo history and
-    /// scratch textures have to share.
-    /// What the GPU says it can hold; a quarter of the machine's memory where it says
-    /// nothing (the iOS simulator reports a working set of zero).
+    /// scratch textures have to share. See `budget(workingSet:available:physical:)`.
     public var memoryBudget: Int { Self.memoryBudget(for: device) }
 
     public static func memoryBudget(for device: MTLDevice) -> Int {
-        let workingSet = Int(device.recommendedMaxWorkingSetSize)
-        return workingSet > 0 ? workingSet : Int(ProcessInfo.processInfo.physicalMemory / 4)
+        budget(workingSet: Int(device.recommendedMaxWorkingSetSize), available: availableToProcess,
+               physical: Int(ProcessInfo.processInfo.physicalMemory))
+    }
+
+    /// What the app may still take before the system stops it: iOS says; the Mac sets no
+    /// such limit.
+    public static var availableToProcess: Int? {
+        #if os(iOS)
+        return Int(os_proc_available_memory())
+        #else
+        return nil
+        #endif
+    }
+
+    /// What the GPU says it can hold, or a quarter of the machine's memory where it says
+    /// nothing (the iOS simulator reports a working set of zero); and, where the system
+    /// limits what an app may take (iOS), never more than three quarters of what is left
+    /// to it, so a canvas, its layers and the undo history stay under the limit with room
+    /// for the rest. A GPU's working set is not that limit: on a phone it can be most of
+    /// the memory, and a canvas sized by it (an 8192² one on the iPhone Duo) was killed.
+    public static func budget(workingSet: Int, available: Int?, physical: Int) -> Int {
+        let budget = workingSet > 0 ? workingSet : physical / 4
+        guard let available, available > 0 else { return budget }
+        return min(budget, available / 4 * 3)
     }
 
     /// - Parameter mipLevels: more than one for a texture that is also kept at smaller

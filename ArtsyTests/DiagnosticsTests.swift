@@ -31,9 +31,10 @@ final class DiagnosticsTests: XCTestCase {
         XCTAssertTrue(text.contains("settings: smoothing"), text)
         XCTAssertTrue(text.contains("stroke   Hard Round 12 px: 40 samples"), text)
         XCTAssertTrue(text.contains("error    saving Test.artsy: Failed to save document"), text)
-        // The app, memory, GPU and settings lines, what the platform adds (the Mac: its
-        // screens), then the stroke and the error
-        XCTAssertEqual(text.components(separatedBy: "\n").filter { !$0.isEmpty }.count, 6 + DiagnosticsLog.platformDetails().count, "one line each")
+        // The app, memory, GPU, canvas budget and settings lines, what the platform adds
+        // (the Mac: its screens), then the stroke and the error
+        XCTAssertTrue(text.contains("canvas budget "), text)
+        XCTAssertEqual(text.components(separatedBy: "\n").filter { !$0.isEmpty }.count, 7 + DiagnosticsLog.platformDetails().count, "one line each")
     }
 
     func testFrameTimingsAreSummarisedEveryFewSeconds() {

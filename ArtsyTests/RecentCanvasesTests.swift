@@ -140,6 +140,9 @@ final class RecentCanvasesTests: XCTestCase {
                      "a screen with more pixels than the device takes as a canvas")
         XCTAssertNil(StartView.sizes(last: CGSize(width: 2752, height: 2064), screen: CGSize(width: 2752, height: 2064), maxSide: 4096)
                         .first { $0.name == "This screen" }, "the last size already is the screen's")
+        let afterAHuge = StartView.sizes(last: CGSize(width: 8192, height: 8192), screen: nil, maxSide: 4096)
+        XCTAssertNil(afterAHuge.first { $0.id == "last" }, "a last size the device cannot take is not offered again")
+        XCTAssertEqual(afterAHuge.first?.name, "Small")
     }
 
     /// The view on screen for a moment, then its pixels counted: those near white and
