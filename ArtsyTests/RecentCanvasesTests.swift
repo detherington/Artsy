@@ -117,19 +117,20 @@ final class RecentCanvasesTests: XCTestCase {
     }
 
     /// The screen drawn: with a canvas in the list, its red thumbnail is on the screen
-    /// beside the size tiles' white swatches; with nothing, only the swatches.
+    /// (on the Continue card, large) beside the size pills' white glyphs and the words;
+    /// with nothing, only those.
     func testTheStartScreenComesUpWithTheListAndWithNothing() throws {
         let store = RecentCanvases(fileURL: nil)
         store.note(try makeDocument(named: "One"), size: CGSize(width: 1024, height: 768))
         let shown = try show(StartView(recents: store, maxSide: 4096, actions: StartActions()), width: 860)
         defer { shown.close() }
         let first = try shown.count()
-        XCTAssertGreaterThan(first.whites, 1000, "the size tiles' swatches: \(first.whites)")
-        XCTAssertGreaterThan(first.reds, 1000, "the thumbnail, read from the package: \(first.reds)")
+        XCTAssertGreaterThan(first.whites, 150, "the size pills' glyphs and the words: \(first.whites)")
+        XCTAssertGreaterThan(first.reds, 1000, "the thumbnail, read from the package, on the card: \(first.reds)")
         let empty = try show(StartView(recents: RecentCanvases(fileURL: nil), maxSide: 4096, actions: StartActions()), width: 360)
         defer { empty.close() }
         let nothing = try empty.count()
-        XCTAssertGreaterThan(nothing.whites, 500, "the phone's row of swatches: \(nothing.whites)")
+        XCTAssertGreaterThan(nothing.whites, 150, "the phone's row of pills and the words: \(nothing.whites)")
         XCTAssertEqual(nothing.reds, 0, "nothing in the list, nothing red")
     }
 
