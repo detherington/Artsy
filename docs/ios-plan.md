@@ -359,3 +359,36 @@ Each step is its own branch and PR, with the engine tests the net for every one.
 4. **The engine package first.**
 5. The first TestFlight build: painting and documents; AI and stock images follow.
 6. Documents on iCloud Drive as now, the same `.artsy` package on both.
+
+## The panels fit what holds them (2026-10-30)
+
+Darrell found the brush settings, and the other panels, larger than the pop-up holding
+them, cut off at the corners. The five panels that open from the bar (Brushes, Colour,
+Layers, Adjust, Add) had fixed frames, 340 by 520 to 640 pt, right for a Mac popover,
+which is as large as its content, and wrong wherever the holder is smaller: a popover on
+a short screen (the Duo's inner display on its side is 669 pt tall) is trimmed by UIKit
+and its rounded corners cut the content; the sheet a popover becomes on a phone is the
+screen, 402 pt tall on an iPhone on its side, where a 600-pt panel lost its header above
+and its settings below; and in a taller sheet the panel sat in the middle with its
+scrolling part still cut at the fixed frame's bottom.
+
+`panelFrame(width:height:)` in Artsy/UI/Platform.swift replaces the five frames: fixed on
+the Mac, and on iPad and iPhone an ideal size with no maximum, which a popover takes when
+the screen has the room and trims when it has not, and which a sheet fills. The panel is
+then never larger than what holds it; its scrolling part gives way. The Colour panel's
+square and hue strip, which sit outside the scrolling part because they take the pen's
+drag, give up height down to 120 pt where the panel is short, so the fields and the
+palette keep room of their own; at full height they are the 260 pt they were.
+
+Checked on 2026-10-30: iPad Pro 13-inch simulator, the Brushes popover the same 340 by
+600 as before; iPhone 18 Pro simulator on its side, the Brushes sheet with its header,
+its categories and its grid from edge to edge and the quick settings scrolling below
+(before: the header and the grade row cut off), and the Colour sheet with the square at
+130 pt and the fields and palette in view (before: the square at 260 left them 8 pt);
+iPhone 18 Pro upright, the Colour sheet filling the page sheet; iPhone Duo simulator
+(the 466 by 678 pt display), Brushes, Colour, Layers, Adjust and Add each filling the
+sheet inside the screen's safe area, the Smooth and Amount rows of the brush settings
+now reachable. The whole Mac suite, where the panels keep their fixed frames: 327 tests,
+3 skipped, 0 failures. Seen on the way and left alone: on the 402-pt-wide iPhone upright the
+compact bar is wider than the screen, the Hide button off its right edge and Add half
+cut; the bar fits the Duo's 466 pt.

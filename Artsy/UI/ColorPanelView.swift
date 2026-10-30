@@ -25,6 +25,8 @@ struct ColorPanelView: View {
     @State private var previous: StrokeColor
 
     static let squareSize: CGFloat = 260
+    /// The least the square gives up to, where the panel is short.
+    static let squareMinimum: CGFloat = 120
     static let stripWidth: CGFloat = 32
     static let swatch: CGFloat = 32
 
@@ -67,14 +69,17 @@ struct ColorPanelView: View {
             Divider().overlay(Chrome.hairline)
 
             // The square and the strip take the pen's drag themselves, so they sit outside
-            // the scrolling part
+            // the scrolling part. Full size where the panel has its height; where it has
+            // not (a phone on its side) they give up height down to a floor, so the
+            // fields and the palette below keep room of their own
             HStack(spacing: 12) {
                 SVSquareView(hue: hue, saturation: $saturation, brightness: $brightness)
-                    .frame(width: Self.squareSize, height: Self.squareSize)
+                    .frame(maxWidth: Self.squareSize, minHeight: Self.squareMinimum, idealHeight: Self.squareSize, maxHeight: Self.squareSize)
+                    .aspectRatio(1, contentMode: .fit)
                     .onChange(of: saturation) { _, _ in syncFromHSB() }
                     .onChange(of: brightness) { _, _ in syncFromHSB() }
                 HueSliderView(hue: $hue)
-                    .frame(width: Self.stripWidth, height: Self.squareSize)
+                    .frame(minWidth: Self.stripWidth, maxWidth: Self.stripWidth, minHeight: Self.squareMinimum, idealHeight: Self.squareSize, maxHeight: Self.squareSize)
                     .onChange(of: hue) { _, _ in syncFromHSB() }
             }
             .padding(.horizontal, 12)
@@ -103,7 +108,7 @@ struct ColorPanelView: View {
                 }
             }
         }
-        .frame(width: Chrome.panelWidth, height: 640)
+        .panelFrame(width: Chrome.panelWidth, height: 640)
         .background(Chrome.panel)
         .onAppear { syncFromColor() }
         .onDisappear {

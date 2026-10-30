@@ -508,7 +508,7 @@ struct AdjustPanelView: View {
                 }
             }
         }
-        .frame(width: Chrome.panelWidth, height: 640)
+        .panelFrame(width: Chrome.panelWidth, height: 640)
         .background(Chrome.panel)
     }
 }
@@ -620,7 +620,7 @@ struct AddPanelView: View {
                 .padding(.vertical, 8)
             }
         }
-        .frame(width: Chrome.panelWidth, height: 640)
+        .panelFrame(width: Chrome.panelWidth, height: 640)
         .background(Chrome.panel)
     }
 }
