@@ -39,36 +39,45 @@ struct BottomBarView: View {
     }
 
     /// The compact bar: the same things, the quick values as buttons that open their
-    /// pill, the panel buttons as icons alone.
+    /// pill, the panel buttons as icons alone. Where even that is wider than the window,
+    /// an iPhone upright at 402 pt where the whole bar wants 460, the Size and Opacity
+    /// buttons go, their sliders being in the Brushes panel's quick settings; the way to
+    /// hide the interface stays at the right end, since a phone has no Tab.
     private var compact: some View {
+        ViewThatFits(in: .horizontal) {
+            compactBar(quickValues: true)
+            compactBar(quickValues: false)
+        }
+    }
+
+    private func compactBar(quickValues: Bool) -> some View {
         let target = chrome.isPhone ? Chrome.compactTarget : Chrome.target
         return HStack(spacing: chrome.isPhone ? 6 : 8) {
             DocumentMenu(viewModel: viewModel, actions: actions, compact: true)
             BrushPill(viewModel: viewModel, previews: previews, actions: actions, compact: true)
-            ValueButton(title: "Size", value: $viewModel.brushSize, range: 1...200, logarithmic: true, size: target) { "\(Int($0.rounded()))" }
-            ValueButton(title: "Opacity", value: $viewModel.brushOpacity, range: 0.05...1, logarithmic: false, size: target) { "\(Int(($0 * 100).rounded()))%" }
+            if quickValues {
+                ValueButton(title: "Size", value: $viewModel.brushSize, range: 1...200, logarithmic: true, size: target) { "\(Int($0.rounded()))" }
+                ValueButton(title: "Opacity", value: $viewModel.brushOpacity, range: 0.05...1, logarithmic: false, size: target) { "\(Int(($0 * 100).rounded()))%" }
+            }
             ColorSwatchButton(viewModel: viewModel)
             Spacer(minLength: 4)
             ChromeButton(systemImage: "square.3.layers.3d", badge: viewModel.layerStack?.layers.count, size: target, help: "Layers") {
                 showingLayers = true
             }
-            .popover(isPresented: $showingLayers, arrowEdge: Chrome.barPopoverEdge) {
+            .panelPopover(isPresented: $showingLayers) {
                 LayersPanelView(viewModel: viewModel, renderer: actions.renderer(), dockAvailable: false)
-                    .panelPresentation()
             }
             ChromeButton(systemImage: "slider.horizontal.3", size: target, help: "Symmetry, guides and the view") {
                 showingAdjust = true
             }
-            .popover(isPresented: $showingAdjust, arrowEdge: Chrome.barPopoverEdge) {
+            .panelPopover(isPresented: $showingAdjust) {
                 AdjustPanelView(viewModel: viewModel, actions: actions)
-                    .panelPresentation()
             }
             ChromeButton(systemImage: "plus", size: target, help: "AI, stock images and imports") {
                 showingAdd = true
             }
-            .popover(isPresented: $showingAdd, arrowEdge: Chrome.barPopoverEdge) {
+            .panelPopover(isPresented: $showingAdd) {
                 AddPanelView(viewModel: viewModel, actions: actions, dismiss: { showingAdd = false })
-                    .panelPresentation()
             }
             ChromeButton(systemImage: "arrow.down.right.and.arrow.up.left", size: target, help: "Hide the interface") {
                 viewModel.toggleChrome()
@@ -94,23 +103,20 @@ struct BottomBarView: View {
                     showingLayers = true
                 }
             }
-            .popover(isPresented: $showingLayers, arrowEdge: Chrome.barPopoverEdge) {
+            .panelPopover(isPresented: $showingLayers) {
                 LayersPanelView(viewModel: viewModel, renderer: actions.renderer(), dockAvailable: chrome.isWide)
-                    .panelPresentation()
             }
             ChromeButton(systemImage: "slider.horizontal.3", label: "Adjust", help: "Symmetry, guides and the view") {
                 showingAdjust = true
             }
-            .popover(isPresented: $showingAdjust, arrowEdge: Chrome.barPopoverEdge) {
+            .panelPopover(isPresented: $showingAdjust) {
                 AdjustPanelView(viewModel: viewModel, actions: actions)
-                    .panelPresentation()
             }
             ChromeButton(systemImage: "plus", label: "Add", help: "AI, stock images and imports") {
                 showingAdd = true
             }
-            .popover(isPresented: $showingAdd, arrowEdge: Chrome.barPopoverEdge) {
+            .panelPopover(isPresented: $showingAdd) {
                 AddPanelView(viewModel: viewModel, actions: actions, dismiss: { showingAdd = false })
-                    .panelPresentation()
             }
             ChromeButton(systemImage: "arrow.down.right.and.arrow.up.left", label: "Hide", help: "Hide the interface (Tab)") {
                 viewModel.toggleChrome()
@@ -258,9 +264,8 @@ struct BrushPill: View {
         }
         .buttonStyle(.plain)
         .help("Brush")
-        .popover(isPresented: $showing, arrowEdge: Chrome.barPopoverEdge) {
+        .panelPopover(isPresented: $showing) {
             BrushPanelView(viewModel: viewModel, previews: previews, actions: actions, dismiss: { showing = false })
-                .panelPresentation()
         }
     }
 }
@@ -389,12 +394,11 @@ struct ColorSwatchButton: View {
             }
             .buttonStyle(.plain)
             .help("Background colour")
-            .popover(isPresented: $showingBackground, arrowEdge: Chrome.barPopoverEdge) {
+            .panelPopover(isPresented: $showingBackground) {
                 ColorPanelView(
                     color: Binding(get: { viewModel.swapBackgroundColor }, set: { viewModel.swapBackgroundColor = $0 }),
                     viewModel: viewModel, dismiss: { showingBackground = false }
                 )
-                .panelPresentation()
             }
             Button(action: { showingForeground = true }) {
                 RoundedRectangle(cornerRadius: 5)
@@ -404,13 +408,12 @@ struct ColorSwatchButton: View {
             }
             .buttonStyle(.plain)
             .help("Colour (X swaps the two)")
-            .popover(isPresented: $showingForeground, arrowEdge: Chrome.barPopoverEdge) {
+            .panelPopover(isPresented: $showingForeground) {
                 ColorPanelView(
                     color: Binding(get: { viewModel.foregroundColor },
                                    set: { viewModel.foregroundColor = $0; viewModel.currentColor = $0 }),
                     viewModel: viewModel, dismiss: { showingForeground = false }
                 )
-                .panelPresentation()
             }
         }
         .frame(width: 36, height: 36)

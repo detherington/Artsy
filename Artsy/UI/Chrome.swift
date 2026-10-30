@@ -98,6 +98,10 @@ struct ChromeButton: View {
 struct PanelHeader<Trailing: View>: View {
     let title: String
     @ViewBuilder let trailing: () -> Trailing
+    /// Set by `panelPopover` when the panel is a sheet on a phone rather than a popover:
+    /// a sheet that fills the screen shows no way out of itself, so the header carries
+    /// a Done button then, and only then.
+    @Environment(\.panelDismissal) private var dismissal
 
     init(_ title: String, @ViewBuilder trailing: @escaping () -> Trailing) {
         self.title = title
@@ -111,9 +115,32 @@ struct PanelHeader<Trailing: View>: View {
                 .foregroundColor(Chrome.text)
             Spacer()
             trailing()
+            if let dismissal {
+                Button("Done", action: dismissal)
+                    .buttonStyle(.plain)
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundColor(Chrome.text)
+                    .padding(.horizontal, 12)
+                    .frame(height: 32)
+                    .background(Capsule().fill(Chrome.control))
+                    .help("Close the panel")
+            }
         }
         .padding(.horizontal, 14)
         .frame(height: Chrome.target)
+    }
+}
+
+/// How a panel presented as a sheet is dismissed, for its header's Done button; nil in
+/// a popover, which a tap outside dismisses.
+private struct PanelDismissalKey: EnvironmentKey {
+    static let defaultValue: (() -> Void)? = nil
+}
+
+extension EnvironmentValues {
+    var panelDismissal: (() -> Void)? {
+        get { self[PanelDismissalKey.self] }
+        set { self[PanelDismissalKey.self] = newValue }
     }
 }
 
