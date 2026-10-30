@@ -48,12 +48,23 @@ final class AppModel: ObservableObject {
     enum Failure: LocalizedError {
         case noEngine
         case couldNotWrite
+        /// A canvas with more pixels than this device takes (its textures would be killed
+        /// for their memory, not refused).
+        case tooLarge(width: Int, height: Int, side: Int)
         var errorDescription: String? {
             switch self {
             case .noEngine: return "The drawing engine could not start"
             case .couldNotWrite: return "The canvas could not be written"
+            case .tooLarge(let width, let height, let side):
+                return "A \(width) × \(height) canvas is more than this device takes: up to \(side) × \(side)."
             }
         }
+    }
+
+    /// The error for a canvas of `size` this device cannot take, or nil for one it can.
+    func tooLarge(_ width: Int, _ height: Int) -> Failure? {
+        let side = largestCanvasSide
+        return max(width, height) > side ? .tooLarge(width: width, height: height, side: side) : nil
     }
 
     /// The app's own folder: On My iPad ▸ Artsy in Files, where new canvases go.
@@ -68,6 +79,7 @@ final class AppModel: ObservableObject {
     /// A new canvas of `size`, "Canvas N" in Documents, written and opened; `remember`
     /// makes the size the start screen's "Same as last" (not for a photo's).
     func newCanvas(size: CGSize, remember: Bool = true, completion: @escaping (Result<PaintingSession, Error>) -> Void) {
+        if let failure = tooLarge(Int(size.width), Int(size.height)) { completion(.failure(failure)); return }
         if remember { AppPreferences.shared.lastCanvasSize = size }
         let folder = documentsDirectory
         var n = 1
@@ -101,6 +113,9 @@ final class AppModel: ObservableObject {
     func open(_ url: URL) throws -> PaintingSession {
         guard let context else { throw Failure.noEngine }
         if let open = session { open.close() }
+        // A document from a bigger device is refused with a word, not killed for its memory
+        let size = CanvasDocument.canvasSize(of: try CanvasDocument.read(from: url))
+        if let failure = tooLarge(Int(size.width), Int(size.height)) { throw failure }
         let session = try PaintingSession(.document(url), context: context, previews: previews) { [weak self] name in
             self?.app(name)
         }

@@ -245,9 +245,11 @@ public final class CanvasViewModel: ObservableObject {
         snapAnchor = nil
         strokeInput = input
         strokeHasPressure = input.hasPressure
+        curveSoftenedForPen = false
         if input == .penWithoutPressure, pressureCurve == .linear,
            AppPreferences.shared.pressureCurves[Self.currentPenKey()] == nil {
             pressureCurve = .soft   // a pen that cannot press gets the curve that presses easily
+            curveSoftenedForPen = true
         }
         recorder?.beginStroke(settingsFrom: self, firstPoint: rawPoint)
         speedPressure = PressureFromSpeed(zoom: Float(transform.scale),   // the hand's speed is on the screen
@@ -324,8 +326,13 @@ public final class CanvasViewModel: ObservableObject {
         guard isDrawing, !strokeHasPressure else { return }
         strokeHasPressure = true
         strokeInput = .pen
+        // The Soft curve was the default for a pen that cannot press; this one can
+        if curveSoftenedForPen { pressureCurve = .linear; curveSoftenedForPen = false }
         recorder?.strokeReportsPressure()
     }
+    /// Whether this stroke's Soft curve was the pen-without-pressure default, to take back
+    /// should the pen turn out to press after all.
+    private var curveSoftenedForPen = false
     private var strokeIsSettled = false
 
     /// The pen has lifted: bring the stroke to where it actually lifted, if smoothing left

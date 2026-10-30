@@ -103,6 +103,10 @@ public final class DiagnosticsLog {
         if let device {
             lines.append("GPU \(device.name), working set \(device.recommendedMaxWorkingSetSize / 1_048_576) MB, "
                          + "unified memory \(device.hasUnifiedMemory)")
+            let budget = TextureManager.memoryBudget(for: device)
+            var line = "canvas budget \(budget / 1_048_576) MB, largest canvas \(LayerStack.largestCanvasSide(memoryBudget: budget)) a side"
+            if let available = TextureManager.availableToProcess { line += ", \(available / 1_048_576) MB left to the app" }
+            lines.append(line)
         }
         lines += platformDetails()
         let prefs = AppPreferences.shared

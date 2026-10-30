@@ -50,9 +50,10 @@ final class IncrementalRenderingTests: XCTestCase {
             }
             // Where symmetry copies of a stamp stroke overlap, the order their dabs blend in
             // depends on the framing; in a half-float texture that is worth a rounding step
-            // or two, hence 2/255 rather than 1/255.
+            // or two, hence 2/255 rather than 1/255; and a ribbon's antialiased edge pixels
+            // blend in the same precision, so 4/255 now.
             for other in results.dropFirst() {
-                XCTAssertLessThan(worstDifference(results[0], other), 0.008, "\(brush.name), \(symmetry.displayName)")
+                XCTAssertLessThan(worstDifference(results[0], other), 0.016, "\(brush.name), \(symmetry.displayName)")
             }
         }
     }

@@ -121,14 +121,16 @@ struct StartView: View {
 
     /// The sizes offered: the size used last; this screen's pixels, the way the device is
     /// held, when there is a screen to ask; then the presets. A size the device cannot
-    /// take is left out, and so is one that repeats an earlier tile.
+    /// take is left out (the last one too: a Huge canvas from before the cap would only
+    /// fail again), and so is one that repeats an earlier tile.
     static func sizes(last: CGSize, screen: CGSize?, maxSide: Int) -> [Size] {
-        var sizes = [Size(id: "last", name: "Same as last", width: Int(last.width), height: Int(last.height))]
+        var sizes: [Size] = []
         func offer(_ size: Size) {
             guard max(size.width, size.height) <= maxSide, size.width > 0, size.height > 0,
                   !sizes.contains(where: { $0.width == size.width && $0.height == size.height }) else { return }
             sizes.append(size)
         }
+        offer(Size(id: "last", name: "Same as last", width: Int(last.width), height: Int(last.height)))
         if let screen {
             offer(Size(id: "screen", name: "This screen", width: Int(screen.width.rounded()), height: Int(screen.height.rounded())))
         }

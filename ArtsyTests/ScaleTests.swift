@@ -16,6 +16,21 @@ final class ScaleTests: XCTestCase {
 
     // MARK: - Layers
 
+    /// The budget is the GPU's working set, or a quarter of the memory where it says
+    /// nothing; and where the system limits what the app may take, never more than three
+    /// quarters of what is left, whatever the GPU says: on a phone the working set can be
+    /// most of the memory, and a canvas sized by it was killed.
+    func testTheBudgetStaysUnderWhatTheAppMayTake() {
+        let gigabyte = 1 << 30
+        XCTAssertEqual(TextureManager.budget(workingSet: 18 * gigabyte, available: nil, physical: 24 * gigabyte), 18 * gigabyte, "the Mac: the GPU's working set")
+        XCTAssertEqual(TextureManager.budget(workingSet: 0, available: nil, physical: 16 * gigabyte), 4 * gigabyte, "a device that says nothing: a quarter of its memory")
+        XCTAssertEqual(TextureManager.budget(workingSet: 9 * gigabyte, available: 4 * gigabyte, physical: 12 * gigabyte), 3 * gigabyte, "a phone: three quarters of what is left to the app")
+        XCTAssertEqual(TextureManager.budget(workingSet: 0, available: 4 * gigabyte, physical: 12 * gigabyte), 3 * gigabyte)
+        XCTAssertEqual(TextureManager.budget(workingSet: 2 * gigabyte, available: 4 * gigabyte, physical: 12 * gigabyte), 2 * gigabyte, "the smaller of the two")
+        XCTAssertEqual(TextureManager.budget(workingSet: 2 * gigabyte, available: 0, physical: 12 * gigabyte), 2 * gigabyte, "nothing left reads as nothing said")
+        XCTAssertEqual(LayerStack.largestCanvasSide(memoryBudget: 3 * gigabyte), 5120, "so a phone with 4 GB left offers Large, not Huge")
+    }
+
     func testTheLargestCanvasFollowsTheMemory() {
         let gigabyte = 1 << 30
         XCTAssertEqual(LayerStack.largestCanvasSide(memoryBudget: 16 * gigabyte), 8192, "a Mac is capped by the format, not its memory")

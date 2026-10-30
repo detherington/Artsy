@@ -50,7 +50,9 @@ final class EveryBrushTests: XCTestCase {
                 sheet.forEach { harness.draw($0, pointsPerFrame: pointsPerFrame) }
                 results.append(harness.shown())
             }
-            XCTAssertLessThan(worst(results[0], results[1]), 0.012, brush.name)
+            // To the precision of a 16-bit blend of antialiased edge pixels: a couple of
+            // pixels of a ribbon's edge come out a few 8-bit levels apart
+            XCTAssertLessThan(worst(results[0], results[1]), 0.025, brush.name)
         }
     }
 

@@ -180,6 +180,27 @@ final class CompositingTests: XCTestCase {
     }
 
     /// Samples that arrive between the last frame and pen-up still have to be drawn.
+    /// A hard brush's edge is still antialiased: a Technical Pen line at a slight slant,
+    /// and a Hard Round one, leave pixels of partial coverage all along their edges, not
+    /// a staircase of full and empty ones.
+    func testHardEdgesAreAntialiased() throws {
+        for brush in [BrushDescriptor.technicalPen, .hardRound, .calligraphy] {
+            let harness = try EngineHarness(width: 300, height: 100)
+            harness.select(brush)
+            harness.viewModel.brushSize = 12
+            harness.draw(StrokeFixtures.line(from: CGPoint(x: 20, y: 40), to: CGPoint(x: 280, y: 56), pressure: 1...1))
+            let layer = harness.pixels(of: harness.drawingLayer.texture)
+            var partial = 0, covered = 0
+            for pixel in 0..<(layer.width * layer.height) {
+                let alpha = layer.values[pixel * 4 + 3]
+                if alpha > 0.15 && alpha < 0.85 { partial += 1 }
+                if alpha > 0.85 { covered += 1 }
+            }
+            XCTAssertGreaterThan(covered, 1500, "\(brush.name): the line is there")
+            XCTAssertGreaterThan(partial, 150, "\(brush.name): and its edges are soft by a pixel: \(partial) partial pixels")
+        }
+    }
+
     func testStrokeReachesItsLastSample() throws {
         let harness = try EngineHarness(width: 200, height: 120)
         harness.viewModel.brushSize = 10

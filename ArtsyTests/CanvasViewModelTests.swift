@@ -68,10 +68,11 @@ final class CanvasViewModelTests: XCTestCase {
             harness.viewModel.easesStrokesWithoutPressure = eases
             harness.draw(StrokeFixtures.line(from: CGPoint(x: 30, y: 50), to: CGPoint(x: 270, y: 50), pressure: 0.7...0.7),
                          hasPressure: hasPressure)
-            // How dark the paper is 7 px off the centre line: covered where the stroke is
-            // at full width (15.8 px), bare where it has tapered.
+            // How dark the paper is 6 px off the centre line: covered where the stroke is
+            // at full width (15.8 px, its antialiased edge a pixel further out), bare
+            // where it has tapered.
             let shown = harness.displayed()
-            return (shown.at(x: 36, y: 57).x, shown.at(x: 150, y: 57).x)
+            return (shown.at(x: 36, y: 56).x, shown.at(x: 150, y: 56).x)
         }
         let pen = try widthProfile(hasPressure: true)
         XCTAssertLessThan(pen.start, 0.1)

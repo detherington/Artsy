@@ -19,10 +19,13 @@ final class PaintingView: MTKView {
     /// The touch drawing the stroke in progress, if any.
     private var drawingTouch: UITouch?
     private var strokeHasPressure = false
-    /// Whether the Pencil in use has ever reported a force. Once it has, every stroke
-    /// starts with pressure even when its landing sample reads zero, which a Pencil's
-    /// first, estimated force can. Session-wide: the Pencil does not change mid-document.
-    private static var pencilHasReportedForce = false
+    /// What this session has learned of the Pencil's force: a sensor's, which varies, or
+    /// a constant, which the USB-C Pencil reports in place of none. Session-wide: the
+    /// Pencil does not change mid-document.
+    private static var pencilForce = PencilForce()
+    /// The forces the stroke in progress has read, for the log at pen-up.
+    private var strokeForces: ClosedRange<Float>?
+    private var strokeForceMaximum: Float = 0
     /// Whether a finger draws; two fingers always pan, pinch and turn.
     var fingerPaints = true
 
@@ -119,34 +122,38 @@ final class PaintingView: MTKView {
     }
 
     /// Whether a stroke beginning with `touch` has pressure of its own. A finger never
-    /// does. A Pencil's force is estimated at first and refined later, so its landing
-    /// sample can read zero even on a Pencil with a force sensor (the first and second
-    /// generations, the Pro): the stroke has pressure if the sample reads a force, if an
-    /// update to it is expected, or if this Pencil has reported force before. The USB-C
-    /// Pencil has no sensor: it reads zero and expects no update, so its strokes take
-    /// their pressure from speed. A stroke that starts without pressure and then reports
-    /// some switches to it (`noteForce`).
+    /// does. A Pencil's is a sensor's or a constant's (see `PencilForce`): the stroke has
+    /// pressure if this Pencil's force has been seen to vary, or if the landing sample's
+    /// force is an estimate an update is expected to, which a Pencil with a sensor
+    /// reports and the USB-C Pencil, with none, does not. A stroke that starts without
+    /// pressure and whose Pencil's force then varies switches to it (`noteForce`).
     private func strokeHasPressure(beginning touch: UITouch) -> Bool {
         guard touch.type == .pencil else { return false }
-        if touch.force > 0 {
-            Self.pencilHasReportedForce = true
-            return true
-        }
-        return Self.pencilHasReportedForce || touch.estimatedPropertiesExpectingUpdates.contains(.force)
+        strokeForces = nil
+        noteForce(of: touch)
+        return Self.pencilForce.strokeHasPressure(expectsUpdate: touch.estimatedPropertiesExpectingUpdates.contains(.force))
     }
 
     /// A Pencil sample's force, into the record: a stroke that began without pressure
-    /// takes the Pencil's own from here on.
+    /// takes the Pencil's own from the moment its force varies.
     private func noteForce(of touch: UITouch) {
-        guard touch.type == .pencil, touch.force > 0 else { return }
-        if !Self.pencilHasReportedForce {
-            Self.pencilHasReportedForce = true
-            DiagnosticsLog.shared.note(.stroke, "the Pencil reports force")
+        guard touch.type == .pencil else { return }
+        let force = Float(touch.force), maximum = Float(touch.maximumPossibleForce)
+        strokeForces = strokeForces.map { min($0.lowerBound, force)...max($0.upperBound, force) } ?? force...force
+        strokeForceMaximum = maximum
+        let before = Self.pencilForce
+        Self.pencilForce.note(force: force, maximum: maximum)
+        if Self.pencilForce.varies, !before.varies {
+            DiagnosticsLog.shared.note(.stroke, "the Pencil's force varies: a force sensor")
         }
-        if !strokeHasPressure, drawingTouch != nil {
+        if Self.pencilForce.steady, !before.steady {
+            DiagnosticsLog.shared.note(.stroke, String(format: "the Pencil's force has read %.2f of %.2f for %d samples running: no force sensor, so its strokes take their pressure from speed",
+                                                    force, maximum, PencilForce.steadySamples))
+        }
+        if Self.pencilForce.varies, !strokeHasPressure, drawingTouch != nil {
             strokeHasPressure = true
             viewModel?.strokeReportsPressure()
-            DiagnosticsLog.shared.note(.stroke, "the stroke began without pressure and the Pencil's force arrived: its own pressure from here")
+            DiagnosticsLog.shared.note(.stroke, "the stroke began without pressure and the Pencil's force varied: its own pressure from here")
         }
     }
 
@@ -164,7 +171,11 @@ final class PaintingView: MTKView {
         drawingTouch = nil
         guard let viewModel, let renderer else { return }
         if let summary = viewModel.strokeSummary() {
-            DiagnosticsLog.shared.note(.stroke, summary + (touch.type == .pencil ? ", pencil" : ", finger"))
+            var what = touch.type == .pencil ? ", pencil" : ", finger"
+            if touch.type == .pencil, let forces = strokeForces {
+                what += String(format: " (force %.2f–%.2f of %.2f)", forces.lowerBound, forces.upperBound, strokeForceMaximum)
+            }
+            DiagnosticsLog.shared.note(.stroke, summary + what)
         }
         // Finalize first: the renderer still needs the stroke's points to draw its last samples
         renderer.finalizeStroke()

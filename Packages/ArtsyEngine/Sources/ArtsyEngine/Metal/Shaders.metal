@@ -63,6 +63,15 @@ static inline float4 pigmentLerp(float4 dst, float4 paint, float k) {
     return float4(spectral::mixP3(straight(dst), straight(paint), wp / (wp + wd)) * a, a);
 }
 
+// A ribbon's edge: full inside, falling off over the brush's softness, and over at least
+// one pixel however hard the brush (`dist` is 0 at the middle and 1 at the edge; fwidth
+// is what one pixel changes it by). A hard brush used to be cut off at the edge outright,
+// which drew every inking brush's edge as a staircase, plain to see zoomed in.
+static inline float ribbonAlpha(float dist, float hardness) {
+    float edge = max(fwidth(dist), 1e-3);
+    return 1.0 - smoothstep(min(hardness, 1.0 - edge), 1.0, dist);
+}
+
 // Round tip: uses 2D radial distance from the center of the quad.
 // Used for stroke caps (start/end) to produce smooth rounded endpoints like Procreate.
 fragment float4 strokeRadialFragment(
@@ -71,14 +80,7 @@ fragment float4 strokeRadialFragment(
     constant float &hardness [[buffer(1)]]
 ) {
     float dist = distance(in.texCoord, float2(0.5, 0.5)) * 2.0;
-
-    float alpha;
-    if (hardness >= 0.99) {
-        alpha = 1.0 - step(1.0, dist);
-    } else {
-        float inner = hardness;
-        alpha = 1.0 - smoothstep(inner, 1.0, dist);
-    }
+    float alpha = ribbonAlpha(dist, hardness);
     return premultiplied(brushColor.rgb, brushColor.a * alpha * in.opacity);
 }
 
@@ -91,15 +93,7 @@ fragment float4 strokeProceduralFragment(
 ) {
     // Cross-stroke distance: 0 at left edge, 0.5 at center, 1 at right edge
     float dist = abs(in.texCoord.x - 0.5) * 2.0; // 0 at center, 1 at edge
-
-    float alpha;
-    if (hardness >= 0.99) {
-        alpha = 1.0 - step(1.0, dist);
-    } else {
-        float inner = hardness;
-        alpha = 1.0 - smoothstep(inner, 1.0, dist);
-    }
-
+    float alpha = ribbonAlpha(dist, hardness);
     return premultiplied(brushColor.rgb, brushColor.a * alpha * in.opacity);
 }
 
@@ -367,13 +361,9 @@ static inline float stampCoverage(
         coverage = tip.sample(tipSampler, in.uv).r;
     } else {
         float dist = distance(in.uv, float2(0.5)) * 2.0;
-        if (params.hardness >= 0.99) {
-            // One pixel of antialiasing on a hard edge
-            float edge = fwidth(dist);
-            coverage = 1.0 - smoothstep(1.0 - edge, 1.0, dist);
-        } else {
-            coverage = 1.0 - smoothstep(params.hardness, 1.0, dist);
-        }
+        // At least one pixel of antialiasing at the edge, however hard the brush
+        float edge = max(fwidth(dist), 1e-3);
+        coverage = 1.0 - smoothstep(min(params.hardness, 1.0 - edge), 1.0, dist);
     }
 
     if (params.hasSecondTip != 0) {
