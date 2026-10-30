@@ -79,6 +79,27 @@ final class CanvasTransformTests: XCTestCase {
         }
     }
 
+    /// Edge to edge, a canvas of the screen's pixels is the screen pixel for pixel: at 2x
+    /// half a point per pixel, its corners on the view's. Turned, it is fitted by its
+    /// height and centred. The margin fit is as it was.
+    func testFittingEdgeToEdgeCoversTheViewPixelForPixel() {
+        var transform = CanvasTransform()
+        let screen = CGSize(width: 2752, height: 2064)
+        let view = CGSize(width: 1376, height: 1032)
+        transform.zoomToFit(canvasSize: screen, viewSize: view, share: 1)
+        XCTAssertEqual(transform.scale, 0.5, accuracy: 1e-9)
+        assertEqual(transform.canvasToView(.zero, viewSize: view), .zero)
+        assertEqual(transform.canvasToView(CGPoint(x: 2752, y: 2064), viewSize: view), CGPoint(x: 1376, y: 1032))
+
+        transform.zoomToFit(canvasSize: CGSize(width: 2064, height: 2752), viewSize: view, share: 1)
+        XCTAssertEqual(transform.scale, 1032 / 2752, accuracy: 1e-9)
+        assertEqual(transform.canvasToView(.zero, viewSize: view), CGPoint(x: (1376 - 2064 * 1032 / 2752) / 2, y: 0))
+        assertEqual(transform.canvasToView(CGPoint(x: 0, y: 2752), viewSize: view), CGPoint(x: (1376 - 2064 * 1032 / 2752) / 2, y: 1032))
+
+        transform.zoomToFit(canvasSize: screen, viewSize: view)
+        XCTAssertEqual(transform.scale, 0.45, accuracy: 1e-9, "the margin fit takes nine tenths")
+    }
+
     func testSettingRotationSnapsNearUprightAndWraps() {
         var transform = CanvasTransform()
         let pin = CGPoint(x: 400, y: 300)

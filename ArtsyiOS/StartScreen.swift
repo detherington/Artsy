@@ -25,6 +25,7 @@ final class StartController: UIHostingController<StartView> {
         view.backgroundColor = UIColor(white: 0.13, alpha: 1)
         var actions = StartActions()
         actions.newCanvas = { [weak self] size in self?.newCanvas(size: size) }
+        actions.fullScreen = { [weak self] size in self?.newCanvas(size: size, fullScreen: true) }
         actions.customCanvas = { [weak self] in self?.showSizeDialog() }
         actions.open = { [weak self] entry in self?.openRecent(entry) }
         actions.browse = { [weak self] in self?.browse() }
@@ -112,10 +113,14 @@ final class StartController: UIHostingController<StartView> {
 
     // MARK: - Canvases
 
-    private func newCanvas(size: CGSize) {
+    /// `fullScreen` opens it as the screen: the interface away and the canvas edge to
+    /// edge, which for the screen's own pixels is pixel for pixel.
+    private func newCanvas(size: CGSize, fullScreen: Bool = false) {
         model.newCanvas(size: size) { [weak self] result in
             switch result {
-            case .success(let session): self?.show(session)
+            case .success(let session):
+                if fullScreen { session.viewModel.fillScreen() }
+                self?.show(session)
             case .failure(let error): self?.show("Could not make a canvas", error.localizedDescription)
             }
         }
@@ -149,6 +154,7 @@ final class StartController: UIHostingController<StartView> {
         screen.modalPresentationStyle = .fullScreen
         screen.overrideUserInterfaceStyle = .dark
         screen.keys = KeyCommands.entries(for: session) { [weak model] name in model?.app(name) }
+        screen.follow(session.viewModel)
         model.presenter = screen
         model.dismissCanvas = { [weak self] in self?.dismiss(animated: true) }
         present(screen, animated: true)

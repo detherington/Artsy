@@ -49,6 +49,14 @@ public final class CanvasViewModel: ObservableObject {
     @Published public var isErasing = false
     /// The bar, the rail and the dock out of the way, for the canvas alone (Tab).
     @Published public var isChromeHidden = false
+    /// How the canvas sits in the view whenever it is fitted: within a margin, as a
+    /// canvas in a window; or edge to edge, as a drawing surface that is the screen.
+    public enum ViewFit {
+        case margin, edgeToEdge
+        /// The share of the view the canvas takes along its tighter side.
+        public var share: CGFloat { self == .margin ? 0.9 : 1 }
+    }
+    public var viewFit: ViewFit = .margin
     /// Tint the active layer's paint that is still wet, on the canvas.
     @Published public var showsWetPaint = false
 
@@ -505,10 +513,19 @@ public final class CanvasViewModel: ObservableObject {
         isChromeHidden.toggle()
     }
 
+    /// The start screen's Full screen: the interface away and the canvas edge to edge,
+    /// now and whenever it is fitted again, so a canvas of the screen's pixels is the
+    /// screen, pixel for pixel. The interface comes back with Tab or the pill.
+    public func fillScreen() {
+        isChromeHidden = true
+        viewFit = .edgeToEdge
+    }
+
     // MARK: - The view: zoom, rotation, flip, guides (the menus and the Adjust panel)
 
+    /// Fit the canvas to the view the way this canvas is fitted (`viewFit`).
     public func zoomToFit(viewSize: CGSize) {
-        transform.zoomToFit(canvasSize: canvasSize, viewSize: viewSize)
+        transform.zoomToFit(canvasSize: canvasSize, viewSize: viewSize, share: viewFit.share)
     }
 
     public func actualSize() {

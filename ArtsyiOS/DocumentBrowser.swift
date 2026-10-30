@@ -1,4 +1,5 @@
 import SwiftUI
+import Combine
 import UIKit
 import UniformTypeIdentifiers
 import ArtsyEngine
@@ -108,8 +109,27 @@ enum DocumentBrowser {
 }
 
 /// The canvas screen as a view controller: full screen, no status bar, and the keys a
-/// keyboard sends, held as the Mac's shortcuts.
+/// keyboard sends, held as the Mac's shortcuts. With the interface hidden the home
+/// indicator fades too, and a swipe up from the bottom edge is the canvas's first, the
+/// system's on the second, so a stroke that runs off the bottom does not leave the app.
 final class CanvasHostingController: UIHostingController<CanvasScreen> {
+    private var chromeHidden = false
+    private var chromeWatch: AnyCancellable?
+
+    /// Follows whether this canvas's interface is hidden.
+    func follow(_ viewModel: CanvasViewModel) {
+        chromeHidden = viewModel.isChromeHidden
+        // Published values arrive before the property changes: the delivered one is the new one
+        chromeWatch = viewModel.$isChromeHidden.dropFirst().sink { [weak self] hidden in
+            self?.chromeHidden = hidden
+            self?.setNeedsUpdateOfHomeIndicatorAutoHidden()
+            self?.setNeedsUpdateOfScreenEdgesDeferringSystemGestures()
+        }
+    }
+
+    override var prefersHomeIndicatorAutoHidden: Bool { chromeHidden }
+    override var preferredScreenEdgesDeferringSystemGestures: UIRectEdge { chromeHidden ? .bottom : [] }
+
     var keys: [KeyCommands.Entry] = [] {
         didSet {
             commands = keys.map { entry in

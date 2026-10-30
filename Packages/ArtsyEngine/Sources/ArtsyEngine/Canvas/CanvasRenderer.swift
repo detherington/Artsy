@@ -201,7 +201,7 @@ public final class CanvasRenderer: NSObject, MTKViewDelegate {
         }
 
         if !hasInitializedTransform && view.bounds.size.width > 0 {
-            viewModel.transform.zoomToFit(canvasSize: canvasSize, viewSize: view.bounds.size)
+            viewModel.zoomToFit(viewSize: view.bounds.size)
             hasInitializedTransform = true
         }
 

@@ -506,6 +506,35 @@ final class ShellTests: XCTestCase {
         XCTAssertEqual(viewModel.transform.scale, fitted.scale, accuracy: 1e-6, "fitted")
     }
 
+    /// A canvas opened as the screen (the start screen's Full screen) starts with the
+    /// chrome away and the pill up, the canvas the whole window; it fits edge to edge,
+    /// now and after a reset; and Tab brings the chrome back.
+    func testACanvasOpenedAsTheScreenStartsWithoutChromeAndFitsEdgeToEdge() throws {
+        let (canvasView, viewModel) = try canvas()
+        viewModel.isLayersDocked = false
+        viewModel.fillScreen()
+        let layout = MainLayout(canvasView: canvasView, viewModel: viewModel, previewRenderer: nil)
+        show(layout, size: NSSize(width: 1800, height: 900))
+        XCTAssertTrue(viewModel.isChromeHidden)
+        XCTAssertEqual(canvasView.frame.width, 1800, accuracy: 0.5, "the canvas is the whole window")
+        XCTAssertEqual(canvasView.frame.height, 900, accuracy: 0.5)
+        let pill = try XCTUnwrap(layout.firstDescendant(of: NSHostingView<ChromePillView>.self))
+        XCTAssertFalse(pill.isHidden, "the way back is up")
+
+        let size = CGSize(width: 1376, height: 1032)
+        viewModel.zoomToFit(viewSize: size)
+        XCTAssertEqual(viewModel.transform.scale, 1032 / 256, accuracy: 1e-6, "edge to edge: the canvas is the view's height")
+        XCTAssertEqual(viewModel.transform.canvasToView(.zero, viewSize: size).y, 0, accuracy: 1e-6)
+        viewModel.transform.scale = 3
+        viewModel.resetView(viewSize: size)
+        XCTAssertEqual(viewModel.transform.scale, 1032 / 256, accuracy: 1e-6, "and after a reset of the view")
+
+        viewModel.toggleChrome()
+        settle(layout)
+        XCTAssertEqual(canvasView.frame.width, 1800 - Chrome.railWidth, accuracy: 0.5, "Tab brings the chrome back")
+        XCTAssertTrue(pill.isHidden)
+    }
+
     /// The shortcut sheet lists what the keys do, and the number keys do what it says.
     func testTheShortcutSheetAndTheNumberKeysAgreeWithTheBrushPanel() throws {
         let host = NSHostingView(rootView: ShortcutsView())

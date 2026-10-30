@@ -138,7 +138,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     /// - Parameter remember: whether `size` becomes the start screen's "Same as last";
     ///   not for a photo's.
-    func createNewCanvas(size: CGSize, remember: Bool = true) {
+    ///   `fullScreen` opens it as the screen: the interface away, the window full screen on
+    ///   the start screen's display, the canvas fitted edge to edge once the window is the screen.
+    func createNewCanvas(size: CGSize, remember: Bool = true, fullScreen: Bool = false) {
         if remember { AppPreferences.shared.lastCanvasSize = size }
         tabCounter += 1
         let title = "Canvas \(tabCounter)"
@@ -158,6 +160,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         do {
             let viewModel = CanvasViewModel(canvasSize: size)
             viewModel.untitledName = title
+            if fullScreen { viewModel.fillScreen() }
             let canvasView = CanvasView(frame: NSRect(x: 0, y: 0, width: 800, height: 600), device: metalContext.device)
             try canvasView.configure(context: metalContext, viewModel: viewModel)
             // The time-lapse of a canvas not yet saved goes to a temporary folder until it is
@@ -169,6 +172,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             window.representedURL = nil
             CanvasWindowStore.shared.register(window: window, viewModel: viewModel, canvasView: canvasView)
             observeDirty(window: window, viewModel: viewModel)
+            if fullScreen { fitAcrossFullScreen(window, viewModel: viewModel, canvasView: canvasView) }
 
         } catch {
             let label = NSTextField(labelWithString: "Canvas creation failed:\n\(error.localizedDescription)")
@@ -179,18 +183,44 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // Always set the tabbing identifier
         window.tabbingIdentifier = "ArtsyCanvas"
 
-        // Add tab to the currently active canvas window/group
-        let targetWindow = NSApp.keyWindow?.tabbingIdentifier == "ArtsyCanvas" ? NSApp.keyWindow :
+        // Add tab to the currently active canvas window/group; a full-screen surface is a
+        // space of its own
+        let targetWindow = fullScreen ? nil : NSApp.keyWindow?.tabbingIdentifier == "ArtsyCanvas" ? NSApp.keyWindow :
             NSApp.windows.first(where: { $0.tabbingIdentifier == "ArtsyCanvas" && $0 != window && $0.isVisible })
 
         if let target = targetWindow {
             target.addTabbedWindow(window, ordered: .above)
             window.makeKeyAndOrderFront(nil)
+        } else if fullScreen, let screen = startWindow?.screen ?? NSScreen.main {
+            // On the display the start screen is on, whose pixels the canvas has, then full screen there
+            let visible = screen.visibleFrame
+            window.setFrameOrigin(NSPoint(x: visible.midX - window.frame.width / 2, y: visible.midY - window.frame.height / 2))
+            window.makeKeyAndOrderFront(nil)
+            window.toggleFullScreen(nil)
         } else {
             window.center()
             window.makeKeyAndOrderFront(nil)
         }
         startWindow?.close()
+    }
+
+    /// A canvas opened as the screen is fitted edge to edge once its window has become the
+    /// screen, and fitted to the window again when it leaves full screen (Esc), where the
+    /// screen's pixels at 1:1 would run past the edges.
+    private func fitAcrossFullScreen(_ window: NSWindow, viewModel: CanvasViewModel, canvasView: CanvasView) {
+        let center = NotificationCenter.default
+        var observers: [NSObjectProtocol] = []
+        for name in [NSWindow.didEnterFullScreenNotification, NSWindow.didExitFullScreenNotification] {
+            observers.append(center.addObserver(forName: name, object: window, queue: .main) { [weak viewModel, weak canvasView] _ in
+                guard let canvasView else { return }
+                viewModel?.zoomToFit(viewSize: canvasView.bounds.size)
+            })
+        }
+        var closing: NSObjectProtocol?
+        closing = center.addObserver(forName: NSWindow.willCloseNotification, object: window, queue: .main) { _ in
+            for observer in observers { center.removeObserver(observer) }
+            if let closing { center.removeObserver(closing) }
+        }
     }
 
     /// The canvas with the chrome around it; see `MainLayout`.
@@ -440,7 +470,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         window.minSize = NSSize(width: 520, height: 400)
         window.isReleasedWhenClosed = false
         window.tabbingMode = .disallowed
-        // "This screen" is the display the Start window is on, at its own scale
+        // "Full screen" is the display the Start window is on, at its own scale
         window.contentView = NSHostingView(rootView: StartView(recents: RecentCanvases.shared, screenPixels: { [weak window] in
             guard let screen = window?.screen ?? NSScreen.main else { return nil }
             return CGSize(width: (screen.frame.width * screen.backingScaleFactor).rounded(),
@@ -465,6 +495,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private func startActions() -> StartActions {
         var actions = StartActions()
         actions.newCanvas = { [weak self] size in self?.createNewCanvas(size: size) }
+        actions.fullScreen = { [weak self] size in self?.createNewCanvas(size: size, fullScreen: true) }
         actions.customCanvas = { [weak self] in self?.showNewCanvasDialog() }
         actions.open = { [weak self] entry in self?.openRecent(entry) }
         actions.browse = { [weak self] in self?.handleOpen() }

@@ -1309,7 +1309,7 @@ class CanvasView: MTKView {
                 viewModel.saveUndoSnapshot(renderer: renderer, description: "Deselect", changing: .nothing)
                 viewModel.clearSelection()
             case "0":
-                viewModel.transform.zoomToFit(canvasSize: viewModel.canvasSize, viewSize: bounds.size)
+                viewModel.zoomToFit(viewSize: bounds.size)
             case "1":
                 viewModel.transform.scale = 1.0
                 viewModel.transform.offset = .zero

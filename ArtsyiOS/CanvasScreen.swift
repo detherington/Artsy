@@ -31,7 +31,7 @@ struct CanvasScreen: View {
                         ToolRailView(viewModel: viewModel, actions: session.actions)
                     }
                     ZStack(alignment: .bottomLeading) {
-                        canvas
+                        canvas(hidden: hidden)
                         if hidden {
                             ChromePillView(viewModel: viewModel, previews: session.previews, actions: session.actions)
                                 .padding(12)
@@ -76,8 +76,10 @@ struct CanvasScreen: View {
         if chrome.isPhone != phone { chrome.isPhone = phone }
     }
 
-    private var canvas: some View {
+    /// The canvas under the status bar's edge; with the chrome hidden, under every edge,
+    /// the home indicator's and a notch's too, so the screen is canvas from side to side.
+    private func canvas(hidden: Bool) -> some View {
         CanvasHost(view: session.paintingView)
-            .ignoresSafeArea(edges: .top)
+            .ignoresSafeArea(edges: hidden ? .all : .top)
     }
 }
