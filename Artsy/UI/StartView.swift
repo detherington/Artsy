@@ -270,12 +270,14 @@ struct StartView: View {
     }
 
     /// A canvas as a tile: its thumbnail, its name, its pixels and when it was last
-    /// opened; dimmed, with a word, once it has gone.
+    /// opened; dimmed, with a word, once it has gone; a word too for a document that is
+    /// there but keeps no thumbnail that can be read.
     private struct RecentTile: View {
         let entry: RecentCanvases.Entry
         let recents: RecentCanvases
         @State private var image: CGImage?
         @State private var missing = false
+        @State private var looked = false
 
         var body: some View {
             VStack(alignment: .leading, spacing: 6) {
@@ -286,8 +288,8 @@ struct StartView: View {
                             .resizable()
                             .aspectRatio(contentMode: .fit)
                             .padding(4)
-                    } else if missing {
-                        Text("not found")
+                    } else if missing || looked {
+                        Text(missing ? "not found" : "no preview")
                             .font(.system(size: 12))
                             .foregroundColor(StartView.dim)
                     }
@@ -305,11 +307,14 @@ struct StartView: View {
             }
             .opacity(missing ? 0.45 : 1)
             .contentShape(Rectangle())
-            .task(id: entry.path) {
+            // Read again when the document is saved while the screen is up (a save notes
+            // it anew, with the time), not only when the entry is another document's
+            .task(id: "\(entry.path) \(entry.openedAt.timeIntervalSinceReferenceDate)") {
                 let recents = recents
                 let loaded = await Task.detached(priority: .utility) { recents.thumbnail(of: entry) }.value
                 image = loaded
                 missing = loaded == nil && recents.url(of: entry) == nil
+                looked = true
             }
         }
     }

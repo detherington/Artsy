@@ -104,13 +104,17 @@ public final class RecentCanvases: ObservableObject {
     }
 
     /// The `thumbnail.png` inside the package at `documentURL`: the canvas over white, at
-    /// most 512 px a side, written on every save.
+    /// most 512 px a side, written on every save. Read whole and decoded here, while the
+    /// document is reachable: an image left to decode when first drawn went back to the
+    /// file after the security scope below had closed, and in the sandboxed App Store
+    /// build that read is refused, so the start screen's tile came up empty.
     public static func thumbnail(in documentURL: URL) -> CGImage? {
         let scoped = documentURL.startAccessingSecurityScopedResource()
         defer { if scoped { documentURL.stopAccessingSecurityScopedResource() } }
         let file = documentURL.appendingPathComponent("thumbnail.png")
-        guard let source = CGImageSourceCreateWithURL(file as CFURL, nil) else { return nil }
-        return CGImageSourceCreateImageAtIndex(source, 0, nil)
+        guard let data = try? Data(contentsOf: file),
+              let source = CGImageSourceCreateWithData(data as CFData, nil) else { return nil }
+        return CGImageSourceCreateImageAtIndex(source, 0, [kCGImageSourceShouldCacheImmediately: true] as CFDictionary)
     }
 
     // MARK: - Bookmarks and the file

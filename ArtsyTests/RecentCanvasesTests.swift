@@ -20,21 +20,29 @@ final class RecentCanvasesTests: XCTestCase {
         try? FileManager.default.removeItem(at: folder)
     }
 
+    private static let red = CGColor(red: 0.8, green: 0.3, blue: 0.2, alpha: 1)
+    private static let blue = CGColor(red: 0.1, green: 0.1, blue: 0.9, alpha: 1)
+
     /// A package with a document.json and a square thumbnail of `size`, as a save leaves one.
     private func makeDocument(named name: String, thumbnail size: Int = 8) throws -> URL {
         let url = folder.appendingPathComponent("\(name).artsy")
         try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
         try Data("{}".utf8).write(to: url.appendingPathComponent("document.json"))
+        try writeThumbnail(into: url, size: size, color: Self.red)
+        return url
+    }
+
+    /// The package's thumbnail.png, a square of `color`, as a save rewrites it.
+    private func writeThumbnail(into url: URL, size: Int = 8, color: CGColor) throws {
         let context = try XCTUnwrap(CGContext(data: nil, width: size, height: size, bitsPerComponent: 8, bytesPerRow: 0,
                                               space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue))
-        context.setFillColor(CGColor(red: 0.8, green: 0.3, blue: 0.2, alpha: 1))
+        context.setFillColor(color)
         context.fill(CGRect(x: 0, y: 0, width: size, height: size))
         let image = try XCTUnwrap(context.makeImage())
         let destination = try XCTUnwrap(CGImageDestinationCreateWithURL(
             url.appendingPathComponent("thumbnail.png") as CFURL, UTType.png.identifier as CFString, 1, nil))
         CGImageDestinationAddImage(destination, image, nil)
         XCTAssertTrue(CGImageDestinationFinalize(destination))
-        return url
     }
 
     func testADocumentWhoseFolderMovedIsStillOneEntry() throws {
@@ -113,12 +121,35 @@ final class RecentCanvasesTests: XCTestCase {
     func testTheStartScreenComesUpWithTheListAndWithNothing() throws {
         let store = RecentCanvases(fileURL: nil)
         store.note(try makeDocument(named: "One"), size: CGSize(width: 1024, height: 768))
-        let (reds, whites) = try render(StartView(recents: store, maxSide: 4096, actions: StartActions()), width: 860)
-        XCTAssertGreaterThan(whites, 1000, "the size tiles' swatches: \(whites)")
-        XCTAssertGreaterThan(reds, 1000, "the thumbnail, read from the package: \(reds)")
-        let (noReds, phoneWhites) = try render(StartView(recents: RecentCanvases(fileURL: nil), maxSide: 4096, actions: StartActions()), width: 360)
-        XCTAssertGreaterThan(phoneWhites, 500, "the phone's row of swatches: \(phoneWhites)")
-        XCTAssertEqual(noReds, 0, "nothing in the list, nothing red")
+        let shown = try show(StartView(recents: store, maxSide: 4096, actions: StartActions()), width: 860)
+        defer { shown.close() }
+        let first = try shown.count()
+        XCTAssertGreaterThan(first.whites, 1000, "the size tiles' swatches: \(first.whites)")
+        XCTAssertGreaterThan(first.reds, 1000, "the thumbnail, read from the package: \(first.reds)")
+        let empty = try show(StartView(recents: RecentCanvases(fileURL: nil), maxSide: 4096, actions: StartActions()), width: 360)
+        defer { empty.close() }
+        let nothing = try empty.count()
+        XCTAssertGreaterThan(nothing.whites, 500, "the phone's row of swatches: \(nothing.whites)")
+        XCTAssertEqual(nothing.reds, 0, "nothing in the list, nothing red")
+    }
+
+    /// A save while the screen is up (the Mac's Window ▸ Start beside a canvas) notes the
+    /// document anew, and its tile reads the thumbnail again: the drawing shown is the
+    /// one just saved, not the one from when the screen came up.
+    func testATileFollowsASaveWhileTheScreenIsUp() throws {
+        let store = RecentCanvases(fileURL: nil)
+        let document = try makeDocument(named: "Live")
+        store.note(document, size: CGSize(width: 1024, height: 768))
+        let shown = try show(StartView(recents: store, maxSide: 4096, actions: StartActions()), width: 860)
+        defer { shown.close() }
+        let before = try shown.count()
+        XCTAssertGreaterThan(before.reds, 1000, "the thumbnail as saved first: \(before.reds)")
+        XCTAssertEqual(before.blues, 0)
+        try writeThumbnail(into: document, color: Self.blue)
+        store.note(document, size: CGSize(width: 1024, height: 768), at: Date().addingTimeInterval(1))
+        let after = try shown.count()
+        XCTAssertGreaterThan(after.blues, 1000, "the thumbnail as saved again: \(after.blues)")
+        XCTAssertEqual(after.reds, 0, "and not the old one: \(after.reds)")
     }
 
     /// "Full screen" is the device's own pixels, offered after the size used last and
@@ -148,34 +179,48 @@ final class RecentCanvasesTests: XCTestCase {
         XCTAssertEqual(afterAHuge.first?.name, "Small")
     }
 
-    /// The view on screen for a moment, then its pixels counted: those near white and
-    /// those near the thumbnail's red.
-    private func render(_ view: StartView, width: CGFloat) throws -> (reds: Int, whites: Int) {
+    /// The view in a window on screen, to be counted as often as wanted and closed.
+    private func show(_ view: StartView, width: CGFloat) throws -> ShownView {
         let host = NSHostingView(rootView: view)
         let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: width, height: 640), styleMask: [.borderless], backing: .buffered, defer: false)
         window.isReleasedWhenClosed = false
         window.contentView = host
         window.orderFront(nil)
-        defer { window.orderOut(nil); window.contentView = nil }
-        // The thumbnails load off the main thread; give them a moment
-        RunLoop.main.run(until: Date().addingTimeInterval(1.2))
-        host.layoutSubtreeIfNeeded()
-        window.displayIfNeeded()
-        // The layer tree, images and all, into a bitmap at 1x
-        let rep = try XCTUnwrap(NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: Int(host.bounds.width), pixelsHigh: Int(host.bounds.height),
-                                                 bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true, isPlanar: false,
-                                                 colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0))
-        let context = try XCTUnwrap(NSGraphicsContext(bitmapImageRep: rep))
-        try XCTUnwrap(host.layer).render(in: context.cgContext)
-        var reds = 0, whites = 0
-        for y in stride(from: 0, to: rep.pixelsHigh, by: 2) {
-            for x in stride(from: 0, to: rep.pixelsWide, by: 2) {
-                guard let color = rep.colorAt(x: x, y: y) else { continue }
-                let r = color.redComponent, g = color.greenComponent, b = color.blueComponent
-                if r > 0.85 && g > 0.85 && b > 0.85 { whites += 1 }
-                if r > 0.6 && g < 0.4 && b < 0.35 { reds += 1 }
+        return ShownView(window: window, host: host)
+    }
+
+    private struct ShownView {
+        let window: NSWindow
+        let host: NSHostingView<StartView>
+
+        /// A moment for the thumbnails, which load off the main thread, then the pixels
+        /// counted: those near white, those near the red thumbnail, those near the blue.
+        func count() throws -> (reds: Int, whites: Int, blues: Int) {
+            RunLoop.main.run(until: Date().addingTimeInterval(1.2))
+            host.layoutSubtreeIfNeeded()
+            window.displayIfNeeded()
+            // The layer tree, images and all, into a bitmap at 1x
+            let rep = try XCTUnwrap(NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: Int(host.bounds.width), pixelsHigh: Int(host.bounds.height),
+                                                     bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true, isPlanar: false,
+                                                     colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0))
+            let context = try XCTUnwrap(NSGraphicsContext(bitmapImageRep: rep))
+            try XCTUnwrap(host.layer).render(in: context.cgContext)
+            var reds = 0, whites = 0, blues = 0
+            for y in stride(from: 0, to: rep.pixelsHigh, by: 2) {
+                for x in stride(from: 0, to: rep.pixelsWide, by: 2) {
+                    guard let color = rep.colorAt(x: x, y: y) else { continue }
+                    let r = color.redComponent, g = color.greenComponent, b = color.blueComponent
+                    if r > 0.85 && g > 0.85 && b > 0.85 { whites += 1 }
+                    if r > 0.6 && g < 0.4 && b < 0.35 { reds += 1 }
+                    if b > 0.7 && r < 0.3 && g < 0.3 { blues += 1 }
+                }
             }
+            return (reds, whites, blues)
         }
-        return (reds, whites)
+
+        func close() {
+            window.orderOut(nil)
+            window.contentView = nil
+        }
     }
 }
