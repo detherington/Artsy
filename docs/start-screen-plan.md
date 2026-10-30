@@ -137,3 +137,44 @@ Checked: `RecentCanvasesTests.testTheStartScreenOffersThisScreensPixels` (the ti
 place and pixels, the way the screen is turned, none without a screen, none past the
 device's largest side, none when the last size is the screen's). Seen on the iPhone Duo
 simulator.
+
+## Full screen (2026-10-29)
+
+Darrell wants a full-screen drawing surface, quickly and easily, on every device; the
+screen-sized canvas was partly for that. The **This screen** tile is now **Full screen**,
+its swatch carrying the full-screen arrows: a canvas of the screen's pixels, opened as
+the screen. The interface is away from the first frame (the pill stays in the corner;
+Tab or its button bring the bar and rail back), and the canvas is fitted edge to edge
+rather than inside the 90 % margin, so each canvas pixel is a screen pixel. On the Mac
+the window goes full screen on the display the Start window is on, the canvas fitted
+once the window has become the screen and fitted to the window again when Esc leaves
+full screen; it is not added to the tabs of other canvases. On iPad and iPhone the
+canvas lies under every edge of the screen while the interface is hidden (the home
+indicator's and a notch's too), the home indicator fades, and the first swipe up from
+the bottom edge is the canvas's, the second the system's.
+
+In the engine, `CanvasTransform.zoomToFit` takes `share`: 0.9 for the margin, 1 for
+edge to edge. `CanvasViewModel.viewFit` says which a canvas gets whenever it is fitted
+(the first frame, ⌘0, a reset of the view, a fold or a turn on iOS), and `fillScreen()`
+sets it with the interface hidden; the Mac's `MainLayout` now starts the way the view
+model says rather than always with the chrome up. When the last canvas was the screen's,
+Full screen stands first in the New row in place of "Same as last", which would have made
+the same canvas without opening it as the screen.
+
+Checked on 2026-10-29: `CanvasTransformTests.testFittingEdgeToEdgeCoversTheViewPixelForPixel`
+(a 2752 × 2064 canvas in a 1376 × 1032 view lands its corners on the view's at scale 0.5;
+turned, it is fitted by its height and centred; the margin fit still takes nine tenths);
+`ShellTests.testACanvasOpenedAsTheScreenStartsWithoutChromeAndFitsEdgeToEdge` (the layout
+starts with the rail and bar away and the pill up, the canvas the whole window; ⌘0 and a
+reset of the view fit edge to edge; Tab brings the chrome back);
+`RecentCanvasesTests.testTheStartScreenOffersFullScreenAtThisScreensPixels` (the tile's
+place and pixels, none without a screen or past the device's largest side, first in place
+of "Same as last" when that was the screen's). The whole Mac suite: 326 tests, 3 skipped,
+0 failures. The iOS app builds; on the iPhone Duo simulator the tile reads "Full screen
+1398 × 2034" and stands first (the last canvas was the screen's), a tap opens white canvas
+from edge to edge with only the pill and a "33%" zoom HUD (one canvas pixel per screen
+pixel at 3x), a stroke paints, and the pill's arrows bring the bar and tool strip back.
+The Mac's full-screen window itself (the transition and the fit on entering) is not
+exercised by a test and awaits a look in hand. Two of the shell tests that measure
+frames after an animated chrome change fail while the Mac's display is asleep, since
+Core Animation does not advance then; they pass the moment it is woken.

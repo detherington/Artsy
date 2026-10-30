@@ -6,6 +6,9 @@ import ArtsyEngine
 struct StartActions {
     /// A canvas of this size, now.
     var newCanvas: (CGSize) -> Void = { _ in }
+    /// A canvas of the screen's pixels as the screen: the interface away, the canvas
+    /// edge to edge, and on the Mac the window full screen.
+    var fullScreen: (CGSize) -> Void = { _ in }
     /// The size dialog, for a width and height of one's own.
     var customCanvas: () -> Void = {}
     var open: (RecentCanvases.Entry) -> Void = { _ in }
@@ -29,8 +32,8 @@ struct StartView: View {
     @ObservedObject var recents: RecentCanvases
     /// The largest side this device takes; sizes beyond it are not offered.
     let maxSide: Int
-    /// The pixels of the screen the app is on, as it is held now, for the "This screen"
-    /// size; nil when there is no screen to ask. Asked again whenever the screen draws,
+    /// The pixels of the screen the app is on, as it is held now, for the "Full screen"
+    /// tile; nil when there is no screen to ask. Asked again whenever the screen draws,
     /// so a turn or a fold is followed.
     let screenPixels: () -> CGSize?
     let actions: StartActions
@@ -119,10 +122,12 @@ struct StartView: View {
         return Self.sizes(last: prefs.lastCanvasSize, screen: screenPixels(), maxSide: maxSide)
     }
 
-    /// The sizes offered: the size used last; this screen's pixels, the way the device is
-    /// held, when there is a screen to ask; then the presets. A size the device cannot
-    /// take is left out (the last one too: a Huge canvas from before the cap would only
-    /// fail again), and so is one that repeats an earlier tile.
+    /// The sizes offered: the size used last; Full screen, this screen's pixels the way
+    /// the device is held, when there is a screen to ask; then the presets. A size the
+    /// device cannot take is left out (the last one too: a Huge canvas from before the
+    /// cap would only fail again), and so is one that repeats an earlier tile. When the
+    /// last canvas was the screen's, Full screen stands first in its place: it makes the
+    /// same canvas and opens it as the screen.
     static func sizes(last: CGSize, screen: CGSize?, maxSide: Int) -> [Size] {
         var sizes: [Size] = []
         func offer(_ size: Size) {
@@ -130,9 +135,13 @@ struct StartView: View {
                   !sizes.contains(where: { $0.width == size.width && $0.height == size.height }) else { return }
             sizes.append(size)
         }
-        offer(Size(id: "last", name: "Same as last", width: Int(last.width), height: Int(last.height)))
-        if let screen {
-            offer(Size(id: "screen", name: "This screen", width: Int(screen.width.rounded()), height: Int(screen.height.rounded())))
+        let lastSize = Size(id: "last", name: "Same as last", width: Int(last.width), height: Int(last.height))
+        let screenSize = screen.map { Size(id: "screen", name: "Full screen", width: Int($0.width.rounded()), height: Int($0.height.rounded())) }
+        if let screenSize, screenSize.width == lastSize.width, screenSize.height == lastSize.height {
+            offer(screenSize)
+        } else {
+            offer(lastSize)
+            if let screenSize { offer(screenSize) }
         }
         for preset in CanvasSizePreset.presets {
             offer(Size(id: preset.name, name: preset.name, width: preset.width, height: preset.height))
@@ -156,26 +165,30 @@ struct StartView: View {
 
     @ViewBuilder
     private func sizeTiles(width: CGFloat?) -> some View {
+        let sizes = sizes
         ForEach(sizes) { size in
-            Button { actions.newCanvas(CGSize(width: size.width, height: size.height)) } label: {
-                SizeTile(name: size.name, width: size.width, height: size.height, first: size.id == "last")
+            let pixels = CGSize(width: size.width, height: size.height)
+            Button { size.id == "screen" ? actions.fullScreen(pixels) : actions.newCanvas(pixels) } label: {
+                SizeTile(name: size.name, width: size.width, height: size.height, first: size == sizes.first, isScreen: size.id == "screen")
                     .frame(width: width)
             }
             .buttonStyle(.plain)
         }
         Button(action: actions.customCanvas) {
-            SizeTile(name: "Custom…", width: 0, height: 0, first: false)
+            SizeTile(name: "Custom…", width: 0, height: 0, first: false, isScreen: false)
                 .frame(width: width)
         }
         .buttonStyle(.plain)
     }
 
-    /// A size as a tile: a swatch at its aspect, its name, its pixels.
+    /// A size as a tile: a swatch at its aspect, its name, its pixels. The screen's
+    /// swatch carries the full-screen arrows, since its canvas opens as the screen.
     private struct SizeTile: View {
         let name: String
         let width: Int
         let height: Int
         let first: Bool
+        let isScreen: Bool
 
         var body: some View {
             VStack(spacing: 6) {
@@ -185,6 +198,11 @@ struct StartView: View {
                         RoundedRectangle(cornerRadius: 2)
                             .fill(Color(white: 0.92))
                             .frame(width: 40 * CGFloat(width) / longest, height: 40 * CGFloat(height) / longest)
+                        if isScreen {
+                            Image(systemName: "arrow.up.left.and.arrow.down.right")
+                                .font(.system(size: 12, weight: .semibold))
+                                .foregroundColor(Chrome.background)
+                        }
                     } else {
                         Image(systemName: "plus")
                             .font(.system(size: 20))

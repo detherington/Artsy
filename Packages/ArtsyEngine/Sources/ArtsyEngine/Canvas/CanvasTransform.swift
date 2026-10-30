@@ -101,13 +101,16 @@ public struct CanvasTransform: Equatable {
         offset.y += delta.y
     }
 
-    public mutating func zoomToFit(canvasSize: CGSize, viewSize: CGSize) {
-        guard viewSize.width > 0, viewSize.height > 0 else { return }
+    /// Fit the canvas to the view, upright and unflipped, taking `share` of the view
+    /// along its tighter side: 0.9 leaves a margin round a canvas in a window; 1 is edge
+    /// to edge, so a canvas of the screen's pixels covers the screen pixel for pixel.
+    public mutating func zoomToFit(canvasSize: CGSize, viewSize: CGSize, share: CGFloat = 0.9) {
+        guard viewSize.width > 0, viewSize.height > 0, canvasSize.width > 0, canvasSize.height > 0 else { return }
         rotation = 0
         isFlipped = false
         let scaleX = viewSize.width / canvasSize.width
         let scaleY = viewSize.height / canvasSize.height
-        scale = min(scaleX, scaleY) * 0.9
+        scale = min(scaleX, scaleY) * share
         // Centre the canvas: its middle maps to the view's centre, which is offset (0, 0)
         offset = CGPoint(
             x: -canvasSize.width / 2 * scale,

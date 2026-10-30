@@ -121,13 +121,14 @@ final class RecentCanvasesTests: XCTestCase {
         XCTAssertEqual(noReds, 0, "nothing in the list, nothing red")
     }
 
-    /// "This screen" is the device's own pixels, offered after the size used last and
-    /// before the presets, and only when there is a screen, the device takes the size,
-    /// and no earlier tile is the same.
-    func testTheStartScreenOffersThisScreensPixels() {
+    /// "Full screen" is the device's own pixels, offered after the size used last and
+    /// before the presets, the way the screen is turned; and in the last size's place
+    /// when that was the screen's.
+    func testTheStartScreenOffersFullScreenAtThisScreensPixels() {
         let last = CGSize(width: 2048, height: 2048)
         let sizes = StartView.sizes(last: last, screen: CGSize(width: 2752, height: 2064), maxSide: 4096)
-        XCTAssertEqual(sizes.map(\.name).prefix(3), ["Same as last", "This screen", "Small"])
+        XCTAssertEqual(sizes.map(\.name).prefix(3), ["Same as last", "Full screen", "Small"])
+        XCTAssertEqual(sizes[1].id, "screen")
         XCTAssertEqual(sizes[1].width, 2752)
         XCTAssertEqual(sizes[1].height, 2064)
         XCTAssertFalse(sizes.contains { $0.name == "Medium" }, "the preset that is the last size is not repeated")
@@ -135,11 +136,13 @@ final class RecentCanvasesTests: XCTestCase {
 
         let turned = StartView.sizes(last: last, screen: CGSize(width: 2064, height: 2752), maxSide: 4096)
         XCTAssertEqual(turned[1].width, 2064, "the screen the way it is held")
-        XCTAssertNil(StartView.sizes(last: last, screen: nil, maxSide: 4096).first { $0.name == "This screen" })
-        XCTAssertNil(StartView.sizes(last: last, screen: CGSize(width: 6144, height: 3456), maxSide: 4096).first { $0.name == "This screen" },
+        XCTAssertNil(StartView.sizes(last: last, screen: nil, maxSide: 4096).first { $0.id == "screen" })
+        XCTAssertNil(StartView.sizes(last: last, screen: CGSize(width: 6144, height: 3456), maxSide: 4096).first { $0.id == "screen" },
                      "a screen with more pixels than the device takes as a canvas")
-        XCTAssertNil(StartView.sizes(last: CGSize(width: 2752, height: 2064), screen: CGSize(width: 2752, height: 2064), maxSide: 4096)
-                        .first { $0.name == "This screen" }, "the last size already is the screen's")
+        let afterFullScreen = StartView.sizes(last: CGSize(width: 2752, height: 2064), screen: CGSize(width: 2752, height: 2064), maxSide: 4096)
+        XCTAssertEqual(afterFullScreen.first?.name, "Full screen", "the last canvas was the screen's: Full screen stands in its place")
+        XCTAssertNil(afterFullScreen.first { $0.id == "last" })
+        XCTAssertEqual(afterFullScreen[1].name, "Small")
         let afterAHuge = StartView.sizes(last: CGSize(width: 8192, height: 8192), screen: nil, maxSide: 4096)
         XCTAssertNil(afterAHuge.first { $0.id == "last" }, "a last size the device cannot take is not offered again")
         XCTAssertEqual(afterAHuge.first?.name, "Small")

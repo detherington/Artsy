@@ -41,6 +41,7 @@ final class MainLayout: NSView {
         pill = NSHostingView(rootView: ChromePillView(viewModel: viewModel, previews: previews, actions: actions))
         zoomHUD = NSHostingView(rootView: ZoomHUDView(viewModel: viewModel))
         layersDocked = viewModel.isLayersDocked
+        chromeHidden = viewModel.isChromeHidden
         super.init(frame: .zero)
         wantsLayer = true
 
