@@ -25,6 +25,70 @@ final class PenWithoutPressureTests: XCTestCase {
         try body()
     }
 
+    /// A Pencil's force is a sensor's, which varies, or a constant's, which the USB-C
+    /// Pencil reports in place of none: a stroke has pressure of its own once the force has
+    /// varied, or when its landing sample is an estimate an update is expected to; a force
+    /// that reads the same through a stroke's worth of samples says there is no sensor,
+    /// whatever a landing sample claims, and one seen to vary is never taken for that.
+    func testAPencilWhoseForceNeverVariesHasNoPressureAndOneWhoseForceVariesHas() {
+        var constant = PencilForce()
+        XCTAssertFalse(constant.strokeHasPressure(expectsUpdate: false), "a force that has not varied is no sensor's yet")
+        XCTAssertTrue(constant.strokeHasPressure(expectsUpdate: true), "an estimate an update is expected to is a sensor's")
+        for _ in 0..<PencilForce.steadySamples { constant.note(force: 1, maximum: 4.17) }
+        XCTAssertTrue(constant.steady)
+        XCTAssertFalse(constant.varies)
+        XCTAssertFalse(constant.strokeHasPressure(expectsUpdate: true), "a steady force is no sensor's, whatever a landing sample claims")
+
+        var sensor = PencilForce()
+        XCTAssertFalse(sensor.note(force: 1.2, maximum: 4.17))
+        XCTAssertFalse(sensor.note(force: 1.2 + 0.004, maximum: 4.17), "the same, within the tolerance")
+        XCTAssertTrue(sensor.note(force: 1.35, maximum: 4.17), "varied: the stroke switches to the Pencil's own")
+        XCTAssertTrue(sensor.varies)
+        XCTAssertTrue(sensor.strokeHasPressure(expectsUpdate: false))
+
+        var late = PencilForce()
+        for _ in 0..<40 { late.note(force: 2, maximum: 4.17) }
+        XCTAssertTrue(late.steady)
+        late.note(force: 2.5, maximum: 4.17)
+        XCTAssertTrue(late.varies, "a force that varies after all is a sensor's")
+        XCTAssertFalse(late.steady)
+        XCTAssertTrue(late.strokeHasPressure(expectsUpdate: false))
+
+        var none = PencilForce()
+        for _ in 0..<40 { none.note(force: 0, maximum: 4.17) }
+        XCTAssertFalse(none.varies, "a force of nothing says nothing")
+        XCTAssertFalse(none.steady)
+    }
+
+    /// The Soft curve a pen without pressure starts with is taken back should the pen turn
+    /// out to press after all; a curve chosen for the pen stands either way.
+    func testTheSoftCurveGivenToAPenWithoutPressureIsTakenBackWhenItTurnsOutToPress() throws {
+        try withTestPen {
+            let harness = try EngineHarness(width: 100, height: 60)
+            let viewModel = harness.viewModel
+            viewModel.pressureCurve = .linear
+            harness.renderer.beginStroke()
+            viewModel.beginStroke(point: sample(10, at: 1), input: .penWithoutPressure)
+            XCTAssertEqual(viewModel.pressureCurve, .soft)
+            viewModel.strokeReportsPressure()
+            XCTAssertEqual(viewModel.pressureCurve, .linear, "the Soft curve was the default for a pen that cannot press, which this one can")
+            viewModel.continueStroke(point: sample(30, at: 1.01))
+            harness.renderer.finalizeStroke()
+            viewModel.endStroke()
+
+            AppPreferences.shared.pressureCurves["test-pen-without-pressure"] = .firm
+            viewModel.pressureCurve = .firm
+            harness.renderer.beginStroke()
+            viewModel.beginStroke(point: sample(10, at: 2), input: .penWithoutPressure)
+            XCTAssertEqual(viewModel.pressureCurve, .firm, "a curve chosen for the pen stands")
+            viewModel.strokeReportsPressure()
+            XCTAssertEqual(viewModel.pressureCurve, .firm)
+            viewModel.continueStroke(point: sample(30, at: 2.01))
+            harness.renderer.finalizeStroke()
+            viewModel.endStroke()
+        }
+    }
+
     func testAPensPaceKeepsMoreWeightThanAHandsAtTheSameSpeed() {
         let pen = PressureFromSpeed.Pace.pen
         XCTAssertEqual(PressureFromSpeed.pressure(atSpeed: 0, pace: .pen), 1, "still is full for a pen too")
