@@ -178,3 +178,33 @@ The Mac's full-screen window itself (the transition and the fit on entering) is 
 exercised by a test and awaits a look in hand. Two of the shell tests that measure
 frames after an animated chrome change fail while the Mac's display is asleep, since
 Core Animation does not advance then; they pass the moment it is woken.
+
+### The pill folded (2026-10-30)
+
+Darrell's full-screen canvas on the Duo still had the pill across its corner, the brush's
+name, the colour and the arrows, over the drawing. With the interface hidden the pill now
+starts folded to a disc, `Chrome.target` across, translucent (the chrome's background at
+0.3 with a faint white ring, so it is found on a light canvas and a dark one) and carrying
+the colour in use as a dot. A tap on the disc opens it into the pill, which is as it was:
+the brush, the colour and the way back to the interface. A stroke folds the pill to the
+disc again, and a tap on the canvas is a stroke; the interface coming back or going away
+folds it too, so a canvas always starts with the disc. Both fold and unfold through a
+0.2 s scale from the corner. (A tap on the pill between its buttons was to fold it as
+well, but the gaps are 8 pt and the tap took the brush button on the Duo both times, so
+that path is not offered.)
+
+The state is the view model's `isPillOpen`, folded by `beginStroke` and whenever
+`isChromeHidden` changes, so the Mac and iOS share it and a test can see it. The view is
+`ChromePillView` in Artsy/UI, the same on both apps.
+
+Checked on 2026-10-30: `CanvasViewModelTests.testThePillFoldsUnderAStrokeAndWithTheInterface`
+(folded after `fillScreen`; a stroke folds it; the interface coming back folds it, and it is
+folded when the interface goes again), and
+`ShellTests.testACanvasOpenedAsTheScreenStartsWithoutChromeAndFitsEdgeToEdge` now sees the
+pill's hosting view at the disc's 44 × 44 in the corner, a click on the disc open it to over
+200 pt wide, a stroke fold it, and Tab fold it with the chrome's return; with
+`ARTSY_SNAPSHOT_DIR` it writes pill-folded.png and pill-open.png, which show the grey disc
+with the colour's dot and the pill as it was. The whole Mac suite: 327 tests, 3 skipped,
+0 failures. On the iPhone Duo simulator a Full screen canvas comes up with the disc in the
+corner, a tap on it opens the pill (Pencil, the swatch, the arrows), a stroke paints and
+folds it to the disc, and a tap on the disc opens it again.

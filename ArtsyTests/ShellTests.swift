@@ -507,8 +507,9 @@ final class ShellTests: XCTestCase {
     }
 
     /// A canvas opened as the screen (the start screen's Full screen) starts with the
-    /// chrome away and the pill up, the canvas the whole window; it fits edge to edge,
-    /// now and after a reset; and Tab brings the chrome back.
+    /// chrome away and the pill up, folded to a disc in the corner that a click opens and
+    /// a stroke folds, the canvas the whole window; it fits edge to edge, now and after a
+    /// reset; and Tab brings the chrome back.
     func testACanvasOpenedAsTheScreenStartsWithoutChromeAndFitsEdgeToEdge() throws {
         let (canvasView, viewModel) = try canvas()
         viewModel.isLayersDocked = false
@@ -520,6 +521,25 @@ final class ShellTests: XCTestCase {
         XCTAssertEqual(canvasView.frame.height, 900, accuracy: 0.5)
         let pill = try XCTUnwrap(layout.firstDescendant(of: NSHostingView<ChromePillView>.self))
         XCTAssertFalse(pill.isHidden, "the way back is up")
+        XCTAssertFalse(viewModel.isPillOpen, "folded to a disc")
+        XCTAssertEqual(pill.frame.width, ChromePillView.discSize, accuracy: 0.5, "the disc")
+        XCTAssertEqual(pill.frame.height, ChromePillView.discSize, accuracy: 0.5)
+        XCTAssertEqual(pill.frame.minX, 12, accuracy: 0.5, "in the corner")
+        XCTAssertEqual(pill.frame.minY, 12, accuracy: 0.5)
+        let snapshotting = ProcessInfo.processInfo.environment["ARTSY_SNAPSHOT_DIR"] != nil
+        if snapshotting { snapshot(layout, named: "pill-folded") }
+
+        click(at: layout.convert(NSPoint(x: pill.frame.midX, y: pill.frame.midY), to: nil))
+        XCTAssertTrue(viewModel.isPillOpen, "a click on the disc opens the pill")
+        settle(layout)
+        XCTAssertGreaterThan(pill.frame.width, 200, "the brush, the colour and the way back")
+        if snapshotting { snapshot(layout, named: "pill-open") }
+
+        viewModel.beginStroke(point: StrokePoint(position: CGPoint(x: 100, y: 100), pressure: 0.5, tiltX: 0, tiltY: 0, rotation: 0, timestamp: 0))
+        XCTAssertFalse(viewModel.isPillOpen, "a stroke folds it")
+        viewModel.endStroke()
+        settle(layout)
+        XCTAssertEqual(pill.frame.width, ChromePillView.discSize, accuracy: 0.5, "the disc again")
 
         let size = CGSize(width: 1376, height: 1032)
         viewModel.zoomToFit(viewSize: size)
@@ -529,10 +549,12 @@ final class ShellTests: XCTestCase {
         viewModel.resetView(viewSize: size)
         XCTAssertEqual(viewModel.transform.scale, 1032 / 256, accuracy: 1e-6, "and after a reset of the view")
 
+        viewModel.isPillOpen = true
         viewModel.toggleChrome()
         settle(layout)
         XCTAssertEqual(canvasView.frame.width, 1800 - Chrome.railWidth, accuracy: 0.5, "Tab brings the chrome back")
         XCTAssertTrue(pill.isHidden)
+        XCTAssertFalse(viewModel.isPillOpen, "and folds the pill for next time")
     }
 
     /// The shortcut sheet lists what the keys do, and the number keys do what it says.

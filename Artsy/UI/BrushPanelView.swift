@@ -94,7 +94,7 @@ struct BrushPanelView: View {
                 }
             }
         }
-        .frame(width: Chrome.panelWidth, height: 600)
+        .panelFrame(width: Chrome.panelWidth, height: 600)
         .background(Chrome.panel)
         .confirmationDialog("Delete \"\(deleting?.name ?? "")\"?", isPresented: Binding(
             get: { deleting != nil }, set: { if !$0 { deleting = nil } }

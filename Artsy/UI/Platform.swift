@@ -101,6 +101,19 @@ extension View {
         #endif
     }
 
+    /// A panel's frame, for the panels that open from the bar: its size on the Mac, where
+    /// a popover is as large as its content. On iPad and iPhone its ideal size, which a
+    /// popover takes when the screen has the room and trims when it has not, and which the
+    /// sheet a popover becomes on a phone fills: the panel is then never larger than what
+    /// holds it, its scrolling part gives way, and nothing is cut off at the corners.
+    func panelFrame(width: CGFloat, height: CGFloat) -> some View {
+        #if os(macOS)
+        frame(width: width, height: height)
+        #else
+        frame(idealWidth: width, maxWidth: .infinity, idealHeight: height, maxHeight: .infinity)
+        #endif
+    }
+
     /// A sheet's frame: fixed on the Mac, where the sheet is a window of its own; no
     /// wider than that on iPad and iPhone, where it fills the sheet it is given.
     func sheetFrame(width: CGFloat, height: CGFloat) -> some View {

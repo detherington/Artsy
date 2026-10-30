@@ -48,7 +48,14 @@ public final class CanvasViewModel: ObservableObject {
     @Published public var brushOpacity: Float = 1.0
     @Published public var isErasing = false
     /// The bar, the rail and the dock out of the way, for the canvas alone (Tab).
-    @Published public var isChromeHidden = false
+    @Published public var isChromeHidden = false {
+        didSet { isPillOpen = false }   // the pill in the corner starts folded, each time
+    }
+    /// With the interface hidden, whether the pill in the corner is open, the brush, the
+    /// colour and the way back within reach, or folded to a disc that is just visible
+    /// enough to find. A tap on the disc opens it; a stroke, which a tap on the canvas is,
+    /// folds it, and so does the interface coming back.
+    @Published public var isPillOpen = false
     /// How the canvas sits in the view whenever it is fitted: within a margin, as a
     /// canvas in a window; or edge to edge, as a drawing surface that is the screen.
     public enum ViewFit {
@@ -247,6 +254,7 @@ public final class CanvasViewModel: ObservableObject {
     ///   side, which this pen cannot tell from pressing.
     public func beginStroke(point rawPoint: StrokePoint, input: StrokeInput) {
         guard rawPoint.isFinite else { return }   // a tablet glitch, not a stroke
+        if isPillOpen { isPillOpen = false }   // the pill folds away under a stroke
         // A shape the last stroke was left snapped to has nothing to do with this one
         snappedPath = nil
         snappedShapeName = nil

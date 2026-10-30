@@ -508,7 +508,7 @@ struct AdjustPanelView: View {
                 }
             }
         }
-        .frame(width: Chrome.panelWidth, height: 640)
+        .panelFrame(width: Chrome.panelWidth, height: 640)
         .background(Chrome.panel)
     }
 }
@@ -620,7 +620,7 @@ struct AddPanelView: View {
                 .padding(.vertical, 8)
             }
         }
-        .frame(width: Chrome.panelWidth, height: 640)
+        .panelFrame(width: Chrome.panelWidth, height: 640)
         .background(Chrome.panel)
     }
 }
@@ -629,21 +629,49 @@ struct AddPanelView: View {
 
 /// With the chrome hidden, the brush and the colour stay within reach in a corner, with
 /// the way back.
+/// The corner of a canvas whose interface is hidden: a disc, translucent, just visible
+/// enough to find, that a tap opens into the pill, the brush, the colour and the way back
+/// to the interface. A stroke, which a tap on the canvas is, folds the pill to the disc
+/// again. The disc carries the colour in use as a dot.
 struct ChromePillView: View {
     @ObservedObject var viewModel: CanvasViewModel
     let previews: BrushPreviewCache
     let actions: ChromeActions
 
+    /// The disc, a touch target across.
+    static let discSize: CGFloat = Chrome.target
+
     var body: some View {
-        HStack(spacing: 8) {
-            BrushPill(viewModel: viewModel, previews: previews, actions: actions)
-            ColorSwatchButton(viewModel: viewModel)
-            ChromeButton(systemImage: "arrow.up.left.and.arrow.down.right", help: "Show the interface (Tab)") {
-                viewModel.toggleChrome()
+        ZStack(alignment: .bottomLeading) {
+            if viewModel.isPillOpen {
+                HStack(spacing: 8) {
+                    BrushPill(viewModel: viewModel, previews: previews, actions: actions)
+                    ColorSwatchButton(viewModel: viewModel)
+                    ChromeButton(systemImage: "arrow.up.left.and.arrow.down.right", help: "Show the interface (Tab)") {
+                        viewModel.toggleChrome()
+                    }
+                }
+                .padding(6)
+                .background(RoundedRectangle(cornerRadius: 14).fill(Chrome.background.opacity(0.92)))
+                .transition(.scale(scale: 0.4, anchor: .bottomLeading).combined(with: .opacity))
+            } else {
+                Button { viewModel.isPillOpen = true } label: {
+                    ZStack {
+                        Circle().fill(Chrome.background.opacity(0.3))
+                        Circle().strokeBorder(Color.white.opacity(0.2), lineWidth: 1)
+                        Circle()
+                            .fill(viewModel.foregroundColor.displayColor.opacity(0.65))
+                            .frame(width: 12, height: 12)
+                    }
+                    .frame(width: Self.discSize, height: Self.discSize)
+                    .contentShape(Circle())
+                }
+                .buttonStyle(.plain)
+                .help("Brush, colour and the interface")
+                .transition(.scale(scale: 0.4, anchor: .bottomLeading).combined(with: .opacity))
             }
         }
-        .padding(6)
-        .background(RoundedRectangle(cornerRadius: 14).fill(Chrome.background.opacity(0.92)))
+        .animation(.easeInOut(duration: 0.2), value: viewModel.isPillOpen)
     }
 }
 

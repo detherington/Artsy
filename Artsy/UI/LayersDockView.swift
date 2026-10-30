@@ -45,7 +45,7 @@ struct LayersPanelView: View {
                 LayersPanelContent(viewModel: viewModel, layerStack: layerStack, renderer: renderer)
             }
         }
-        .frame(width: Chrome.panelWidth, height: 520)
+        .panelFrame(width: Chrome.panelWidth, height: 520)
         .background(Chrome.panel)
     }
 }

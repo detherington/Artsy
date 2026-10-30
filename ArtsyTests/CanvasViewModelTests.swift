@@ -247,6 +247,28 @@ final class CanvasViewModelTests: XCTestCase {
     }
 
     /// A tablet glitch can send a sample that is not a number; no stroke can use it.
+    /// With the interface hidden the pill in the corner starts folded; a stroke folds it
+    /// again, and so does the interface coming back or going away.
+    func testThePillFoldsUnderAStrokeAndWithTheInterface() {
+        let viewModel = CanvasViewModel(canvasSize: CGSize(width: 64, height: 64))
+        viewModel.recorder = nil
+        viewModel.fillScreen()
+        XCTAssertTrue(viewModel.isChromeHidden)
+        XCTAssertFalse(viewModel.isPillOpen, "folded to start with")
+
+        viewModel.isPillOpen = true
+        viewModel.beginStroke(point: StrokePoint(position: CGPoint(x: 10, y: 10), pressure: 0.5, tiltX: 0, tiltY: 0, rotation: 0, timestamp: 0))
+        XCTAssertFalse(viewModel.isPillOpen, "a stroke folds it")
+
+        viewModel.isPillOpen = true
+        viewModel.toggleChrome()
+        XCTAssertFalse(viewModel.isChromeHidden)
+        XCTAssertFalse(viewModel.isPillOpen, "the interface coming back folds it")
+        viewModel.isPillOpen = true
+        viewModel.toggleChrome()
+        XCTAssertFalse(viewModel.isPillOpen, "and it is folded when the interface goes again")
+    }
+
     func testSamplesThatAreNotNumbersAreDropped() throws {
         let harness = try EngineHarness(width: 64, height: 64)
         let viewModel = harness.viewModel
