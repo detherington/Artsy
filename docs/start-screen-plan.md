@@ -208,3 +208,27 @@ with the colour's dot and the pill as it was. The whole Mac suite: 327 tests, 3 
 0 failures. On the iPhone Duo simulator a Full screen canvas comes up with the disc in the
 corner, a tap on it opens the pill (Pencil, the swatch, the arrows), a stroke paints and
 folds it to the disc, and a tap on the disc opens it again.
+
+## The backdrop, 2026-10-30
+
+The screen redrawn around the canvas opened last, on the branch `start-screen-backdrop`,
+after three mocked-up directions (a gallery shelf, a studio sidebar, this one).
+
+- **The canvas opened last** fills the screen as a backdrop: its thumbnail, blurred,
+  dimmed and faded into the ground from the top down, so the colours of the work in
+  progress set the screen's. It stands first as a Continue card: the picture at its
+  aspect, its name large, its pixels and when, an Open pill. The card opens it; a
+  secondary click or a long press gives the same menu as the tiles. With no canvas yet
+  a few loose strokes stand in for the backdrop and a welcome line for the card.
+- **The sizes** are pills in rows that wrap (`FlowLayout`, in `StartView.swift`),
+  the first in the accent, each with a glyph at its aspect and roughly its scale; on
+  a phone one row that scrolls sideways, as before. The list is the same `sizes`.
+- **Recent** is the canvases after the card's, as thumbnails at their own aspect, in
+  rows that wrap; with one canvas in the list the section is away. A gone document
+  dims with "not found", one without a readable thumbnail says "no preview", as before.
+- **Open… / Browse… and From a photo…** sit top right beside the card on the Mac,
+  in the title row on iPad, and at the foot on a phone.
+- Seen on the iPhone 18 Pro and iPad Pro 13-inch simulators, and the Mac through its
+  render test at 880, 520 and 360 wide with the list, with one canvas and with
+  nothing. `RecentCanvasesTests`: the screen test's white count is now the pills'
+  glyphs and the words, far fewer than the old tiles' swatches.
