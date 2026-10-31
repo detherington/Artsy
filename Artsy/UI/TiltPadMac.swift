@@ -14,7 +14,7 @@ final class TiltPadView: NSView, PenDragTarget {
 
     override func draw(_ dirtyRect: NSRect) {
         let inset = TiltPadMetrics.inset
-        let path = NSBezierPath(roundedRect: bounds, xRadius: 8, yRadius: 8)
+        let path = NSBezierPath(rect: bounds)
         NSColor(Chrome.control).setFill()
         path.fill()
         NSColor(Chrome.hairline).setStroke()
@@ -28,7 +28,7 @@ final class TiltPadView: NSView, PenDragTarget {
         let reach = bounds.width / 2 - inset
         NSBezierPath(ovalIn: NSRect(x: bounds.midX - reach, y: bounds.midY - reach, width: reach * 2, height: reach * 2)).stroke()
         let dot = NSPoint(x: bounds.midX + CGFloat(tilt.x) * reach, y: bounds.midY + CGFloat(tilt.y) * reach)
-        (tilt == .zero ? NSColor(Chrome.secondaryText) : NSColor.controlAccentColor).setFill()
+        (tilt == .zero ? NSColor(Chrome.secondaryText) : NSColor(Chrome.accent)).setFill()
         NSBezierPath(ovalIn: NSRect(x: dot.x - 7, y: dot.y - 7, width: 14, height: 14)).fill()
     }
 

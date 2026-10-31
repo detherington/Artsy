@@ -232,3 +232,39 @@ after three mocked-up directions (a gallery shelf, a studio sidebar, this one).
   render test at 880, 520 and 360 wide with the list, with one canvas and with
   nothing. `RecentCanvasesTests`: the screen test's white count is now the pills'
   glyphs and the words, far fewer than the old tiles' swatches.
+
+## The Bauhaus chrome, 2026-10-31
+
+A system for the whole chrome rather than a look for the start screen, on the branch
+`bauhaus-chrome`, chosen after six rounds of mock-ups on a design canvas (Atelier,
+Darkroom, Gallery, Pigment; Riso, Poster, Palette, Sketchbook; four serifs; a minimal
+studio; the current chrome polished; and this). The brief it answers: minimalist, the art
+first, a bold geometric face, clean icons and controls, and a look that reads as a brand.
+
+- **The system, in `Chrome.swift`.** Ink #121212 or paper #F4F4F2 for the ground, one
+  grey #8C8C8C for everything secondary, hairlines to divide, and one red #E03A2F: the
+  square that marks what is active (`Mark`). Yellow and blue exist only in the mark
+  beside the name (`BrandMark`: triangle, square, circle). Futura, the system's own,
+  Medium for words and Bold for names, with panel titles and section labels in lowercase
+  after Bayer's universal alphabet. Square corners on everything; the colour swatch is the
+  only circle. No fills behind controls: `ChromeButton` shows the mark beside a selected
+  tool, `SquareChoice` a line under a chosen grade or symmetry, `TrackSlider` a hairline
+  with the mark on it, `PanelRow` the mark before a selected row.
+- **Light and dark.** Every chrome colour has a side for each appearance
+  (`Color(light:dark:)`), and `AppPreferences.appearance` (system, dark, light; dark to
+  begin with, as the app has always been) picks between them: on the Mac through
+  `NSApp.appearance` at launch and on change, on iPad and iPhone through the window's
+  interface style, both from the Appearance control in Settings.
+- **The start screen.** The mark and the name top left; the canvas opened last as the
+  largest thing on the screen, at its own aspect with nothing drawn around it, the word
+  "continue" with the mark, its name in Futura Bold, its pixels and when, and a red
+  rectangle that says open; the other canvases in a row at their aspect; a hairline; the
+  sizes as their own shapes, outlined, the first filled in red, in rows that wrap; open
+  and from a photo as words. On a wide window the name sits beside the picture, under it
+  otherwise. The backdrop is gone: the art is the colour on the screen.
+- **The canvas screen.** The rail and bar have no fills, a hairline above the bar, the
+  selected tool marked by the square, the brush as its stroke and name with a small
+  triangle, size and opacity as a hairline track with the square, the colours as two
+  circles, the zoom as a plain number. Panels keep their places and contents; the
+  brushes panel's categories are words with the mark, its cards a stroke and a name, the
+  layers rows the mark, the colour panel's swatches squares.

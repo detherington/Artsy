@@ -100,7 +100,7 @@ struct NewCanvasView: View {
                             .frame(maxWidth: .infinity, minHeight: 40)
                             .background(
                                 !useCustom && selectedPreset?.name == preset.name
-                                    ? Color.accentColor.opacity(0.2)
+                                    ? Chrome.accent.opacity(0.2)
                                     : Platform.controlBackground
                             )
                             .cornerRadius(6)
@@ -108,7 +108,7 @@ struct NewCanvasView: View {
                                 RoundedRectangle(cornerRadius: 6)
                                     .stroke(
                                         !useCustom && selectedPreset?.name == preset.name
-                                            ? Color.accentColor
+                                            ? Chrome.accent
                                             : Color.clear,
                                         lineWidth: 1.5
                                     )

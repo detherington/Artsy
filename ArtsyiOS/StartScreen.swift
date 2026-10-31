@@ -1,3 +1,4 @@
+import Combine
 import SwiftUI
 import UIKit
 import PhotosUI
@@ -17,12 +18,15 @@ struct StartScreen: UIViewControllerRepresentable {
 
 final class StartController: UIHostingController<StartView> {
     private let model: AppModel
+    /// Follows the appearance setting into this screen, its window and what it presents.
+    private var appearanceObservation: AnyCancellable?
 
     init(model: AppModel) {
         self.model = model
         super.init(rootView: StartView(recents: .shared, maxSide: model.largestCanvasSide, actions: StartActions()))
-        overrideUserInterfaceStyle = .dark
-        view.backgroundColor = UIColor(white: 0.13, alpha: 1)
+        overrideUserInterfaceStyle = Chrome.interfaceStyle
+        view.backgroundColor = UIColor(Chrome.background)
+        appearanceObservation = AppPreferences.shared.$appearance.dropFirst().sink { [weak self] _ in self?.applyAppearance() }
         var actions = StartActions()
         actions.newCanvas = { [weak self] size in self?.newCanvas(size: size) }
         actions.fullScreen = { [weak self] size in self?.newCanvas(size: size, fullScreen: true) }
@@ -45,6 +49,30 @@ final class StartController: UIHostingController<StartView> {
         actions.fromImageFile = { [weak self] in self?.newCanvasFromImageFile() }
         rootView = StartView(recents: .shared, maxSide: model.largestCanvasSide,
                              screenPixels: { [weak self] in self?.screenPixels }, actions: actions)
+    }
+
+    override func viewWillAppear(_ animated: Bool) {
+        super.viewWillAppear(animated)
+        // The window is there now: the style goes on it too, so the status bar and anything
+        // presented over this screen follow
+        applyAppearance()
+    }
+
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+        applyAppearance()
+    }
+
+    /// The appearance setting, onto this screen, the window and whatever is presented over it.
+    private func applyAppearance() {
+        let style = Chrome.interfaceStyle
+        overrideUserInterfaceStyle = style
+        // The windows too: a popover or a sheet takes its appearance from the window it is
+        // presented in, not from this screen
+        for scene in UIApplication.shared.connectedScenes {
+            (scene as? UIWindowScene)?.windows.forEach { $0.overrideUserInterfaceStyle = style }
+        }
+        presentedViewController?.overrideUserInterfaceStyle = style
     }
 
     /// The pixels of the screen this controller is on, the way the device is held: on a
@@ -152,7 +180,7 @@ final class StartController: UIHostingController<StartView> {
     private func show(_ session: PaintingSession) {
         let screen = CanvasHostingController(rootView: CanvasScreen(session: session))
         screen.modalPresentationStyle = .fullScreen
-        screen.overrideUserInterfaceStyle = .dark
+        screen.overrideUserInterfaceStyle = Chrome.interfaceStyle
         screen.keys = KeyCommands.entries(for: session) { [weak model] name in model?.app(name) }
         screen.follow(session.viewModel)
         model.presenter = screen
@@ -185,7 +213,7 @@ final class StartController: UIHostingController<StartView> {
         .preferredColorScheme(.dark)
         let host = UIHostingController(rootView: picker)
         host.modalPresentationStyle = .formSheet
-        host.overrideUserInterfaceStyle = .dark
+        host.overrideUserInterfaceStyle = Chrome.interfaceStyle
         host.preferredContentSize = CGSize(width: 400, height: 520)
         sheet = host
         present(host, animated: true)

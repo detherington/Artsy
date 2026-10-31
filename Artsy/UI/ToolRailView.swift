@@ -18,7 +18,7 @@ struct ToolRailView: View {
     #endif
 
     var body: some View {
-        VStack(spacing: 2) {
+        VStack(spacing: 6) {
             ForEach(Self.tools) { tool in
                 ChromeButton(
                     systemImage: tool == .fill ? nil : tool.iconName,
@@ -37,7 +37,7 @@ struct ToolRailView: View {
             ChromeButton(systemImage: "arrow.uturn.backward", help: "Undo (⌘Z)", action: actions.undo)
             ChromeButton(systemImage: "arrow.uturn.forward", help: "Redo (⇧⌘Z)", action: actions.redo)
         }
-        .padding(.vertical, 6)
+        .padding(.vertical, 14)
         .frame(width: Chrome.railWidth)
         .frame(maxHeight: .infinity)
         .background(Chrome.background)
@@ -115,7 +115,8 @@ struct ToolStripView: View {
             ChromeButton(systemImage: "arrow.uturn.forward", size: Chrome.compactTarget, help: "Redo", action: actions.redo)
         }
         .padding(4)
-        .background(RoundedRectangle(cornerRadius: 14).fill(Chrome.background.opacity(0.92)))
+        .background(Rectangle().fill(Chrome.background.opacity(0.92)))
+        .overlay(Rectangle().strokeBorder(Chrome.hairline))
     }
 }
 

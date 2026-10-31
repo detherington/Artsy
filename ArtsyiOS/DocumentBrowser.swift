@@ -20,8 +20,8 @@ enum DocumentBrowser {
         browser.allowsDocumentCreation = true
         browser.allowsPickingMultipleItems = false
         browser.shouldShowFileExtensions = false
-        browser.browserUserInterfaceStyle = .dark
-        browser.overrideUserInterfaceStyle = .dark
+        browser.browserUserInterfaceStyle = Chrome.interfaceStyle == .light ? .light : .dark
+        browser.overrideUserInterfaceStyle = Chrome.interfaceStyle
         let coordinator = Coordinator(model: model, onPick: onPick)
         coordinator.browser = browser
         browser.coordinator = coordinator
@@ -82,7 +82,7 @@ enum DocumentBrowser {
             .preferredColorScheme(.dark)
             let host = UIHostingController(rootView: picker)
             host.modalPresentationStyle = .formSheet
-            host.overrideUserInterfaceStyle = .dark
+            host.overrideUserInterfaceStyle = Chrome.interfaceStyle
             host.isModalInPresentation = true
             host.preferredContentSize = CGSize(width: 400, height: 520)
             sheet = host

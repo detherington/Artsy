@@ -43,13 +43,13 @@ struct TiltControl: View {
                     HStack(spacing: 8) {
                         Image(systemName: "level")
                             .font(.system(size: 17))
-                        Text("Level")
+                        Text("level")
                             .font(Chrome.font)
                     }
                     .frame(maxWidth: .infinity)
                     .frame(height: Chrome.target)
-                    .background(RoundedRectangle(cornerRadius: 8).fill(Chrome.control))
-                    .contentShape(RoundedRectangle(cornerRadius: 8))
+                    .overlay(Rectangle().strokeBorder(Chrome.hairline, lineWidth: 1))
+                    .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
                 .foregroundColor(viewModel.canvasTilt == .zero ? Chrome.secondaryText : Chrome.text)

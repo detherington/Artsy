@@ -44,12 +44,12 @@ struct ColorPanelView: View {
                     #if os(macOS)
                     Button(action: sampleScreen) {
                         Image(systemName: "scope")
-                            .font(.system(size: 14))
+                            .font(.system(size: 15, weight: .regular))
                             .frame(width: 32, height: 32)
-                            .background(Capsule().fill(Chrome.control))
+                            .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
-                    .foregroundColor(Chrome.text)
+                    .foregroundColor(Chrome.secondaryText)
                     .help("Pick a colour from anywhere on the screen")
                     #endif
                     Button(action: {
@@ -57,12 +57,12 @@ struct ColorPanelView: View {
                         dismiss()
                     }) {
                         Image(systemName: "eyedropper")
-                            .font(.system(size: 14))
+                            .font(.system(size: 15, weight: .regular))
                             .frame(width: 32, height: 32)
-                            .background(Capsule().fill(Chrome.control))
+                            .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
-                    .foregroundColor(Chrome.text)
+                    .foregroundColor(Chrome.secondaryText)
                     .help("Pick a colour from the canvas with the pen (I)")
                 }
             }
@@ -170,11 +170,11 @@ struct ColorPanelView: View {
 
     private func swatchButton(_ swatch: StrokeColor) -> some View {
         Button(action: { pick(swatch) }) {
-            RoundedRectangle(cornerRadius: 6)
+            Rectangle()
                 .fill(swatch.swiftUIColor)
                 .frame(width: Self.swatch, height: Self.swatch)
-                .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color.white.opacity(swatch == color ? 0.9 : 0.2), lineWidth: 1.5))
-                .contentShape(RoundedRectangle(cornerRadius: 6))
+                .overlay(Rectangle().stroke(swatch == color ? Chrome.text : Chrome.hairline, lineWidth: swatch == color ? 2 : 1))
+                .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .help(ColorMath.hex(of: swatch))
@@ -191,11 +191,11 @@ struct ColorPanelView: View {
                     }
             }
             Button(action: { ColorPanelActions.add(color, to: prefs) }) {
-                RoundedRectangle(cornerRadius: 6)
-                    .strokeBorder(Chrome.hairline, style: StrokeStyle(lineWidth: 1.5, dash: [4, 3]))
+                Rectangle()
+                    .strokeBorder(Chrome.secondaryText, style: StrokeStyle(lineWidth: 1, dash: [4, 3]))
                     .frame(width: Self.swatch, height: Self.swatch)
-                    .overlay(Image(systemName: "plus").font(.system(size: 14, weight: .semibold)).foregroundColor(Chrome.secondaryText))
-                    .contentShape(RoundedRectangle(cornerRadius: 6))
+                    .overlay(Image(systemName: "plus").font(.system(size: 14, weight: .regular)).foregroundColor(Chrome.secondaryText))
+                    .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             .help("Keep the current colour in the palette")
@@ -258,12 +258,12 @@ struct ColorWell: View {
     var body: some View {
         Button(action: action) {
             HStack(spacing: 10) {
-                RoundedRectangle(cornerRadius: 8)
+                Rectangle()
                     .fill(color.swiftUIColor)
                     .frame(width: 44, height: 32)
-                    .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.white.opacity(isCurrent ? 0.7 : 0.25), lineWidth: 1.5))
-                Text(label)
-                    .font(Chrome.font)
+                    .overlay(Rectangle().stroke(isCurrent ? Chrome.text : Chrome.hairline, lineWidth: isCurrent ? 2 : 1))
+                Text(label.lowercased())
+                    .font(Chrome.futura(13))
                     .foregroundColor(isCurrent ? Chrome.text : Chrome.secondaryText)
                 Spacer()
             }
