@@ -297,11 +297,10 @@ struct ValueButton: View {
         }
         .buttonStyle(.plain)
         .help(title)
-        .popover(isPresented: $showing, arrowEdge: Chrome.barPopoverEdge) {
+        .chromePopover(isPresented: $showing, edge: .top, gap: Chrome.popoverGap, staysPopover: true) {
             ValuePill(title: title, value: $value, range: range, logarithmic: logarithmic, format: format)
                 .padding(12)
                 .background(Chrome.panel)
-                .popoverStaysPopover()
         }
     }
 }
@@ -569,12 +568,10 @@ struct AddPanelView: View {
     var body: some View {
         VStack(spacing: 0) {
             PanelHeader("Add")
-            Picker("", selection: $section) {
-                Text("AI generate").tag(0)
-                Text("Stock images").tag(1)
+            HStack(spacing: 6) {
+                SquareChoice(text: "ai generate", isSelected: section == 0, height: 36, font: Chrome.labelFont, help: "Generate an image") { section = 0 }
+                SquareChoice(text: "stock images", isSelected: section == 1, height: 36, font: Chrome.labelFont, help: "Search stock images") { section = 1 }
             }
-            .pickerStyle(.segmented)
-            .labelsHidden()
             .padding(.horizontal, 14)
             .padding(.bottom, 10)
             Divider().overlay(Chrome.hairline)

@@ -130,9 +130,7 @@ struct ColorPanelView: View {
                 .foregroundColor(Chrome.secondaryText)
                 .fixedSize()
             TextField("RRGGBB", text: $hexText)
-                .textFieldStyle(.roundedBorder)
-                .font(Chrome.valueFont)
-                .frame(width: 68)
+                .squareField(width: 68)
                 .onSubmit {
                     if let picked = ColorMath.color(fromHex: hexText) { apply(picked) }
                 }
@@ -148,9 +146,7 @@ struct ColorPanelView: View {
                 .foregroundColor(Chrome.secondaryText)
                 .fixedSize()
             TextField("", text: text)
-                .textFieldStyle(.roundedBorder)
-                .font(Chrome.valueFont)
-                .frame(width: 40)
+                .squareField(width: 40)
                 .onSubmit { if submit(text.wrappedValue) { syncFromHSB() } }
         }
     }
