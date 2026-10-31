@@ -82,15 +82,22 @@ enum Platform {
 }
 
 extension View {
-    /// A panel opened from the bar: a popover, or the sheet it becomes on a phone, in the
-    /// panel's own colour rather than the system's, with the grabber that says a sheet
-    /// can be pulled down.
-    func panelPresentation() -> some View {
+    /// A popover from a control, with `edge` the control's edge it opens from: on iPad a
+    /// square one without an arrow, presented by UIKit (`SquarePopover`), which on a
+    /// phone becomes a square sheet unless told to stay a popover; the system's on the Mac.
+    func chromePopover<Content: View>(isPresented: Binding<Bool>, edge: Edge, gap: CGFloat = 0, staysPopover: Bool = false,
+                                      @ViewBuilder content: @escaping () -> Content) -> some View {
         #if os(iOS)
-        presentationBackground(Chrome.panel)
-            .presentationDragIndicator(.visible)
+        let direction: UIPopoverArrowDirection
+        switch edge {
+        case .top: direction = .down
+        case .bottom: direction = .up
+        case .leading: direction = .right
+        case .trailing: direction = .left
+        }
+        return background(SquarePopover(isPresented: isPresented, direction: direction, gap: gap, staysPopover: staysPopover, content: content))
         #else
-        self
+        return popover(isPresented: isPresented, arrowEdge: edge, content: content)
         #endif
     }
 
@@ -101,15 +108,6 @@ extension View {
     /// a popover's own contents are compact either way.
     func panelPopover<Panel: View>(isPresented: Binding<Bool>, @ViewBuilder panel: @escaping () -> Panel) -> some View {
         modifier(PanelPopover(isPresented: isPresented, panel: panel))
-    }
-
-    /// A small popover that stays one on a phone rather than becoming a sheet.
-    func popoverStaysPopover() -> some View {
-        #if os(iOS)
-        presentationCompactAdaptation(.popover)
-        #else
-        self
-        #endif
     }
 
     /// A panel's frame, for the panels that open from the bar: its size on the Mac, where
@@ -164,9 +162,8 @@ struct PanelPopover<Panel: View>: ViewModifier {
 
     func body(content: Content) -> some View {
         let dismissal: (() -> Void)? = becomesSheet ? { isPresented = false } : nil
-        return content.popover(isPresented: $isPresented, arrowEdge: Chrome.barPopoverEdge) {
+        return content.chromePopover(isPresented: $isPresented, edge: .top, gap: Chrome.popoverGap) {
             panel()
-                .panelPresentation()
                 .environment(\.panelDismissal, dismissal)
         }
     }

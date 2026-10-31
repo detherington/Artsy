@@ -290,6 +290,16 @@ enum BrushPanelActions {
 /// The current brush's own settings, under the grid: the four a painter reaches for, and
 /// the way to the Studio for the rest.
 struct BrushQuickSettings: View {
+    /// The smoothing modes as one short word each, so four fit the row.
+    static func word(for mode: SmoothingMode) -> String {
+        switch mode {
+        case .none: return "none"
+        case .oneEuro: return "adaptive"
+        case .lazyBrush: return "lazy"
+        case .movingAverage: return "average"
+        }
+    }
+
     @ObservedObject var viewModel: CanvasViewModel
     let actions: ChromeActions
     let dismiss: () -> Void
@@ -319,20 +329,14 @@ struct BrushQuickSettings: View {
                     .tracking(Chrome.sectionTracking)
                     .foregroundColor(Chrome.secondaryText)
                     .frame(width: 64, alignment: .leading)
-                Picker("", selection: Binding(
-                    get: { viewModel.smoothingMode },
-                    set: {
-                        viewModel.smoothingMode = $0
+                ForEach(SmoothingMode.allCases) { mode in
+                    SquareChoice(text: Self.word(for: mode), isSelected: viewModel.smoothingMode == mode, height: 40,
+                                 font: Chrome.labelFont, help: "\(mode.rawValue) smoothing") {
+                        viewModel.smoothingMode = mode
                         // Remembered across launches; the amount below belongs to the brush
-                        AppPreferences.shared.smoothingMode = $0
-                    }
-                )) {
-                    ForEach(SmoothingMode.allCases) { mode in
-                        Text(mode.rawValue).tag(mode)
+                        AppPreferences.shared.smoothingMode = mode
                     }
                 }
-                .pickerStyle(.segmented)
-                .labelsHidden()
             }
             .padding(.horizontal, 14)
             .frame(height: Chrome.target)

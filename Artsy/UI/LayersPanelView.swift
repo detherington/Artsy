@@ -109,14 +109,14 @@ struct LayerControls: View {
                     .tracking(Chrome.sectionTracking)
                     .foregroundColor(Chrome.secondaryText)
                     .frame(width: 64, alignment: .leading)
-                Picker("", selection: Binding(get: { layer.blendMode }, set: { actions.setBlendMode($0, of: layer) })) {
-                    ForEach(LayerBlendMode.allCases) { mode in
-                        Text(mode.displayName).tag(mode)
+                SquareMenu(layer.blendMode.displayName, minWidth: 132) {
+                    Picker("Blend", selection: Binding(get: { layer.blendMode }, set: { actions.setBlendMode($0, of: layer) })) {
+                        ForEach(LayerBlendMode.allCases) { mode in
+                            Text(mode.displayName).tag(mode)
+                        }
                     }
+                    .labelsHidden()
                 }
-                .pickerStyle(.menu)
-                .labelsHidden()
-                .controlSize(.large)
                 Spacer()
             }
             .padding(.horizontal, 14)

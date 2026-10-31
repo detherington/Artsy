@@ -268,3 +268,12 @@ first, a bold geometric face, clean icons and controls, and a look that reads as
   circles, the zoom as a plain number. Panels keep their places and contents; the
   brushes panel's categories are words with the mark, its cards a stroke and a name, the
   layers rows the mark, the colour panel's swatches squares.
+- **Square popovers and the blend menu.** On iPad the panels, the values on the compact
+  bar and the rail's tool modes open through `SquarePopover` (`ChromeiOS.swift`), a
+  UIKit presentation of its own (`SquarePanelPresentation`), which puts the panel beside
+  the control with eight points of air (`Chrome.popoverGap`): a square, no arrow or
+  shadow, the panel's colour inside a hairline, closed by a tap outside. The sheet a panel becomes on a phone is square-cornered
+  with the grabber. `chromePopover(isPresented:edge:)` in `Platform.swift` is the one
+  name for both, with `edge` the control's edge it opens from; the Mac keeps the
+  system's popover behind it. The layer blend mode is `SquareMenu`: the chosen word and
+  a small triangle in a hairline box, the system's menu opening from it.
