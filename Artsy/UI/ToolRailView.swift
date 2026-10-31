@@ -28,8 +28,8 @@ struct ToolRailView: View {
                 ) {
                     select(tool)
                 }
-                .popover(isPresented: Binding(get: { modesFor == tool }, set: { if !$0 { modesFor = nil } }),
-                         arrowEdge: .trailing) {
+                .chromePopover(isPresented: Binding(get: { modesFor == tool }, set: { if !$0 { modesFor = nil } }),
+                               edge: .trailing, gap: Chrome.popoverGap) {
                     modes(for: tool)
                 }
             }

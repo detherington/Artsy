@@ -30,14 +30,8 @@ enum Chrome {
     /// The least a finger should have to hit, where a phone's bar has no room for more.
     static let compactTarget: CGFloat = 40
     static let panelWidth: CGFloat = 340
-    /// Where a panel's arrow goes when it opens from the bar: on the Mac the panel is
-    /// asked for below and flipped above the bar by the system; on iPad it is asked for
-    /// above, since nothing flips it.
-    #if os(macOS)
-    static let barPopoverEdge: Edge = .top
-    #else
-    static let barPopoverEdge: Edge = .bottom
-    #endif
+    /// Air between a control and the popover that opens from it.
+    static let popoverGap: CGFloat = 8
 
     // MARK: - Colour
 
@@ -430,5 +424,63 @@ struct PanelSectionLabel: View {
             .padding(.top, 12)
             .padding(.bottom, 4)
             .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+/// A choice from a list: the chosen word and a small triangle inside a hairline box, and
+/// the system's menu, with its options, opening from it.
+struct SquareMenu<Options: View>: View {
+    let title: String
+    var minWidth: CGFloat = 0
+    @ViewBuilder let options: () -> Options
+
+    init(_ title: String, minWidth: CGFloat = 0, @ViewBuilder options: @escaping () -> Options) {
+        self.title = title
+        self.minWidth = minWidth
+        self.options = options
+    }
+
+    var body: some View {
+        Menu {
+            options()
+        } label: {
+            HStack(spacing: 10) {
+                Text(title)
+                    .font(Chrome.font)
+                    .foregroundColor(Chrome.text)
+                    .lineLimit(1)
+                Spacer(minLength: 0)
+                Image(systemName: "arrowtriangle.down.fill")
+                    .font(.system(size: 8))
+                    .foregroundColor(Chrome.secondaryText)
+            }
+            .padding(.horizontal, 10)
+            .frame(minWidth: minWidth)
+            .frame(height: 32)
+            .overlay(Rectangle().strokeBorder(Chrome.hairline, lineWidth: 1))
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(SquareMenuStyle())
+        .menuIndicator(.hidden)
+        .fixedSize()
+    }
+
+    private struct SquareMenuStyle: ButtonStyle {
+        func makeBody(configuration: Configuration) -> some View {
+            configuration.label
+                .opacity(configuration.isPressed ? 0.6 : 1)
+        }
+    }
+}
+
+extension View {
+    /// A text field in the chrome: the value in a hairline box, no plate or rounding.
+    func squareField(width: CGFloat) -> some View {
+        textFieldStyle(.plain)
+            .font(Chrome.valueFont)
+            .foregroundColor(Chrome.text)
+            .padding(.horizontal, 6)
+            .frame(width: width, height: 28)
+            .overlay(Rectangle().strokeBorder(Chrome.hairline, lineWidth: 1))
     }
 }
