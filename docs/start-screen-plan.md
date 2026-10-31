@@ -277,3 +277,9 @@ first, a bold geometric face, clean icons and controls, and a look that reads as
   name for both, with `edge` the control's edge it opens from; the Mac keeps the
   system's popover behind it. The layer blend mode is `SquareMenu`: the chosen word and
   a small triangle in a hairline box, the system's menu opening from it.
+- **The icon.** Darrell's own picture: a paper hand holding a red pencil on black, in flat
+  shapes with black line, the same hand and pencil as the old icon redrawn in the system's
+  colours. The Mac set is the picture inside Apple's 824-of-1024 rounded shape at every
+  size, flat, with no shadow; the iOS entry is the full square with no alpha, the system
+  masking it. The eight geometric options drawn first (the mark, the square, Albers, a
+  brush of the three forms…) were set aside: they read as a brand, not as drawing.
