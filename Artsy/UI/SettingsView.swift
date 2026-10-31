@@ -293,6 +293,22 @@ struct GeneralSettingsView: View {
                 Text("General")
                     .font(.headline)
 
+                GroupBox("Appearance") {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Picker("", selection: $prefs.appearance) {
+                            ForEach(AppPreferences.Appearance.allCases) { appearance in
+                                Text(appearance.title).tag(appearance)
+                            }
+                        }
+                        .pickerStyle(.segmented)
+                        .labelsHidden()
+                        Text("Dark or light chrome around the canvas, or whichever the system is set to.")
+                            .font(.system(size: 12))
+                            .foregroundColor(.secondary)
+                    }
+                    .padding(4)
+                }
+
                 GroupBox("New Canvas") {
                     VStack(alignment: .leading, spacing: 12) {
                         // Default canvas size preset picker

@@ -100,7 +100,7 @@ struct AIPanelView: View {
                         }
                         .font(.system(size: 12))
                         .buttonStyle(.plain)
-                        .foregroundColor(.accentColor)
+                        .foregroundColor(Chrome.accent)
                     }
                 }
                 TextEditor(text: $prompt)
@@ -361,11 +361,11 @@ struct StylePresetGrid: View {
                     .frame(maxWidth: .infinity, minHeight: 44)
                     .background(
                         RoundedRectangle(cornerRadius: 6)
-                            .fill(selectedStyle == style ? Color.accentColor.opacity(0.25) : Color(white: 0.2))
+                            .fill(selectedStyle == style ? Chrome.accent.opacity(0.25) : Color(white: 0.2))
                     )
                     .overlay(
                         RoundedRectangle(cornerRadius: 6)
-                            .stroke(selectedStyle == style ? Color.accentColor : Color.clear, lineWidth: 1)
+                            .stroke(selectedStyle == style ? Chrome.accent : Color.clear, lineWidth: 1)
                     )
                 }
                 .buttonStyle(.plain)
@@ -397,11 +397,11 @@ struct CustomPresetButton: View {
         .frame(maxWidth: .infinity, minHeight: 32)
         .background(
             RoundedRectangle(cornerRadius: 6)
-                .fill(isSelected ? Color.accentColor.opacity(0.25) : Color(white: 0.2))
+                .fill(isSelected ? Chrome.accent.opacity(0.25) : Color(white: 0.2))
         )
         .overlay(
             RoundedRectangle(cornerRadius: 6)
-                .stroke(isSelected ? Color.accentColor : Color.clear, lineWidth: 1)
+                .stroke(isSelected ? Chrome.accent : Color.clear, lineWidth: 1)
         )
         .foregroundColor(isSelected ? .white : Color(white: 0.8))
         .contentShape(Rectangle())

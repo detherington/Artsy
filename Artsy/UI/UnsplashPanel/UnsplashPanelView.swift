@@ -120,7 +120,7 @@ struct UnsplashPanelView: View {
                     }
                     .buttonStyle(.plain)
                     .font(.system(size: 12, weight: .medium))
-                    .foregroundColor(.accentColor)
+                    .foregroundColor(Chrome.accent)
                 }
                 .padding(.top, 4)
             }

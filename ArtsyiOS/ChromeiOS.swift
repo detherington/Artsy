@@ -37,7 +37,7 @@ struct TiltPad: View {
             let reach = bounds.width / 2 - inset
             let dot = CGPoint(x: bounds.midX + CGFloat(tilt.x) * reach, y: bounds.midY + CGFloat(tilt.y) * reach)
             ZStack {
-                RoundedRectangle(cornerRadius: 8).fill(Chrome.control)
+                Rectangle().fill(Chrome.control)
                 Path { path in
                     path.move(to: CGPoint(x: bounds.midX, y: inset))
                     path.addLine(to: CGPoint(x: bounds.midX, y: bounds.maxY - inset))
@@ -47,7 +47,7 @@ struct TiltPad: View {
                 }
                 .stroke(Chrome.hairline, lineWidth: 1)
                 Circle()
-                    .fill(tilt == .zero ? Chrome.secondaryText : Color.accentColor)
+                    .fill(tilt == .zero ? Chrome.secondaryText : Chrome.accent)
                     .frame(width: 14, height: 14)
                     .position(dot)
             }

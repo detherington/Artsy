@@ -46,16 +46,15 @@ struct BrushPanelView: View {
     var body: some View {
         VStack(spacing: 0) {
             PanelHeader("Brushes") {
-                Button("Studio…") {
+                Button("studio") {
                     dismiss()
                     actions.app("showBrushStudio")
                 }
                 .buttonStyle(.plain)
-                .font(Chrome.font)
-                .foregroundColor(Chrome.text)
-                .padding(.horizontal, 12)
+                .font(Chrome.futura(13))
+                .foregroundColor(Chrome.secondaryText)
+                .padding(.horizontal, 4)
                 .frame(height: 32)
-                .background(Capsule().fill(Chrome.control))
                 .help("Every setting of this brush")
             }
             Divider().overlay(Chrome.hairline)
@@ -160,17 +159,19 @@ struct BrushCategoryStrip: View {
     @Binding var selected: BrushPanelCategory
 
     var body: some View {
-        HStack(spacing: 4) {
+        HStack(spacing: 0) {
             ForEach(BrushPanelCategory.allCases, id: \.self) { category in
                 Button(action: { selected = category }) {
-                    Text(category.title)
-                        .font(Chrome.labelFont)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.8)
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 40)
-                        .background(RoundedRectangle(cornerRadius: 8).fill(selected == category ? Chrome.selected : Chrome.control))
-                        .contentShape(RoundedRectangle(cornerRadius: 8))
+                    HStack(spacing: 7) {
+                        if selected == category { Mark() }
+                        Text(category.title.lowercased())
+                            .font(Chrome.futura(13))
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.8)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 40)
+                    .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
                 .foregroundColor(selected == category ? Chrome.text : Chrome.secondaryText)
@@ -220,26 +221,27 @@ struct BrushCard: View {
                     .frame(height: 44)
                     if let number {
                         Text("\(number)")
-                            .font(.system(size: 10, design: .monospaced))
+                            .font(Chrome.futura(10))
                             .foregroundColor(Chrome.secondaryText)
-                            .padding(.horizontal, 5)
-                            .frame(minWidth: 16, minHeight: 16)
-                            .background(Capsule().fill(Chrome.control))
+                            .padding(.top, 2)
+                            .padding(.trailing, 2)
                     }
                 }
-                Text(brush.name)
-                    .font(Chrome.font)
-                    .foregroundColor(isSelected ? Chrome.text : Chrome.secondaryText)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.85)
+                HStack(spacing: 7) {
+                    if isSelected { Mark() }
+                    Text(brush.name)
+                        .font(Chrome.futura(13))
+                        .foregroundColor(isSelected ? Chrome.text : Chrome.secondaryText)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.85)
+                }
             }
             .padding(.horizontal, 8)
             .padding(.vertical, 6)
             .frame(maxWidth: .infinity)
             .frame(height: Self.height)
-            .background(RoundedRectangle(cornerRadius: 10).fill(isSelected ? Chrome.selected : Chrome.control.opacity(0.6)))
-            .overlay(RoundedRectangle(cornerRadius: 10).stroke(isSelected ? Color.accentColor : Color.clear, lineWidth: 1.5))
-            .contentShape(RoundedRectangle(cornerRadius: 10))
+            .background(Rectangle().fill(isSelected ? Chrome.selected : Color.clear))
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .help(number.map { "\(brush.name) (\($0))" } ?? brush.name)
@@ -301,8 +303,9 @@ struct BrushQuickSettings: View {
                 PencilGradeRow(viewModel: viewModel)
             }
             HStack(spacing: 12) {
-                Text("Pressure")
-                    .font(Chrome.font)
+                Text("pressure")
+                    .font(Chrome.sectionFont)
+                    .tracking(Chrome.sectionTracking)
                     .foregroundColor(Chrome.secondaryText)
                     .frame(width: 64, alignment: .leading)
                 PressureCurveControl(viewModel: viewModel)
@@ -311,8 +314,9 @@ struct BrushQuickSettings: View {
             .padding(.horizontal, 14)
             .frame(height: Chrome.target)
             HStack(spacing: 12) {
-                Text("Smooth")
-                    .font(Chrome.font)
+                Text("smooth")
+                    .font(Chrome.sectionFont)
+                    .tracking(Chrome.sectionTracking)
                     .foregroundColor(Chrome.secondaryText)
                     .frame(width: 64, alignment: .leading)
                 Picker("", selection: Binding(
@@ -352,23 +356,15 @@ struct PencilGradeRow: View {
 
     var body: some View {
         HStack(spacing: 6) {
-            Text("Grade")
-                .font(Chrome.font)
+            Text("grade")
+                .font(Chrome.sectionFont)
+                .tracking(Chrome.sectionTracking)
                 .foregroundColor(Chrome.secondaryText)
                 .frame(width: Self.labelWidth, alignment: .leading)
             ForEach(PencilGrade.shown) { grade in
-                let selected = viewModel.pencilGrade == grade
-                Button(action: { viewModel.pencilGrade = grade }) {
-                    Text(grade.rawValue)
-                        .font(Chrome.valueFont)
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 36)
-                        .background(RoundedRectangle(cornerRadius: 8).fill(selected ? Chrome.selected : Chrome.control))
-                        .contentShape(RoundedRectangle(cornerRadius: 8))
+                SquareChoice(text: grade.rawValue, isSelected: viewModel.pencilGrade == grade, help: grade.help) {
+                    viewModel.pencilGrade = grade
                 }
-                .buttonStyle(.plain)
-                .foregroundColor(selected ? Chrome.text : Chrome.secondaryText)
-                .help(grade.help)
             }
         }
         .padding(.horizontal, 14)
@@ -418,18 +414,18 @@ struct PanelSlider: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            Text(label)
-                .font(Chrome.font)
+            Text(label.lowercased())
+                .font(Chrome.sectionFont)
+                .tracking(Chrome.sectionTracking)
                 .foregroundColor(Chrome.secondaryText)
                 .frame(width: 64, alignment: .leading)
-            Slider(value: position, in: 0...1, onEditingChanged: onEditingChanged)
-                .controlSize(.large)
+            TrackSlider(position: position, onEditingChanged: onEditingChanged)
             Text(format(value))
                 .font(Chrome.valueFont)
                 .foregroundColor(Chrome.text)
                 .frame(width: 44, alignment: .trailing)
         }
-        .padding(.horizontal, 14)
+        .padding(.horizontal, 16)
         .frame(height: Chrome.target)
     }
 }

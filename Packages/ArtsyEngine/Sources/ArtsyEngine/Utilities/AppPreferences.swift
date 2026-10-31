@@ -32,6 +32,14 @@ public final class AppPreferences: ObservableObject {
         static let dryingTime = "dryingTime"
         static let snapShapesOnHold = "snapShapesOnHold"
         static let layersDocked = "layersDocked"
+        static let appearance = "chromeAppearance"
+    }
+
+    /// Which side of the chrome's colours to show: the system's, or one of the two.
+    public enum Appearance: String, CaseIterable, Identifiable, Sendable {
+        case system, dark, light
+        public var id: String { rawValue }
+        public var title: String { rawValue.capitalized }
     }
 
     // MARK: - Published
@@ -99,6 +107,11 @@ public final class AppPreferences: ObservableObject {
     /// Stroke smoothing algorithm. Starts on Adaptive: steady when slow, out of the way when fast.
     @Published public var smoothingMode: SmoothingMode {
         didSet { defaults.set(smoothingMode.rawValue, forKey: Key.smoothingMode) }
+    }
+
+    /// The appearance: dark, light, or whatever the system is set to.
+    @Published public var appearance: Appearance {
+        didSet { defaults.set(appearance.rawValue, forKey: Key.appearance) }
     }
 
     /// Ease strokes in and out when the input has no pressure (mouse, trackpad).
@@ -198,6 +211,7 @@ public final class AppPreferences: ObservableObject {
         self.paletteColors = (defaults.array(forKey: Key.paletteColors) as? [String]) ?? Self.startingPalette
 
         self.smoothingMode = defaults.string(forKey: Key.smoothingMode).flatMap(SmoothingMode.init(rawValue:)) ?? .oneEuro
+        self.appearance = defaults.string(forKey: Key.appearance).flatMap(Appearance.init(rawValue:)) ?? .dark
         self.easeStrokesWithoutPressure = (defaults.object(forKey: Key.easeStrokesWithoutPressure) as? Bool) ?? true
         self.pressureFromSpeed = (defaults.object(forKey: Key.pressureFromSpeed) as? Bool) ?? true
         self.paintRelief = min(max((defaults.object(forKey: Key.paintRelief) as? Double) ?? 1.0, 0), 2)

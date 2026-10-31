@@ -104,8 +104,9 @@ struct LayerControls: View {
     var body: some View {
         VStack(spacing: 0) {
             HStack(spacing: 12) {
-                Text("Blend")
-                    .font(Chrome.font)
+                Text("blend")
+                    .font(Chrome.sectionFont)
+                    .tracking(Chrome.sectionTracking)
                     .foregroundColor(Chrome.secondaryText)
                     .frame(width: 64, alignment: .leading)
                 Picker("", selection: Binding(get: { layer.blendMode }, set: { actions.setBlendMode($0, of: layer) })) {
@@ -150,17 +151,16 @@ struct LayerRow: View {
                 .frame(width: 24, height: LayersPanelContent.rowHeight)
                 .help("Drag to reorder")
             ZStack {
-                RoundedRectangle(cornerRadius: 4).fill(Color(white: 0.3))
+                Rectangle().fill(Chrome.control)
                 if let thumb = layer.thumbnail {
                     Image(decorative: thumb, scale: 1)
                         .resizable()
                         .interpolation(.low)
                         .aspectRatio(contentMode: .fit)
-                        .cornerRadius(4)
                 }
             }
             .frame(width: 44, height: 32)
-            .overlay(RoundedRectangle(cornerRadius: 4).stroke(Chrome.hairline, lineWidth: 1))
+            .overlay(Rectangle().stroke(Chrome.hairline, lineWidth: 1))
             Text(layer.name)
                 .font(Chrome.font)
                 .foregroundColor(isActive ? Chrome.text : Chrome.secondaryText)
@@ -174,7 +174,10 @@ struct LayerRow: View {
         .padding(.leading, 6)
         .padding(.trailing, 6)
         .frame(height: LayersPanelContent.rowHeight)
-        .background(RoundedRectangle(cornerRadius: 8).fill(isActive ? Chrome.selected : Color.clear))
+        .background(Rectangle().fill(isActive ? Chrome.selected : Color.clear))
+        .overlay(alignment: .leading) {
+            if isActive { Mark().padding(.leading, 2) }
+        }
         .opacity(isDragging ? 0.4 : 1)
         .padding(.horizontal, 6)
         .contentShape(Rectangle())

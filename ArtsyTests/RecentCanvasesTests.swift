@@ -20,7 +20,7 @@ final class RecentCanvasesTests: XCTestCase {
         try? FileManager.default.removeItem(at: folder)
     }
 
-    private static let red = CGColor(red: 0.8, green: 0.3, blue: 0.2, alpha: 1)
+    private static let green = CGColor(red: 0.2, green: 0.8, blue: 0.3, alpha: 1)
     private static let blue = CGColor(red: 0.1, green: 0.1, blue: 0.9, alpha: 1)
 
     /// A package with a document.json and a square thumbnail of `size`, as a save leaves one.
@@ -28,7 +28,7 @@ final class RecentCanvasesTests: XCTestCase {
         let url = folder.appendingPathComponent("\(name).artsy")
         try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
         try Data("{}".utf8).write(to: url.appendingPathComponent("document.json"))
-        try writeThumbnail(into: url, size: size, color: Self.red)
+        try writeThumbnail(into: url, size: size, color: Self.green)
         return url
     }
 
@@ -116,22 +116,23 @@ final class RecentCanvasesTests: XCTestCase {
         XCTAssertEqual(store.url(of: store.entries[0])?.standardizedFileURL.path, after.standardizedFileURL.path)
     }
 
-    /// The screen drawn: with a canvas in the list, its red thumbnail is on the screen
-    /// (on the Continue card, large) beside the size pills' white glyphs and the words;
-    /// with nothing, only those.
+    /// The screen drawn: with a canvas in the list, its green thumbnail is on the screen,
+    /// large, beside the sizes' white outlines and the words; with nothing, only those
+    /// (the chrome's own red, the mark and the first size, is not green and is not
+    /// counted).
     func testTheStartScreenComesUpWithTheListAndWithNothing() throws {
         let store = RecentCanvases(fileURL: nil)
         store.note(try makeDocument(named: "One"), size: CGSize(width: 1024, height: 768))
         let shown = try show(StartView(recents: store, maxSide: 4096, actions: StartActions()), width: 860)
         defer { shown.close() }
         let first = try shown.count()
-        XCTAssertGreaterThan(first.whites, 150, "the size pills' glyphs and the words: \(first.whites)")
-        XCTAssertGreaterThan(first.reds, 1000, "the thumbnail, read from the package, on the card: \(first.reds)")
+        XCTAssertGreaterThan(first.whites, 150, "the sizes' outlines and the words: \(first.whites)")
+        XCTAssertGreaterThan(first.greens, 1000, "the thumbnail, read from the package, large: \(first.greens)")
         let empty = try show(StartView(recents: RecentCanvases(fileURL: nil), maxSide: 4096, actions: StartActions()), width: 360)
         defer { empty.close() }
         let nothing = try empty.count()
-        XCTAssertGreaterThan(nothing.whites, 150, "the phone's row of pills and the words: \(nothing.whites)")
-        XCTAssertEqual(nothing.reds, 0, "nothing in the list, nothing red")
+        XCTAssertGreaterThan(nothing.whites, 150, "the phone's sizes and the words: \(nothing.whites)")
+        XCTAssertEqual(nothing.greens, 0, "nothing in the list, nothing green")
     }
 
     /// A save while the screen is up (the Mac's Window ▸ Start beside a canvas) notes the
@@ -144,13 +145,13 @@ final class RecentCanvasesTests: XCTestCase {
         let shown = try show(StartView(recents: store, maxSide: 4096, actions: StartActions()), width: 860)
         defer { shown.close() }
         let before = try shown.count()
-        XCTAssertGreaterThan(before.reds, 1000, "the thumbnail as saved first: \(before.reds)")
+        XCTAssertGreaterThan(before.greens, 1000, "the thumbnail as saved first: \(before.greens)")
         XCTAssertEqual(before.blues, 0)
         try writeThumbnail(into: document, color: Self.blue)
         store.note(document, size: CGSize(width: 1024, height: 768), at: Date().addingTimeInterval(1))
         let after = try shown.count()
         XCTAssertGreaterThan(after.blues, 1000, "the thumbnail as saved again: \(after.blues)")
-        XCTAssertEqual(after.reds, 0, "and not the old one: \(after.reds)")
+        XCTAssertEqual(after.greens, 0, "and not the old one: \(after.greens)")
     }
 
     /// "Full screen" is the device's own pixels, offered after the size used last and
@@ -195,8 +196,8 @@ final class RecentCanvasesTests: XCTestCase {
         let host: NSHostingView<StartView>
 
         /// A moment for the thumbnails, which load off the main thread, then the pixels
-        /// counted: those near white, those near the red thumbnail, those near the blue.
-        func count() throws -> (reds: Int, whites: Int, blues: Int) {
+        /// counted: those near white, those near the green thumbnail, those near the blue.
+        func count() throws -> (greens: Int, whites: Int, blues: Int) {
             RunLoop.main.run(until: Date().addingTimeInterval(1.2))
             host.layoutSubtreeIfNeeded()
             window.displayIfNeeded()
@@ -206,17 +207,18 @@ final class RecentCanvasesTests: XCTestCase {
                                                      colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0))
             let context = try XCTUnwrap(NSGraphicsContext(bitmapImageRep: rep))
             try XCTUnwrap(host.layer).render(in: context.cgContext)
-            var reds = 0, whites = 0, blues = 0
+            var greens = 0, whites = 0, blues = 0
             for y in stride(from: 0, to: rep.pixelsHigh, by: 2) {
                 for x in stride(from: 0, to: rep.pixelsWide, by: 2) {
                     guard let color = rep.colorAt(x: x, y: y) else { continue }
                     let r = color.redComponent, g = color.greenComponent, b = color.blueComponent
                     if r > 0.85 && g > 0.85 && b > 0.85 { whites += 1 }
-                    if r > 0.6 && g < 0.4 && b < 0.35 { reds += 1 }
+                    // The thumbnail's green: nothing in the chrome is green
+                    if g > 0.6 && r < 0.4 && b < 0.45 { greens += 1 }
                     if b > 0.7 && r < 0.3 && g < 0.3 { blues += 1 }
                 }
             }
-            return (reds, whites, blues)
+            return (greens, whites, blues)
         }
 
         func close() {

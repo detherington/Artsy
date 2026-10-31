@@ -22,6 +22,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private var scopedRecentURLs: Set<URL> = []
     /// Keeps `viewModel.isDirty` → `window.isDocumentEdited` bindings alive per window.
     private var dirtyObservations: [ObjectIdentifier: AnyCancellable] = [:]
+    /// Follows the appearance setting into the app's windows.
+    private var appearanceObservation: AnyCancellable?
     #if !APP_STORE
     /// Sparkle updater — starts checking on launch, exposes "Check for Updates…" action.
     /// The App Store build has none: the store updates it, and the sandbox would not let
@@ -51,6 +53,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         NSApp.setActivationPolicy(.regular)
+        Chrome.applyAppearance()
+        appearanceObservation = AppPreferences.shared.$appearance.dropFirst().sink { _ in Chrome.applyAppearance() }
         // Raw pen input is recorded unless Help ▸ Diagnostics says otherwise, so a session
         // can be replayed here
         UserDefaults.standard.register(defaults: ["recordStrokes": true])
@@ -973,7 +977,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                                   styleMask: [.titled, .closable], backing: .buffered, defer: false)
             window.title = "Keyboard Shortcuts"
             window.isReleasedWhenClosed = false
-            window.appearance = NSAppearance(named: .darkAqua)
+            window.appearance = Chrome.appearance
             window.contentView = NSHostingView(rootView: ShortcutsView())
             window.center()
             return window
@@ -1003,7 +1007,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             )
             window.title = "Brush Studio"
             window.isReleasedWhenClosed = false
-            window.appearance = NSAppearance(named: .darkAqua)   // the chrome's one look
+            window.appearance = Chrome.appearance   // the chrome's one look
             window.center()
             return window
         }()
@@ -1317,7 +1321,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             defer: false
         )
         settingsWindow.title = "Artsy Settings"
-        settingsWindow.appearance = NSAppearance(named: .darkAqua)
+        settingsWindow.appearance = Chrome.appearance
         settingsWindow.contentView = NSHostingView(rootView: SettingsView())
         settingsWindow.center()
         settingsWindow.isReleasedWhenClosed = false
@@ -1428,7 +1432,7 @@ extension AppDelegate {
                 let movie = try await recorder.movie()
                 let window = NSWindow(contentRect: .zero, styleMask: [.titled, .closable, .resizable], backing: .buffered, defer: false)
                 window.title = "Time-lapse — " + name
-                window.appearance = NSAppearance(named: .darkAqua)
+                window.appearance = Chrome.appearance
                 window.isReleasedWhenClosed = false
                 window.contentViewController = NSHostingController(rootView: TimelapsePlayerView(
                     movie: movie, name: name, export: { [weak self] length in
@@ -1466,7 +1470,7 @@ extension AppDelegate {
             let progress = NSWindow(contentViewController: NSHostingController(rootView: TimelapseExportView(export: export, name: name)))
             progress.title = "Export Time-lapse"
             progress.styleMask = [.titled]
-            progress.appearance = NSAppearance(named: .darkAqua)
+            progress.appearance = Chrome.appearance
             progress.isReleasedWhenClosed = false
             progress.center()
             progress.makeKeyAndOrderFront(nil)

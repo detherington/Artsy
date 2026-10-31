@@ -31,7 +31,7 @@ struct PressureCurveEditor: View {
                 var stems = Path()
                 stems.move(to: view(CGPoint(x: 0, y: 0))); stems.addLine(to: view(handle1))
                 stems.move(to: view(CGPoint(x: 1, y: 1))); stems.addLine(to: view(handle2))
-                context.stroke(stems, with: .color(.accentColor.opacity(0.5)), lineWidth: 1)
+                context.stroke(stems, with: .color(Chrome.accent.opacity(0.5)), lineWidth: 1)
                 // The curve as the brush sees it
                 var path = Path()
                 for i in 0...48 {
@@ -39,7 +39,7 @@ struct PressureCurveEditor: View {
                     let point = view(CGPoint(x: CGFloat(x), y: CGFloat(curve.map(x))))
                     if i == 0 { path.move(to: point) } else { path.addLine(to: point) }
                 }
-                context.stroke(path, with: .color(.accentColor), lineWidth: 2)
+                context.stroke(path, with: .color(Chrome.accent), lineWidth: 2)
             }
 
             handle(at: handle1) { curve = PressureCurve(controlPoint1: $0, controlPoint2: handle2) }
@@ -58,7 +58,7 @@ struct PressureCurveEditor: View {
 
     private func handle(at point: CGPoint, move: @escaping (CGPoint) -> Void) -> some View {
         Circle()
-            .fill(Color.accentColor)
+            .fill(Chrome.accent)
             .frame(width: 12, height: 12)
             .overlay(Circle().stroke(Color.white, lineWidth: 1.5))
             .position(view(point))

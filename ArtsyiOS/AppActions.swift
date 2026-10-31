@@ -80,7 +80,7 @@ extension AppModel {
         let host = UIHostingController(rootView: content.padding(.top, 16))
         host.modalPresentationStyle = .formSheet
         host.preferredContentSize = size
-        host.overrideUserInterfaceStyle = .dark
+        host.overrideUserInterfaceStyle = Chrome.interfaceStyle
         present(host)
     }
 
@@ -311,7 +311,7 @@ extension AppModel {
     private func pick(_ types: [UTType], multiple: Bool, picked: @escaping ([URL]) -> Void) {
         let picker = UIDocumentPickerViewController(forOpeningContentTypes: types, asCopy: true)
         picker.allowsMultipleSelection = multiple
-        picker.overrideUserInterfaceStyle = .dark
+        picker.overrideUserInterfaceStyle = Chrome.interfaceStyle
         let delegate = DocumentPickerDelegate(picked: picked)
         pickerDelegate = delegate
         picker.delegate = delegate

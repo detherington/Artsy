@@ -7,6 +7,8 @@ import ArtsyEngine
 struct ArtsyApp: App {
     @StateObject private var model = AppModel()
     @Environment(\.scenePhase) private var scenePhase
+    /// The appearance setting, applied to the scene from here: dark, light, or the system's.
+    @ObservedObject private var prefs = AppPreferences.shared
 
     var body: some Scene {
         WindowGroup {
@@ -19,6 +21,7 @@ struct ArtsyApp: App {
             } else {
                 StartScreen(model: model)
                     .ignoresSafeArea()
+                    .preferredColorScheme(Chrome.colorScheme)
             }
         }
         .onChange(of: scenePhase) { _, phase in

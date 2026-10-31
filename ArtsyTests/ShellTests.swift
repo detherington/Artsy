@@ -462,33 +462,34 @@ final class ShellTests: XCTestCase {
         XCTAssertEqual(viewModel.pencilGrade, .h2, "the first")
     }
 
-    /// A slider in a panel's list is an AppKit slider underneath, and the pen on it is the
-    /// slider's, not the scroll view's: the brush panel's Size slider takes the press and
-    /// the drag after it rather than scrolling the list.
+    /// A slider in a panel's list is a hairline track with the mark on it, drawn by the
+    /// chrome, and the pen on it is the slider's, not the scroll view's: the quick
+    /// settings' Size slider puts the mark under the press rather than scrolling the list.
     func testAPanelSliderTakesThePenItself() throws {
         let (_, viewModel) = try canvas()
         viewModel.currentBrush = .hardRound
         viewModel.brushSize = 20
-        let panel = BrushPanelView(viewModel: viewModel, previews: BrushPreviewCache(renderer: nil), actions: ChromeActions(), dismiss: {})
-        let host = NSHostingView(rootView: panel)
-        show(host, size: NSSize(width: Chrome.panelWidth, height: 700))
+        let settings = DragScroll { BrushQuickSettings(viewModel: viewModel, actions: ChromeActions(), dismiss: {}) }
+        let host = NSHostingView(rootView: settings)
+        show(host, size: NSSize(width: Chrome.panelWidth, height: 400))
         settle(host)
-        let slider = try XCTUnwrap(host.firstDescendant(of: NSSlider.self), "the quick settings' Size slider")
-        let frame = slider.convert(slider.bounds, to: nil)
-        XCTAssertTrue(window.contentView?.hitTest(NSPoint(x: frame.midX, y: frame.midY)) === slider, "the slider is hit, not the scroll view")
 
-        // The press puts the knob under the pen, as the Mac's sliders do. The drag after it
-        // is AppKit's own tracking, which looks at the real button and so cannot be fed
-        // synthetic events here: two presses stand in for a drag from one end to the other.
-        let low = NSPoint(x: frame.minX + 20, y: frame.midY), high = NSPoint(x: frame.maxX - 20, y: frame.midY)
+        // Under the section label (30), the Size row, a pen's height; its track runs from
+        // after the label (16 + 64 + 12) to before the value (44 + 12 + 16); the window's y
+        // runs upward
+        let rowY = 400 - (30 + Chrome.target / 2)
+        let trackStart: CGFloat = 16 + 64 + 12, trackEnd = Chrome.panelWidth - 16 - 44 - 12
+        let low = NSPoint(x: trackStart + 16, y: rowY), high = NSPoint(x: trackEnd - 16, y: rowY)
         send(.leftMouseDown, at: low, time: 1)
         send(.leftMouseUp, at: low, time: 1.1)
         RunLoop.main.run(until: Date().addingTimeInterval(0.1))
-        XCTAssertLessThan(viewModel.brushSize, 10, "the knob went to the pen at the low end: \(viewModel.brushSize)")
+        XCTAssertLessThan(viewModel.brushSize, 10, "the mark went to the pen at the low end: \(viewModel.brushSize)")
         send(.leftMouseDown, at: high, time: 2)
         send(.leftMouseUp, at: high, time: 2.1)
         RunLoop.main.run(until: Date().addingTimeInterval(0.1))
         XCTAssertGreaterThan(viewModel.brushSize, 30, "and at the high end: \(viewModel.brushSize)")
+        let scroll = try XCTUnwrap(host.firstDescendant(of: PenScrollView.self))
+        XCTAssertEqual(scroll.contentView.bounds.origin.y, 0, "the list did not scroll")
     }
 
     func testResettingTheViewMakesItUprightUnflippedAndFitted() throws {

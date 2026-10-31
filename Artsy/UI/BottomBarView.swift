@@ -32,10 +32,11 @@ struct BottomBarView: View {
                 full
             }
         }
-        .padding(.horizontal, chrome.isPhone ? 6 : 10)
+        .padding(.horizontal, chrome.isPhone ? 6 : 14)
         .frame(height: Chrome.barHeight)
         .frame(maxWidth: .infinity)
         .background(Chrome.background)
+        .overlay(alignment: .top) { Rectangle().fill(Chrome.hairline).frame(height: 1) }
     }
 
     /// The compact bar: the same things, the quick values as buttons that open their
@@ -61,7 +62,7 @@ struct BottomBarView: View {
             }
             ColorSwatchButton(viewModel: viewModel)
             Spacer(minLength: 4)
-            ChromeButton(systemImage: "square.3.layers.3d", badge: viewModel.layerStack?.layers.count, size: target, help: "Layers") {
+            ChromeButton(systemImage: "square.on.square", badge: viewModel.layerStack?.layers.count, size: target, help: "Layers") {
                 showingLayers = true
             }
             .panelPopover(isPresented: $showingLayers) {
@@ -86,7 +87,7 @@ struct BottomBarView: View {
     }
 
     private var full: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: 16) {
             DocumentMenu(viewModel: viewModel, actions: actions)
             Spacer(minLength: 8)
             BrushPill(viewModel: viewModel, previews: previews, actions: actions)
@@ -94,7 +95,7 @@ struct BottomBarView: View {
             ValuePill(title: "Opacity", value: $viewModel.brushOpacity, range: 0.05...1, logarithmic: false) { "\(Int(($0 * 100).rounded()))%" }
             ColorSwatchButton(viewModel: viewModel)
             Spacer(minLength: 8)
-            ChromeButton(systemImage: "square.3.layers.3d", label: "Layers",
+            ChromeButton(systemImage: "square.on.square", label: "Layers",
                          isSelected: chrome.isWide && viewModel.isLayersDocked,
                          badge: viewModel.layerStack?.layers.count, help: "Layers") {
                 if chrome.isWide {
@@ -168,7 +169,7 @@ struct DocumentMenu: View {
                     if viewModel.isDirty { Text("•").font(Chrome.font) }
                 } else {
                     Text((viewModel.isDirty ? "• " : "") + viewModel.displayName)
-                        .font(Chrome.font)
+                        .font(Chrome.futura(14, bold: true))
                         .lineLimit(1)
                 }
             }
@@ -249,18 +250,17 @@ struct BrushPill: View {
                 }
                 if !compact {
                     Text(viewModel.currentBrush.name)
-                        .font(Chrome.font)
+                        .font(Chrome.futura(14))
                         .foregroundColor(Chrome.text)
                         .lineLimit(1)
                 }
-                Image(systemName: "chevron.up")
-                    .font(.system(size: 10, weight: .semibold))
+                Image(systemName: "arrowtriangle.up.fill")
+                    .font(.system(size: 8))
                     .foregroundColor(Chrome.secondaryText)
             }
-            .padding(.horizontal, compact ? 8 : 12)
+            .padding(.horizontal, compact ? 6 : 2)
             .frame(height: 36)
-            .background(Capsule().fill(Chrome.control))
-            .contentShape(Capsule())
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .help("Brush")
@@ -292,8 +292,8 @@ struct ValueButton: View {
                     .foregroundColor(Chrome.secondaryText)
             }
             .frame(width: size, height: size)
-            .background(RoundedRectangle(cornerRadius: 10).fill(Chrome.control))
-            .contentShape(RoundedRectangle(cornerRadius: 10))
+            .overlay(Rectangle().strokeBorder(Chrome.hairline))
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .help(title)
@@ -317,33 +317,33 @@ struct ValuePill: View {
     let format: (Float) -> String
     @State private var dragStart: CGFloat?
 
-    static let trackWidth: CGFloat = 70
-    private static let thumb: CGFloat = 16
+    static let trackWidth: CGFloat = 84
+    private static let thumb: CGFloat = Chrome.mark
 
     var body: some View {
-        HStack(spacing: 8) {
-            Text(title)
-                .font(Chrome.labelFont)
+        HStack(spacing: 10) {
+            Text(title.lowercased())
+                .font(Chrome.sectionFont)
+                .tracking(Chrome.sectionTracking)
                 .foregroundColor(Chrome.secondaryText)
+                .lineLimit(1)
+                // The word keeps its width; the bar's spacers give way before it does
+                .fixedSize()
             ZStack(alignment: .leading) {
-                Capsule()
-                    .fill(Chrome.hairline)
-                    .frame(height: 4)
-                Circle()
-                    .fill(Chrome.text)
-                    .frame(width: Self.thumb, height: Self.thumb)
+                Rectangle()
+                    .fill(Chrome.track)
+                    .frame(height: 1)
+                Mark()
                     .offset(x: position * (Self.trackWidth - Self.thumb))
             }
             .frame(width: Self.trackWidth, height: 20)
             Text(format(value))
                 .font(Chrome.valueFont)
                 .foregroundColor(Chrome.text)
-                .frame(width: 38, alignment: .trailing)
+                .frame(width: 38, alignment: .leading)
         }
-        .padding(.horizontal, 12)
         .frame(height: 36)
-        .background(Capsule().fill(Chrome.control))
-        .contentShape(Capsule())
+        .contentShape(Rectangle())
         .gesture(
             DragGesture(minimumDistance: 0)
                 .onChanged { drag in
@@ -387,10 +387,10 @@ struct ColorSwatchButton: View {
     var body: some View {
         ZStack(alignment: .topLeading) {
             Button(action: { showingBackground = true }) {
-                RoundedRectangle(cornerRadius: 7)
+                Circle()
                     .fill(viewModel.swapBackgroundColor.displayColor)
-                    .frame(width: 36, height: 36)
-                    .overlay(RoundedRectangle(cornerRadius: 7).stroke(Color.white.opacity(0.25), lineWidth: 1))
+                    .frame(width: 34, height: 34)
+                    .overlay(Circle().stroke(Chrome.hairline, lineWidth: 1))
             }
             .buttonStyle(.plain)
             .help("Background colour")
@@ -401,10 +401,10 @@ struct ColorSwatchButton: View {
                 )
             }
             Button(action: { showingForeground = true }) {
-                RoundedRectangle(cornerRadius: 5)
+                Circle()
                     .fill(viewModel.foregroundColor.displayColor)
                     .frame(width: 24, height: 24)
-                    .overlay(RoundedRectangle(cornerRadius: 5).stroke(Color.white.opacity(0.6), lineWidth: 1))
+                    .overlay(Circle().stroke(Chrome.background, lineWidth: 2))
             }
             .buttonStyle(.plain)
             .help("Colour (X swaps the two)")
@@ -471,12 +471,10 @@ struct AdjustPanelView: View {
                             .frame(width: 60, alignment: .leading)
                         ForEach(Self.gridSpacings, id: \.self) { spacing in
                             let selected = Int(viewModel.guides.gridSpacing) == spacing
-                            Button("\(spacing)") { actions.changeGuides { $0.gridSpacing = CGFloat(spacing) } }
-                                .buttonStyle(.plain)
-                                .font(Chrome.valueFont)
-                                .foregroundColor(selected ? Chrome.text : Chrome.secondaryText)
-                                .frame(width: 44, height: 36)
-                                .background(RoundedRectangle(cornerRadius: 8).fill(selected ? Chrome.selected : Chrome.control))
+                            SquareChoice(text: "\(spacing)", isSelected: selected, help: "Grid every \(spacing) pixels") {
+                                actions.changeGuides { $0.gridSpacing = CGFloat(spacing) }
+                            }
+                            .frame(width: 44)
                         }
                     }
                     .padding(.horizontal, 20)
@@ -496,10 +494,10 @@ struct AdjustPanelView: View {
                         ForEach(Self.papers, id: \.name) { paper in
                             let selected = abs(viewModel.canvasBackgroundColor.r - paper.grey) < 0.01
                             Button(action: { viewModel.canvasBackgroundColor = (paper.grey, paper.grey, paper.grey) }) {
-                                RoundedRectangle(cornerRadius: 8)
+                                Rectangle()
                                     .fill(Color(white: paper.grey))
                                     .frame(width: 44, height: 36)
-                                    .overlay(RoundedRectangle(cornerRadius: 8).stroke(selected ? Color.accentColor : Chrome.hairline, lineWidth: selected ? 2 : 1))
+                                    .overlay(Rectangle().stroke(selected ? Chrome.accent : Chrome.hairline, lineWidth: selected ? 2 : 1))
                             }
                             .buttonStyle(.plain)
                             .help(paper.name)
@@ -531,23 +529,16 @@ struct SymmetryButtons: View {
                 mode("Quad", systemImage: "square.grid.2x2.fill", .quad)
             }
             HStack(spacing: 6) {
-                Text("Radial")
-                    .font(Chrome.font)
+                Text("radial")
+                    .font(Chrome.sectionFont)
+                    .tracking(Chrome.sectionTracking)
                     .foregroundColor(Chrome.secondaryText)
                     .frame(width: 60, alignment: .leading)
                 ForEach(Self.radialChoices, id: \.self) { n in
                     let selected = viewModel.symmetryMode == .radial(n)
-                    Button(action: { viewModel.symmetryMode = .radial(n) }) {
-                        Text("\(n)")
-                            .font(Chrome.valueFont)
-                            .frame(maxWidth: .infinity)
-                            .frame(height: 40)
-                            .background(RoundedRectangle(cornerRadius: 8).fill(selected ? Chrome.selected : Chrome.control))
-                            .contentShape(RoundedRectangle(cornerRadius: 8))
+                    SquareChoice(text: "\(n)", isSelected: selected, height: 40, help: "Strokes repeat \(n) ways around the centre") {
+                        viewModel.symmetryMode = .radial(n)
                     }
-                    .buttonStyle(.plain)
-                    .foregroundColor(selected ? Chrome.text : Chrome.secondaryText)
-                    .help("Strokes repeat \(n) ways around the centre")
                 }
             }
         }
@@ -559,22 +550,10 @@ struct SymmetryButtons: View {
 
     private func mode(_ label: String, systemImage: String, _ mode: SymmetryMode) -> some View {
         let selected = viewModel.symmetryMode == mode
-        return Button(action: { viewModel.symmetryMode = mode }) {
-            VStack(spacing: 3) {
-                Image(systemName: systemImage)
-                    .font(.system(size: 18))
-                Text(label)
-                    .font(Chrome.labelFont)
-                    .lineLimit(1)
-            }
-            .frame(maxWidth: .infinity)
-            .frame(height: Self.modeHeight)
-            .background(RoundedRectangle(cornerRadius: 8).fill(selected ? Chrome.selected : Chrome.control))
-            .contentShape(RoundedRectangle(cornerRadius: 8))
+        return SquareChoice(systemImage: systemImage, text: label.lowercased(), isSelected: selected, height: Self.modeHeight,
+                            font: Chrome.labelFont, help: mode == .off ? "No symmetry" : "Strokes mirror across the canvas") {
+            viewModel.symmetryMode = mode
         }
-        .buttonStyle(.plain)
-        .foregroundColor(selected ? Chrome.text : Chrome.secondaryText)
-        .help(mode == .off ? "No symmetry" : "Strokes mirror across the canvas")
     }
 }
 
@@ -655,13 +634,14 @@ struct ChromePillView: View {
                     }
                 }
                 .padding(6)
-                .background(RoundedRectangle(cornerRadius: 14).fill(Chrome.background.opacity(0.92)))
+                .background(Rectangle().fill(Chrome.background.opacity(0.92)))
+                .overlay(Rectangle().strokeBorder(Chrome.hairline))
                 .transition(.scale(scale: 0.4, anchor: .bottomLeading).combined(with: .opacity))
             } else {
                 Button { viewModel.isPillOpen = true } label: {
                     ZStack {
                         Circle().fill(Chrome.background.opacity(0.3))
-                        Circle().strokeBorder(Color.white.opacity(0.2), lineWidth: 1)
+                        Circle().strokeBorder(Chrome.text.opacity(0.3), lineWidth: 1)
                         Circle()
                             .fill(viewModel.foregroundColor.displayColor.opacity(0.65))
                             .frame(width: 12, height: 12)
@@ -687,10 +667,9 @@ struct ZoomHUDView: View {
     var body: some View {
         Text("\(Int((viewModel.transform.scale * 100).rounded()))%")
             .font(Chrome.valueFont)
-            .foregroundColor(Chrome.text)
+            .foregroundColor(Chrome.secondaryText)
             .padding(.horizontal, 12)
             .frame(height: 28)
-            .background(Capsule().fill(Chrome.background.opacity(0.9)))
             .opacity(visible ? 1 : 0)
             .allowsHitTesting(false)
             .onChange(of: viewModel.transform.scale) { _, _ in
