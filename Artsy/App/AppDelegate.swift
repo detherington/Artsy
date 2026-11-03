@@ -789,6 +789,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         diagnosticsItem.submenu = diagnosticsMenu
         helpMenu.addItem(withTitle: "Keyboard Shortcuts", action: #selector(showShortcuts), keyEquivalent: "/")
         helpMenu.addItem(NSMenuItem.separator())
+        helpMenu.addItem(withTitle: "Artsy Support", action: #selector(openSupport), keyEquivalent: "")
+        helpMenu.addItem(withTitle: "Privacy Policy", action: #selector(openPrivacyPolicy), keyEquivalent: "")
+        helpMenu.addItem(NSMenuItem.separator())
         helpMenu.addItem(diagnosticsItem)
         helpMenuItem.submenu = helpMenu
         NSApp.helpMenu = helpMenu
@@ -971,6 +974,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private var shortcutsWindow: NSWindow?
 
     /// Every key the app answers to, in one sheet.
+    @objc private func openSupport() { NSWorkspace.shared.open(ArtsyLinks.support) }
+    @objc private func openPrivacyPolicy() { NSWorkspace.shared.open(ArtsyLinks.privacy) }
+
     @objc private func showShortcuts() {
         let window = shortcutsWindow ?? {
             let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 420, height: 640),

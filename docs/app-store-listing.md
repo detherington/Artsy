@@ -12,10 +12,11 @@ in `mac-app-store.md`, and what the listing needs for it is at the end of this p
    2026-10-26 as a universal App ID, through the App Store Connect API; an archive's
    automatic provisioning only takes a wildcard profile and registers nothing), SKU
    `artsy-ios`. Full access.
-2. **The privacy policy URL.** The listing needs one. `docs/privacy-policy.md` is the
-   text; it needs a home on the web, which the repository's GitHub Pages can be
-   (Settings → Pages, from `docs/`), giving
-   `https://detherington.github.io/Artsy/privacy-policy`.
+2. **The site.** artsydraw.com, on Cloudflare: `site/public` holds the front page, the
+   support page and the privacy policy (the text of `docs/privacy-policy.md`), served by
+   a Worker of static files; `wrangler deploy --config site/wrangler.toml` from the
+   repository publishes it and makes the custom domains. The listing's three URLs point
+   there, and support@artsydraw.com is the contact (added 2026-11-03).
 3. **The API key's role.** The App Store Connect API key in the environment must have
    the App Manager role (or above) for cloud signing to make the distribution
    certificate and profile on its own.
@@ -45,9 +46,10 @@ in `mac-app-store.md`, and what the listing needs for it is at the end of this p
   > Made for iPad Pro and the Apple Pencil, and for iPhone.
 
 - **Keywords:** sketch,paint,drawing,pencil,watercolor,oil,brush,canvas,art,procreate,layers,ipad
-- **Support URL:** https://github.com/detherington/Artsy
-- **Marketing URL:** none yet
-- **Privacy policy URL:** see above
+- **Support URL:** https://artsydraw.com/support
+- **Marketing URL:** https://artsydraw.com
+- **Privacy policy URL:** https://artsydraw.com/privacy
+- **Support email:** support@artsydraw.com (the review contact too)
 - **App privacy (the questionnaire):** Data not collected. The optional AI and stock
   services are third parties the user sends to under their own keys; the questionnaire
   asks about data the developer collects, which is none.
@@ -96,3 +98,26 @@ only, which the listing states as "Requires a Mac with Apple silicon".
 - **Review notes:** the same as iOS's (the AI and stock image panels need the reviewer's
   own keys; the app works fully without them).
 - **Version:** the Mac's own, from `Artsy/App/Info.plist`; it need not match iOS's.
+
+## The submission, prepared 2026-11-03
+
+Everything the API can set is set by two scripts, both through `scripts/asc.py` (the
+ES256 token over the release scripts' key):
+
+- `scripts/asc-listing.py` writes the record: content rights, the two categories, the
+  subtitle and privacy policy URL, the age rating (every answer none, 4+), each
+  platform's description, keywords, support and marketing URLs and promotional text,
+  the copyright, the latest valid build attached to each version, the price (free)
+  and availability (every territory). The review contact and notes go in too once
+  `ARTSY_REVIEW_PHONE` is in the environment: App Store Connect refuses the contact
+  without a phone number. `--show` prints what is there.
+- `scripts/asc-screenshots.py <folder>` replaces each device's screenshot set from PNGs
+  named `ipad-1-….png`, `iphone-2-….png`, `mac-1-….png`: the 13-inch iPad set
+  (2064×2752), the iPhone set (1320×2868) and the Mac set (2880×1800). The first set,
+  a watercolour landscape painted on the simulator with the chrome, the brushes, the
+  layers and the start screen, is kept under `build/screenshots`.
+
+By hand in App Store Connect, each once: App Privacy → "Data Not Collected"; the review
+contact's phone number (or the environment variable above and the listing script again);
+then Add for Review on each platform. The site is published with
+`wrangler deploy --config site/wrangler.toml` from the repository.

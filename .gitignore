@@ -42,3 +42,7 @@ Package.pins
 # Scratch
 *.tmp
 *.log
+
+# wrangler state
+.wrangler/
+site/.wrangler/

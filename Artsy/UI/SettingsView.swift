@@ -309,6 +309,15 @@ struct GeneralSettingsView: View {
                     .padding(4)
                 }
 
+                GroupBox("Support") {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Link("Artsy support, at artsydraw.com", destination: ArtsyLinks.support)
+                        Link("Privacy policy", destination: ArtsyLinks.privacy)
+                        Link("support@artsydraw.com", destination: ArtsyLinks.email)
+                    }
+                    .padding(4)
+                }
+
                 GroupBox("New Canvas") {
                     VStack(alignment: .leading, spacing: 12) {
                         // Default canvas size preset picker

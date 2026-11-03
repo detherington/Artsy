@@ -1,6 +1,6 @@
 # Artsy privacy policy
 
-*26 October 2026*
+*3 November 2026*
 
 Artsy is a sketching and painting app for Mac, iPad and iPhone. It keeps what you make
 on your device, and in your own iCloud Drive if you put it there.
@@ -29,5 +29,5 @@ or share from the app; it is never sent anywhere on its own.
 
 **Changes.** If this policy changes, the date above changes with it.
 
-**Contact.** Questions go to the developer through the app's page on GitHub,
-https://github.com/detherington/Artsy.
+**Contact.** Questions go to support@artsydraw.com. The policy is published at
+https://artsydraw.com/privacy.
