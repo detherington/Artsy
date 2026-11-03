@@ -168,3 +168,11 @@ struct PanelPopover<Panel: View>: ViewModifier {
         }
     }
 }
+
+/// Where the app points when it sends the painter out of itself.
+enum ArtsyLinks {
+    static let site = URL(string: "https://artsydraw.com")!
+    static let support = URL(string: "https://artsydraw.com/support")!
+    static let privacy = URL(string: "https://artsydraw.com/privacy")!
+    static let email = URL(string: "mailto:support@artsydraw.com")!
+}

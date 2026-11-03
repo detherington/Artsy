@@ -1,0 +1,15 @@
+# artsydraw.com: the app's site, static files served by a Cloudflare Worker with no
+# script of its own. From the repository: wrangler deploy --config site/wrangler.toml
+# (wrangler is logged in with Darrell's account; the custom domains are made by the
+# deploy, the zone being on the same account).
+name = "artsydraw"
+compatibility_date = "2026-11-01"
+routes = [
+  { pattern = "artsydraw.com", custom_domain = true },
+  { pattern = "www.artsydraw.com", custom_domain = true },
+]
+
+[assets]
+directory = "./public"
+html_handling = "auto-trailing-slash"
+not_found_handling = "404-page"
