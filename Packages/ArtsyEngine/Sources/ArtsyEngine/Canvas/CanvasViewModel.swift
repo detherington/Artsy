@@ -188,6 +188,9 @@ public final class CanvasViewModel: ObservableObject {
     /// The drawn font the next balloon is set in, over its face; nil for the face alone.
     @Published public var balloonDrawnFont: UUID?
     @Published public var balloonCaps = true
+    /// The look last given a balloon of each kind, which the next one of that kind takes;
+    /// a kind with none takes the plain look.
+    @Published public var balloonLooks: [BalloonStyle: BalloonLook] = [:]
     /// The Letter tool's gesture in progress.
     var letteringGesture: LetteringGesture?
     /// The last step saved by a lettering change, to fold the next one into it.

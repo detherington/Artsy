@@ -84,8 +84,9 @@ extension CanvasViewModel {
             case .body:
                 balloon.center.x += dx
                 balloon.center.y += dy
-                // The tail goes with it; its tip is pointed on its own
-                if let tail = balloon.tail { balloon.tail = CGPoint(x: tail.x + dx, y: tail.y + dy) }
+                // The tail goes with it, unless its tip is pinned to its speaker; its tip is
+                // pointed on its own
+                if let tail = balloon.tail, !balloon.tailPinned { balloon.tail = CGPoint(x: tail.x + dx, y: tail.y + dy) }
             case .tail:
                 balloon.tail = point
             case .width:
@@ -129,7 +130,8 @@ extension CanvasViewModel {
         // A drawn font since deleted is not carried on
         let drawn = balloonDrawnFont.flatMap { DrawnFontLibrary.shared.font(id: $0)?.id }
         let balloon = Balloon.new(balloonStyle, at: point, face: balloonFace, drawnFont: drawn,
-                                  fontSize: Balloon.fontSize(canvasWidth: canvasSize.width), allCaps: balloonCaps)
+                                  fontSize: Balloon.fontSize(canvasWidth: canvasSize.width), allCaps: balloonCaps,
+                                  look: balloonLook(for: balloonStyle))
         layer.lettering = (layer.lettering ?? []) + [balloon]
         renderer.drawLettering(layer.lettering ?? [], into: layer, in: BalloonLayout(balloon).bounds)
         renderer.updateThumbnail(for: layer)
@@ -155,6 +157,58 @@ extension CanvasViewModel {
         }
         changeBalloon(id, renderer: renderer, change)
         renderer.updateThumbnail(for: layer)
+    }
+
+    /// The look the next balloon of `style` takes: the one last given a balloon of that kind.
+    public func balloonLook(for style: BalloonStyle) -> BalloonLook {
+        balloonLooks[style] ?? BalloonLook()
+    }
+
+    /// Gives the picked-up balloon `look`, as a step called `kind`, and keeps it for the next
+    /// balloon of that kind; with none picked up, only keeps it for the next balloon of the
+    /// kind chosen. `addingTail` puts a tail on a balloon that has none, as choosing a tail's
+    /// shape does.
+    public func setBalloonLook(_ look: BalloonLook, as kind: String, addingTail: Bool = false, renderer: CanvasRenderer?) {
+        guard let balloon = selectedBalloon else {
+            balloonLooks[balloonStyle] = look
+            return
+        }
+        balloonLooks[balloon.style] = look
+        // Nothing to change is no step
+        let tails = addingTail && balloon.style.hasTail && balloon.tail == nil
+        guard let renderer, balloon.look != look || tails else { return }
+        changeSelectedBalloon(kind, renderer: renderer) { b in
+            b.look = look
+            if addingTail, b.style.hasTail, b.tail == nil {
+                b.tail = Balloon.new(b.style, at: b.center, face: b.face, fontSize: b.fontSize, allCaps: b.allCaps).tail
+            }
+        }
+    }
+
+    /// Pins the picked-up balloon's tail tip where it is on the page, so it stays pointing at
+    /// its speaker as the balloon moves, or unpins it to go with the balloon; a step either way.
+    public func pinSelectedTail(_ pinned: Bool, renderer: CanvasRenderer?) {
+        guard let renderer, let balloon = selectedBalloon, balloon.tailPinned != pinned else { return }
+        changeSelectedBalloon(pinned ? "Pin Tail" : "Unpin Tail", renderer: renderer) { $0.tailPinned = pinned }
+    }
+
+    /// Makes the next balloon `style`, and the picked-up one too, as a step: it takes the new
+    /// kind's shape and tail, keeping its line and fill, and a balloon that comes to speak
+    /// gets a tail.
+    public func restyleSelectedBalloon(_ style: BalloonStyle, renderer: CanvasRenderer?) {
+        balloonStyle = style
+        guard let selected = selectedBalloon, selected.style != style, let renderer else { return }
+        let kept = balloonLook(for: style)
+        changeSelectedBalloon("Balloon Style", renderer: renderer) { balloon in
+            let before = balloon.style
+            balloon.style = style
+            balloon.look.shape = kept.shape
+            balloon.look.tail = kept.tail
+            if style.hasTail, !before.hasTail, balloon.tail == nil {
+                balloon.tail = Balloon.new(style, at: balloon.center, face: balloon.face, fontSize: balloon.fontSize,
+                                           allCaps: balloon.allCaps).tail
+            }
+        }
     }
 
     /// Takes the picked-up balloon off the page.

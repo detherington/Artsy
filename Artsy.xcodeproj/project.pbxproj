@@ -37,6 +37,7 @@
 		4A60AA9347B8C91E38A47345 /* ShapeSnapTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79B9FF41588D343B45C80EE9 /* ShapeSnapTests.swift */; };
 		910557AE248C5E6C2EB1180D /* ScaleTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 906151D16DF5DF8303645279 /* ScaleTests.swift */; };
 		A4D9478CA72ABD94AC239F57 /* LetteringTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CF43D8B5ACBBDF0BC8CBA5DA /* LetteringTests.swift */; };
+		3A9CE334EA02E3941F29D370 /* BalloonLookTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D69C5570F03012F38CE28242 /* BalloonLookTests.swift */; };
 		6990FF67C1DF2C9307D6C40D /* DrawnFontFamilyTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF0D3B6EA401832BC3B70224 /* DrawnFontFamilyTests.swift */; };
 		96E0F905127FD4934B2327C1 /* DrawnFontTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0D30A3E2D91A3C9F065E1A90 /* DrawnFontTests.swift */; };
 		9910EAD68BCB245F1F2FD01D /* PanelLayoutTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3EB7258DA1CFCC0FEF7B3F66 /* PanelLayoutTests.swift */; };
@@ -115,6 +116,7 @@
 		79B9FF41588D343B45C80EE9 /* ShapeSnapTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShapeSnapTests.swift; sourceTree = "<group>"; };
 		906151D16DF5DF8303645279 /* ScaleTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScaleTests.swift; sourceTree = "<group>"; };
 		CF43D8B5ACBBDF0BC8CBA5DA /* LetteringTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LetteringTests.swift; sourceTree = "<group>"; };
+		D69C5570F03012F38CE28242 /* BalloonLookTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BalloonLookTests.swift; sourceTree = "<group>"; };
 		BF0D3B6EA401832BC3B70224 /* DrawnFontFamilyTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DrawnFontFamilyTests.swift; sourceTree = "<group>"; };
 		0D30A3E2D91A3C9F065E1A90 /* DrawnFontTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DrawnFontTests.swift; sourceTree = "<group>"; };
 		3EB7258DA1CFCC0FEF7B3F66 /* PanelLayoutTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PanelLayoutTests.swift; sourceTree = "<group>"; };
@@ -295,6 +297,7 @@
 				79B9FF41588D343B45C80EE9 /* ShapeSnapTests.swift */,
 				906151D16DF5DF8303645279 /* ScaleTests.swift */,
 				CF43D8B5ACBBDF0BC8CBA5DA /* LetteringTests.swift */,
+				D69C5570F03012F38CE28242 /* BalloonLookTests.swift */,
 				BF0D3B6EA401832BC3B70224 /* DrawnFontFamilyTests.swift */,
 				0D30A3E2D91A3C9F065E1A90 /* DrawnFontTests.swift */,
 				3EB7258DA1CFCC0FEF7B3F66 /* PanelLayoutTests.swift */,
@@ -617,6 +620,7 @@
 				4A60AA9347B8C91E38A47345 /* ShapeSnapTests.swift in Sources */,
 				910557AE248C5E6C2EB1180D /* ScaleTests.swift in Sources */,
 				A4D9478CA72ABD94AC239F57 /* LetteringTests.swift in Sources */,
+				3A9CE334EA02E3941F29D370 /* BalloonLookTests.swift in Sources */,
 				6990FF67C1DF2C9307D6C40D /* DrawnFontFamilyTests.swift in Sources */,
 				96E0F905127FD4934B2327C1 /* DrawnFontTests.swift in Sources */,
 				9910EAD68BCB245F1F2FD01D /* PanelLayoutTests.swift in Sources */,

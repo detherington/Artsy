@@ -54,11 +54,91 @@ effects, on a layer of their own over the art.
   The selected balloon's box and handles are drawn by the Mac's overlay and the iPad's
   marks overlay.
 
+## Shapes and styles (branch `balloon-looks`)
+
+Each kind of balloon comes in more than one shape, and any balloon can be inked another
+way: a whisper's dashes, a radio's zigzag, a narrator's yellow box, a monster's black
+balloon with white words.
+
+### What the artist does
+
+- In the lettering panel, under the kinds, four rows choose the balloon's **look**, each
+  choice a small picture of the balloon as it would be:
+  - **shape**, by kind. Speech: oval, rounded, box, wobbly (drawn by hand). Thought:
+    cloud, puffy, oval. Shout: burst, jagged (a rough edge, for anger), blast (uneven
+    spikes, for an explosion). Caption: box, rounded, slanted, notched.
+  - **line**: solid, heavy, dashed (a whisper), double, wavy (a weak or trembling
+    voice), electric (a zigzag edge, for a radio, phone or robot), none.
+  - **fill**: white, cream, yellow, blue, pink, black (its words then white).
+  - **tail** (for the kinds with one): curved, straight, bubbles, lightning (a zigzag,
+    for a voice from a speaker). Choosing one puts a tail on a balloon that had none.
+  - **width**: the tail narrower or wider, 30% to 300% in steps of a quarter (its base,
+    a lightning band, the bubbles' size). And, with a balloon picked up, **tip**: pins
+    the tail's tip where it is on the page, on its speaker, so moving the balloon leaves
+    the tip there and the tail stretches back to it; unpinned, the tip goes with the
+    balloon as before. A pinned tip's round handle has a ring (iPad) or dot (Mac) in it,
+    and is still dragged to point it.
+- With a balloon picked up, a choice changes it as one step to undo. With none, it sets
+  the next balloon of that kind: each kind keeps the look last given to one, so captions
+  stay yellow while speech stays white.
+- Changing a balloon's kind gives it that kind's shape and tail; its line and fill stay.
+
+### How it is built
+
+- **`BalloonLook`** (engine, `Lettering/BalloonLook.swift`): shape and tail shape
+  (each nil for the kind's own), line and fill. A `Balloon` carries one; it is saved
+  only where it is not the plain look, so documents from before read as they were and
+  older builds ignore it. A shape the kind does not offer reads as the kind's own.
+- **The shapes** are drawn by the same layout as before: the defaults (oval and curved
+  tail, cloud and bubbles, burst and straight tail, box) are exactly the shapes balloons
+  had, so nothing already lettered moves. Boxes and rounded boxes sit round the words
+  with a margin; a slanted caption leans its sides; the irregular shapes (wobbly, jagged,
+  blast) are seeded from the balloon's id, as the cloud is, so each keeps its own outline.
+- **Tails** grow from the ellipse inside the body, as before, for any shape: the wedge,
+  straight or curved; the bubbles from where the line to the tip leaves the body; the
+  lightning a zigzag band that tapers to the tip.
+- **Lines**: dashed, double and heavy are how the outline is stroked (double is a wide
+  black stroke with a thin one in the fill over it). Wavy and electric reshape the
+  body's outline before its tail joins it: the outline flattened, resampled evenly and
+  moved in and out along its normals, a whole number of waves round each loop, sized by
+  the line's width so they read at any size. None leaves the fill alone.
+- **The panel's pictures** are drawn by the engine (`BalloonLayout.preview`), a balloon
+  with no words fitted into the cell, laid out in points so its line is at least a point
+  and a half, on a tile of paper so a black line shows on the dark panel; they show the
+  real shapes in the current look. A choice edits the balloon's look as it is when
+  tapped, not as the panel last drew it, so quick choices in a row each keep.
+- **Tail width** is part of the look (`tailWidth`, saved when not 1): the base's spread
+  round the ellipse, which the lightning band follows, and the bubbles' radii. **A pinned
+  tip** is the balloon's (`tailPinned`, saved when set): a move of the body leaves its
+  tip where it is.
+
+## Status (2026-11-15, branch `balloon-looks`)
+
+- `BalloonLookTests` (14): the plain look draws every kind exactly as main at dce006a
+  did (path signatures measured there), so nothing lettered moves; every kind's every
+  shape in every line holds its words, wide or in a tall narrow block; a shape a kind
+  lacks reads as its own; the irregular shapes are each balloon's own; every tail of
+  every shape reaches its speaker and stops there, none from a tip inside; lightning
+  zigzags; widths scale the wedge, the lightning band and the bubbles; the lines (heavy
+  twice as wide, double reaching further, wavy and electric moving the outline in and
+  out); fills and white words in a black balloon, dashes with gaps, no line, read back
+  from pixels; the panel's pictures; saving, the plain look saving nothing and an
+  unknown shape reading as plain; each kind keeping its look for the next; changing kind
+  keeping the ink; a pinned tip staying as the balloon moves, still pointed by its
+  handle, pin and unpin as steps. With `LetteringTests` (12) all pass in the engine
+  package on the iPad simulator.
+- Contact sheets rendered of every shape, line, fill, tail and width; the first wobbly
+  oval was too even and the first lightning tail crossed itself, both redrawn. Seen on
+  the iPad simulator: the panel's rows, a balloon given a rounded shape, an electric
+  line, a yellow fill and bubbles, and a pinned tip staying put as its balloon moved.
+- A first reading of "pin a start point" pinned where the tail leaves the balloon; Darrell
+  meant the tip, so that was taken out.
+
 ## Later
 
 - An OFL lettering face bundled with the app.
-- Balloons joined by a connector, double balloons, whisper (dashed) and radio (jagged
-  tail) styles; captions in a colour.
+- Balloons joined by a connector, double balloons.
+- Sound effects in a colour with an outline; a drop shadow; fills in any colour.
 - Text along a path for sound effects; bold and italic within a balloon.
 - Moving lettering between pages, and exporting it as its own layer for a translator.
 
