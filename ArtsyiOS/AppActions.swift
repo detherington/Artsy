@@ -26,6 +26,8 @@ extension AppModel {
             export(.png(bitsPerChannel: 16))
         case "handleExportJPEG":
             export(.jpeg)
+        case "handleExportSlices":
+            exportSlices()
         case "handleExportBrush":
             exportBrush()
         case "handleImportImage":
@@ -131,6 +133,22 @@ extension AppModel {
             share([url])
         } catch {
             show(error, doing: "exporting \(name)")
+        }
+    }
+
+    /// The canvas cut at its slice marks (a webtoon's, or WEBTOON's for any canvas without
+    /// them), the pieces through the share sheet, where Save to Files takes them all.
+    private func exportSlices() {
+        guard let session else { return }
+        ChromeActions.commitPendingEdits()
+        let name = session.viewModel.displayName
+        let slices = session.viewModel.guides.slices ?? .webtoon(canvasWidth: session.viewModel.canvasSize.width)
+        do {
+            let folder = try Self.scratchFolder()
+            let urls = try ImageExporter.exportSlices(renderer: session.renderer, slices: slices, to: folder, name: name)
+            share(urls)
+        } catch {
+            show(error, doing: "exporting \(name) in slices")
         }
     }
 

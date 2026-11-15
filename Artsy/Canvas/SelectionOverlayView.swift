@@ -81,7 +81,7 @@ class SelectionOverlayView: NSView {
     /// canvas, and transformed into the view, so they turn and zoom with the canvas.
     private func drawGuides(_ guides: CanvasGuides, canvasSize: CGSize, zoom: CGFloat, transform: CGAffineTransform) {
         let canvasRect = CGRect(origin: .zero, size: canvasSize)
-        func stroke(_ segments: [(CGPoint, CGPoint)], color: NSColor, width: CGFloat) {
+        func stroke(_ segments: [(CGPoint, CGPoint)], color: NSColor, width: CGFloat, dash: [CGFloat]? = nil) {
             let path = NSBezierPath()
             for (a, b) in segments {
                 if let (ca, cb) = liangBarskyClip(a: a, b: b, rect: canvasRect) {
@@ -90,6 +90,7 @@ class SelectionOverlayView: NSView {
                 }
             }
             path.lineWidth = width
+            if let dash { path.setLineDash(dash, count: dash.count, phase: 0) }
             color.setStroke()
             path.stroke()
         }
@@ -108,6 +109,11 @@ class SelectionOverlayView: NSView {
 
         if let page = guides.page, page.isShown {
             drawPageFrame(page, canvasSize: canvasSize, transform: transform)
+        }
+        if let slices = guides.slices, slices.isShown {
+            // A strip's cuts, dashed across it, in the page frame's blue
+            let cuts = slices.cuts(canvasHeight: canvasSize.height).map { (CGPoint(x: 0, y: $0), CGPoint(x: canvasSize.width, y: $0)) }
+            stroke(cuts, color: NSColor(cgColor: PageFrameStyle.line) ?? .systemBlue, width: 1, dash: PageFrameStyle.sliceDash)
         }
 
         let lines = guides.verticals.map { (CGPoint(x: $0, y: 0), CGPoint(x: $0, y: canvasSize.height)) }

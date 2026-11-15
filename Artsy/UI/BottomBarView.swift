@@ -144,6 +144,7 @@ struct DocumentMenu: View {
             Button("Export PNG…") { actions.app("handleExportPNG") }
             Button("Export PNG (16-bit)…") { actions.app("handleExportPNG16") }
             Button("Export JPEG…") { actions.app("handleExportJPEG") }
+            Button("Export Webtoon Slices…") { actions.app("handleExportSlices") }
             #else
             // The start screen is the screen behind this one; saving is continuous
             Button("Start") { actions.app("handleOpen") }
@@ -152,6 +153,7 @@ struct DocumentMenu: View {
             Button("Export PNG…") { actions.app("handleExportPNG") }
             Button("Export PNG (16-bit)…") { actions.app("handleExportPNG16") }
             Button("Export JPEG…") { actions.app("handleExportJPEG") }
+            Button("Export Webtoon Slices…") { actions.app("handleExportSlices") }
             Divider()
             Button("Settings…") { actions.app("showSettings") }
             Button("Keyboard Shortcuts…") { actions.app("showShortcuts") }
@@ -465,6 +467,10 @@ struct AdjustPanelView: View {
                         PanelRow(systemImage: "rectangle.dashed", label: "Page frame", note: page.isShown ? "On" : "Off",
                                  isSelected: page.isShown) { actions.changeGuides { $0.page?.isShown.toggle() } }
                     }
+                    if let slices = viewModel.guides.slices {
+                        PanelRow(systemImage: "rectangle.split.1x2", label: "Slice marks", note: slices.isShown ? "On" : "Off",
+                                 isSelected: slices.isShown) { actions.changeGuides { $0.slices?.isShown.toggle() } }
+                    }
                     PanelRow(systemImage: "grid", label: "Grid", note: viewModel.guides.showsGrid ? "On" : "Off",
                              isSelected: viewModel.guides.showsGrid) { actions.changeGuides { $0.showsGrid.toggle() } }
                     HStack(spacing: 6) {
@@ -560,7 +566,8 @@ struct SymmetryButtons: View {
     }
 }
 
-/// Things that put something on the canvas now and then: AI, stock images, imports.
+/// Things that put something on the canvas now and then: AI, stock images, a comic page's
+/// panels, imports.
 struct AddPanelView: View {
     @ObservedObject var viewModel: CanvasViewModel
     let actions: ChromeActions
@@ -575,6 +582,7 @@ struct AddPanelView: View {
             HStack(spacing: 6) {
                 SquareChoice(text: "ai generate", isSelected: section == 0, height: 36, font: Chrome.labelFont, help: "Generate an image") { section = 0 }
                 SquareChoice(text: "stock images", isSelected: section == 1, height: 36, font: Chrome.labelFont, help: "Search stock images") { section = 1 }
+                SquareChoice(text: "panels", isSelected: section == 2, height: 36, font: Chrome.labelFont, help: "Lay out a comic page's panels") { section = 2 }
             }
             .padding(.horizontal, 14)
             .padding(.bottom, 10)
@@ -583,8 +591,10 @@ struct AddPanelView: View {
                 VStack(spacing: 0) {
                     if section == 0 {
                         AIPanelView(viewModel: viewModel, aiManager: aiManager, actions: actions)
-                    } else {
+                    } else if section == 1 {
                         UnsplashPanelView(manager: unsplashManager, viewModel: viewModel, actions: actions)
+                    } else {
+                        PanelLayoutPicker(viewModel: viewModel, actions: actions, dismiss: dismiss)
                     }
                     Divider().overlay(Chrome.hairline).padding(.vertical, 8)
                     PanelRow(systemImage: "photo.on.rectangle", label: "Import an image…", note: "as a layer") {

@@ -90,12 +90,60 @@ square's side.
 - **Not snapped to.** The guide lines catch the pen within a few points; a frame that is
   always there would kink every stroke painted across the page's edges.
 
+## The black-and-white manga page
+
+`CanvasSizePreset.mangaBW`, "Manga B&W": the same B5 page, bleed and inner frame at
+600 dpi, 4441 × 6213, for ink and screentone. 27.6 megapixels, so a device offers it
+only if its square is at least 5,253 a side (`LayerStack.fits`); every Mac does.
+
+## Webtoon slices
+
+- **`SliceMarks`** (engine, `CanvasGuides.slices`): a cut every `height` canvas pixels
+  from the top, each piece exported `exportWidth` across. `SliceMarks.webtoon(canvasWidth:)`
+  is WEBTOON's: pieces of 800 × 1,280, so a cut every 1.6 widths; the Webtoon preset's
+  is every 2,560 pixels, three pieces. Saved with the guides, optional like the page.
+- **New canvases** take their marks the way they take a page frame:
+  `CanvasSizePreset.guides(for:)` replaces `page(for:)` and gives both.
+- **Drawn** as long dashes across the strip in the frame's blue, on the Mac with the
+  guides and on iPad in the overlay, renamed `FormatMarksOverlay` now that it draws more
+  than a page; shown or hidden from View ▸ Guides ▸ Show Slice Marks and a Slice marks
+  row in the Adjust panel.
+- **Export Webtoon Slices…** (File menu on the Mac, the canvas menu on iPad):
+  `ImageExporter.exportSlices` scales the whole lit canvas to the export width at once,
+  so the pieces meet without a seam, cuts it at the marks, top first, and writes JPEGs
+  at 0.9, encoded again down to 0.6 if a piece passes 2 MB. WEBTOON's handbook: under
+  800 × 1,280 and 2 MB a piece, JPG or PNG, file names of English letters and numbers
+  only; so the files are the canvas's name in letters and numbers and the piece's
+  number, `Canvas601.jpg`. The Mac writes them into a folder the user names; iPad hands
+  them to the share sheet, where Save to Files takes them all. A canvas with no marks
+  exports at WEBTOON's for its width.
+
+## Panel layouts
+
+- **`PanelLayout`** (engine): rows from the top, each a share of the height and its
+  panels' shares of the width. Nine: splash, two tiers, three tiers, four, six, nine,
+  two one two, wide top, stagger. `panels(in:gutter:)` lays them out in a page-shaped
+  rectangle (y down).
+- **Where**: inside the page's safe area, or inside a margin of a twentieth of the
+  shorter side on a canvas with no page (`PanelLayout.area`).
+- **Gutter and border** are shares of the area's width, so a page looks the same at any
+  resolution: medium is a 49-pixel gutter (about ⅛ inch) and a 10-pixel border (about
+  2 points) on a US page at 400 dpi.
+- **The layer**: `addLayer(to:renderer:gutter:border:)` draws the borders in black just
+  inside each panel on a transparent canvas-sized image (`borderImage`) and fills a new
+  "Panels" layer above the current one with it, the way an imported image is placed;
+  one step to undo.
+- **The picker** is a third section of the Add panel, "panels", on both Mac and iPad:
+  the layouts drawn small at the canvas's shape inside its safe area, gutter and border
+  choices, and "add panels".
+
 ## Later
 
 - More formats: European album, digest, magazine; the manga tankōbon (B6, or 5 × 7½
-  inches in the US editions); a 600-dpi manga page for black and white.
-- Webtoon: marks at each upload slice, and an export that slices.
-- Panel layouts: a page of panel borders drawn on a layer of their own, with gutters.
+  inches in the US editions).
+- Panels as frames that hold their art (each panel clipping what is drawn in it), bleed
+  panels that run past the trim, and a mirrored layout for right-to-left manga.
+- The sliced export as PNG as well as JPEG.
 - Export trimmed to the page as well as with its bleed.
 
 ## Status (2026-11-15, branch `comic-templates`)
@@ -131,3 +179,20 @@ square's side.
   Webtoon tiles (the strip would have been left out by the old longest-side rule); a
   manga canvas with its inner frame deeper at the head and foot than at the sides; a
   webtoon canvas with no frame, which takes a stroke.
+
+## Status (2026-11-15, branch `comic-tools`)
+
+- The 600-dpi manga page, webtoon slice marks with the sliced export, and panel
+  layouts. New tests: the B&W page, the webtoon's marks and where its pieces fall, the
+  sliced export (pieces scaled, cut top first, named for WEBTOON), the overlay drawing
+  and hiding the marks, and `PanelLayoutTests` (a grid's geometry, shares of a row, the
+  area inside a page or a margin, gutters and borders by width, and the layer of borders
+  the right way up, undone in one step). Full Mac suite: 354 tests, only the known
+  `ShellTests.testAPenHeldStillIsARightClick` failing.
+- Seen on the iPad simulator: the Manga B&W tile; a new webtoon with its two marks; the
+  sliced export handing three 800 × 1,280 JPEGs to the share sheet; the Add panel's
+  panels section on a manga page, a wide-top layout added inside the inner frame and
+  undone. Seen on the Mac: a webtoon canvas with its marks and the File menu's export.
+- Found in passing: the engine package's test target does not build on `main`, since
+  `PhotoCanvasTests`, `RecentCanvasesTests` and `TimelapseTests` import the Mac app with
+  no `#if canImport(Artsy)` and are not in the package's excludes. Not changed here.
