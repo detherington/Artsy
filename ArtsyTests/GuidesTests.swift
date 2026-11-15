@@ -134,9 +134,9 @@ final class GuidesTests: XCTestCase {
     /// A new canvas at a print format's pixels gets its frame, however the size was chosen;
     /// any other size gets none.
     func testANewCanvasAtAPrintFormatsSizeGetsItsFrame() {
-        XCTAssertEqual(CanvasSizePreset.page(for: CGSize(width: 2750, height: 4175)), CanvasSizePreset.usComic.page)
-        XCTAssertNil(CanvasSizePreset.page(for: CGSize(width: 4175, height: 2750)), "not turned on its side")
-        XCTAssertNil(CanvasSizePreset.page(for: CGSize(width: 2048, height: 2048)))
+        XCTAssertEqual(CanvasSizePreset.guides(for: CGSize(width: 2750, height: 4175)).page, CanvasSizePreset.usComic.page)
+        XCTAssertNil(CanvasSizePreset.guides(for: CGSize(width: 4175, height: 2750)).page, "not turned on its side")
+        XCTAssertEqual(CanvasSizePreset.guides(for: CGSize(width: 2048, height: 2048)), CanvasGuides(), "nothing for a plain size")
     }
 
     /// A manga page is B5 with 3 mm of bleed at 400 dpi, its inner frame of 150 × 220 mm
@@ -156,17 +156,90 @@ final class GuidesTests: XCTestCase {
             XCTAssertEqual(rect.midY, 4142 / 2, accuracy: 0.01)
         }
         XCTAssertGreaterThan(page.safe.minY - page.trim.minY, page.safe.minX - page.trim.minX, "deeper at the head and foot than at the sides")
-        XCTAssertEqual(CanvasSizePreset.page(for: CGSize(width: 2961, height: 4142)), page)
+        XCTAssertEqual(CanvasSizePreset.guides(for: CGSize(width: 2961, height: 4142)).page, page)
+    }
+
+    /// The black-and-white manga page is the same B5 page at 600 dpi: half as many pixels
+    /// again each way, and the frame with them.
+    func testTheBlackAndWhiteMangaPageIs600dpi() throws {
+        let manga = CanvasSizePreset.mangaBW
+        XCTAssertEqual(manga.width, 4441, "188 mm at 600 dpi")
+        XCTAssertEqual(manga.height, 6213, "263 mm")
+        let page = try XCTUnwrap(manga.page)
+        let px: CGFloat = 600 / 25.4
+        XCTAssertEqual(page.trim.width, 182 * px, accuracy: 0.01)
+        XCTAssertEqual(page.safe.height, 220 * px, accuracy: 0.01)
+        XCTAssertEqual(page.safe.midX, 4441 / 2, accuracy: 0.01)
+        XCTAssertEqual(CanvasSizePreset.guides(for: CGSize(width: 4441, height: 6213)).page, page)
     }
 
     /// A webtoon is a strip for the screen, twice WEBTOON's 800 pixels across and three of
-    /// its 1,280-pixel slices tall at that scale: no page, so no frame.
-    func testAWebtoonIsAStripWithNoFrame() {
+    /// its 1,280-pixel slices tall at that scale: no page, so no frame, but marked where
+    /// the export cuts it, every 2,560 pixels.
+    func testAWebtoonIsAStripMarkedForItsSlices() throws {
         let webtoon = CanvasSizePreset.webtoon
         XCTAssertEqual(webtoon.width, 2 * 800)
         XCTAssertEqual(webtoon.height, 3 * 2 * 1280)
         XCTAssertNil(webtoon.page)
-        XCTAssertNil(CanvasSizePreset.page(for: CGSize(width: 1600, height: 7680)))
+        let slices = try XCTUnwrap(webtoon.slices)
+        XCTAssertEqual(slices, SliceMarks(height: 2560, exportWidth: 800))
+        let guides = CanvasSizePreset.guides(for: CGSize(width: 1600, height: 7680))
+        XCTAssertNil(guides.page)
+        XCTAssertEqual(guides.slices, slices)
+        XCTAssertNil(CanvasSizePreset.guides(for: CGSize(width: 2750, height: 4175)).slices, "a page has none")
+    }
+
+    /// Slices run from the top, the last whatever is left; the cuts between them are in
+    /// canvas y, which runs up.
+    func testSlicesRunFromTheTop() {
+        let slices = SliceMarks(height: 2560, exportWidth: 800)
+        XCTAssertEqual(slices.pieces(canvasHeight: 7680), [0...2560, 2560...5120, 5120...7680])
+        XCTAssertEqual(slices.cuts(canvasHeight: 7680), [5120, 2560], "the first cut 2,560 down from the top")
+        XCTAssertEqual(slices.pieces(canvasHeight: 6000).last, 5120...6000, "a short last piece")
+        XCTAssertEqual(slices.pieces(canvasHeight: 2000), [0...2000], "a canvas shorter than a slice is one piece")
+        XCTAssertEqual(slices.cuts(canvasHeight: 2000), [])
+        XCTAssertEqual(SliceMarks.webtoon(canvasWidth: 1000).height, 1600, "1.6 widths for any canvas without marks")
+    }
+
+    /// The sliced export scales the strip to the export width and cuts it at the marks,
+    /// top first, as JPEGs named with letters and numbers only.
+    func testTheSlicedExportCutsAtTheMarks() throws {
+        // A strip 400 × 1500: red, green, blue bands of 500, top to bottom
+        let width = 400, height = 1500
+        let colorSpace = CGColorSpace(name: CGColorSpace.sRGB)!
+        let context = CGContext(data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: width * 4,
+                                space: colorSpace, bitmapInfo: CGImageAlphaInfo.noneSkipLast.rawValue)!
+        for (band, colour) in [(0, CGColor(srgbRed: 1, green: 0, blue: 0, alpha: 1)),
+                               (1, CGColor(srgbRed: 0, green: 1, blue: 0, alpha: 1)),
+                               (2, CGColor(srgbRed: 0, green: 0, blue: 1, alpha: 1))] {
+            context.setFillColor(colour)
+            // The context's y runs up: the top band is the highest
+            context.fill(CGRect(x: 0, y: height - (band + 1) * 500, width: width, height: 500))
+        }
+        let strip = context.makeImage()!
+        let folder = FileManager.default.temporaryDirectory.appendingPathComponent("ArtsySlices-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: folder) }
+
+        let urls = try ImageExporter.exportSlices(of: strip, slices: SliceMarks(height: 500, exportWidth: 200),
+                                                  to: folder, name: "My Episode #3", maxBytes: 2_000_000)
+        XCTAssertEqual(urls.map(\.lastPathComponent), ["MyEpisode301.jpg", "MyEpisode302.jpg", "MyEpisode303.jpg"])
+        for (url, expected) in zip(urls, [(1, 0, 0), (0, 1, 0), (0, 0, 1)]) {
+            let source = try XCTUnwrap(CGImageSourceCreateWithURL(url as CFURL, nil))
+            let image = try XCTUnwrap(CGImageSourceCreateImageAtIndex(source, 0, nil))
+            XCTAssertEqual(image.width, 200, "scaled to the export width")
+            XCTAssertEqual(image.height, 250)
+            let rep = NSBitmapImageRep(cgImage: image)
+            let middle = try XCTUnwrap(rep.colorAt(x: 100, y: 125)?.usingColorSpace(.sRGB))
+            // JPEG moves a saturated colour a little: the band's own channel leads by far
+            let channels = [middle.redComponent, middle.greenComponent, middle.blueComponent]
+            let band = [expected.0, expected.1, expected.2].firstIndex(of: 1)!
+            XCTAssertGreaterThan(channels[band], 0.75, url.lastPathComponent)
+            for other in 0..<3 where other != band {
+                XCTAssertLessThan(channels[other], 0.35, "\(url.lastPathComponent), channel \(other)")
+            }
+        }
+        XCTAssertEqual(ImageExporter.uploadName("Épisode – 12!"), "pisode12")
+        XCTAssertEqual(ImageExporter.uploadName("—"), "webtoon")
     }
 
     /// The start screen offers the formats by their pixels: on a device whose largest
@@ -177,6 +250,8 @@ final class GuidesTests: XCTestCase {
         let formats = ["US Comic", "Manga B5", "Webtoon"]
         let roomy = StartView.sizes(last: last, screen: nil, maxSide: 4096)
         for name in formats { XCTAssertTrue(roomy.contains { $0.name == name }, name) }
+        XCTAssertFalse(roomy.contains { $0.name == "Manga B&W" }, "27.6 megapixels is more than 4,096 squared")
+        XCTAssertTrue(StartView.sizes(last: last, screen: nil, maxSide: 5376).contains { $0.name == "Manga B&W" })
         let comic = roomy.first { $0.name == "US Comic" }
         XCTAssertEqual(comic?.width, 2750)
         XCTAssertEqual(comic?.height, 4175)
@@ -216,6 +291,37 @@ final class GuidesTests: XCTestCase {
         rep = try capture()
         XCTAssertEqual(pixel(20, 150).alphaComponent, 0, accuracy: 0.01, "hidden")
         XCTAssertEqual(pixel(10, 150).alphaComponent, 0, accuracy: 0.01, "the veil too")
+    }
+
+    /// Slice marks are dashed lines across the canvas at each cut, hidden with the switch.
+    func testTheOverlayDrawsSliceMarks() throws {
+        let viewModel = CanvasViewModel(canvasSize: CGSize(width: 400, height: 300))
+        viewModel.guides.slices = SliceMarks(height: 100, exportWidth: 200)
+        viewModel.transform.scale = 1
+        viewModel.transform.offset = CGPoint(x: -200, y: -150)
+        let overlay = SelectionOverlayView(frame: NSRect(x: 0, y: 0, width: 400, height: 300))
+        overlay.viewModel = viewModel
+        func capture() throws -> NSBitmapImageRep {
+            let rep = try XCTUnwrap(overlay.bitmapImageRepForCachingDisplay(in: overlay.bounds))
+            overlay.cacheDisplay(in: overlay.bounds, to: rep)
+            return rep
+        }
+        var rep = try capture()
+        let scale = CGFloat(rep.pixelsWide) / 400
+        func alpha(_ x: Int, _ y: CGFloat) -> CGFloat {
+            rep.colorAt(x: Int(CGFloat(x) * scale), y: Int((300 - y) * scale))!.alphaComponent
+        }
+        // Cuts at canvas y 200 and 100 (100 and 200 down from the top)
+        for y: CGFloat in [200, 100] {
+            let row = (0..<400).map { alpha($0, y) }
+            XCTAssertGreaterThan(row.filter { $0 > 0.5 }.count, 200, "a cut at \(y), dashed")
+            XCTAssertGreaterThan(row.filter { $0 < 0.05 }.count, 60, "with gaps")
+        }
+        XCTAssertEqual(alpha(200, 150), 0, accuracy: 0.01, "nothing between the cuts")
+
+        viewModel.guides.slices?.isShown = false
+        rep = try capture()
+        XCTAssertEqual((0..<400).map { alpha($0, 200) }.max() ?? 1, 0, accuracy: 0.01, "hidden")
     }
 
     /// Guides from before the page frame have no key for it and decode with none.

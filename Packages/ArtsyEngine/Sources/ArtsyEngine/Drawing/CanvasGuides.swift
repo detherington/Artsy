@@ -16,6 +16,9 @@ public struct CanvasGuides: Codable, Equatable {
     /// The printed page's frame, for a canvas made at a print format; nil for any other.
     /// Optional so that a document from before it decodes with none.
     public var page: PageFrame?
+    /// Where a strip for the screen is cut for upload, for a canvas made as one; nil for
+    /// any other. Optional for the same reason.
+    public var slices: SliceMarks?
 
     /// How close the pen has to come to a line to snap to it, in screen points.
     public static let snapDistance: CGFloat = 8
@@ -116,5 +119,46 @@ public struct PageFrame: Codable, Equatable {
         }
         self.trim = centred(trim)
         self.safe = centred(safe)
+    }
+}
+
+/// Where a strip for the screen, a webtoon, is cut into the pieces a site takes: every
+/// `height` canvas pixels from the top, each piece then scaled to `exportWidth` across.
+/// Drawn over the canvas as dashed lines across it, never into the picture; the sliced
+/// export cuts at them.
+public struct SliceMarks: Codable, Equatable {
+    /// Canvas pixels from one cut to the next.
+    public var height: CGFloat
+    /// The width each piece is exported at.
+    public var exportWidth: Int
+    public var isShown = true
+
+    public init(height: CGFloat, exportWidth: Int) {
+        self.height = height
+        self.exportWidth = exportWidth
+    }
+
+    /// WEBTOON's: pieces up to 800 × 1,280, so a cut every 1.6 widths of a canvas
+    /// `canvasWidth` across, scaled to 800.
+    public static func webtoon(canvasWidth: CGFloat) -> SliceMarks {
+        SliceMarks(height: (canvasWidth * 1280 / 800).rounded(), exportWidth: 800)
+    }
+
+    /// The pieces, top first, as rows of the picture: `y` from the top, as an image's rows
+    /// run; the last is whatever is left.
+    public func pieces(canvasHeight: CGFloat) -> [ClosedRange<CGFloat>] {
+        guard height > 0 else { return [0...canvasHeight] }
+        var pieces: [ClosedRange<CGFloat>] = []
+        var top: CGFloat = 0
+        while top < canvasHeight {
+            pieces.append(top...min(top + height, canvasHeight))
+            top += height
+        }
+        return pieces
+    }
+
+    /// The canvas y of each cut between pieces, canvas y running up as it does.
+    public func cuts(canvasHeight: CGFloat) -> [CGFloat] {
+        pieces(canvasHeight: canvasHeight).dropLast().map { canvasHeight - $0.upperBound }
     }
 }

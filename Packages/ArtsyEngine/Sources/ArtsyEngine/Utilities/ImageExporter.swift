@@ -74,6 +74,67 @@ public final class ImageExporter {
         try data.write(to: url)
     }
 
+    // MARK: - Slices
+
+    /// The canvas cut at `slices` for a site that takes a strip in pieces: the lit canvas
+    /// scaled to `slices.exportWidth` across, cut at each mark, top first, and written to
+    /// `folder` as JPEGs named `name`'s letters and numbers and the piece's number from 01
+    /// (WEBTOON takes no other characters in a file name). A piece over `maxBytes` is
+    /// encoded again at a lower quality, down to 0.6. Returns the files in order.
+    @discardableResult
+    public static func exportSlices(renderer: CanvasRenderer, slices: SliceMarks, to folder: URL, name: String,
+                                    maxBytes: Int = 2_000_000) throws -> [URL] {
+        guard let texture = litCanvas(renderer: renderer), let canvas = cgImage(from: texture) else {
+            throw ExportError.exportFailed
+        }
+        return try exportSlices(of: canvas, slices: slices, to: folder, name: name, maxBytes: maxBytes)
+    }
+
+    /// `exportSlices` from an image of the canvas, top row first.
+    @discardableResult
+    public static func exportSlices(of canvas: CGImage, slices: SliceMarks, to folder: URL, name: String,
+                                    maxBytes: Int = 2_000_000) throws -> [URL] {
+        let scale = CGFloat(slices.exportWidth) / CGFloat(canvas.width)
+        let width = slices.exportWidth
+        let height = Int((CGFloat(canvas.height) * scale).rounded())
+        guard width > 0, height > 0, let colorSpace = canvas.colorSpace ?? CGColorSpace(name: CGColorSpace.displayP3),
+              let context = CGContext(data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: width * 4,
+                                      space: colorSpace, bitmapInfo: CGImageAlphaInfo.noneSkipLast.rawValue)
+        else { throw ExportError.exportFailed }
+        // The whole strip scaled at once, so the pieces meet without a seam
+        context.interpolationQuality = .high
+        context.draw(canvas, in: CGRect(x: 0, y: 0, width: width, height: height))
+        guard let scaled = context.makeImage() else { throw ExportError.exportFailed }
+
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        let base = uploadName(name)
+        var urls: [URL] = []
+        for (index, rows) in slices.pieces(canvasHeight: CGFloat(canvas.height)).enumerated() {
+            let top = Int((rows.lowerBound * scale).rounded())
+            let bottom = min(height, Int((rows.upperBound * scale).rounded()))
+            guard bottom > top, let piece = scaled.cropping(to: CGRect(x: 0, y: top, width: width, height: bottom - top))
+            else { continue }
+            var quality: CGFloat = 0.9
+            var data = encode(piece, format: .jpeg(quality: quality))
+            while let encoded = data, encoded.count > maxBytes, quality > 0.65 {
+                quality -= 0.1
+                data = encode(piece, format: .jpeg(quality: quality))
+            }
+            guard let data else { throw ExportError.exportFailed }
+            let url = folder.appendingPathComponent(String(format: "%@%02d.jpg", base, index + 1))
+            try data.write(to: url)
+            urls.append(url)
+        }
+        return urls
+    }
+
+    /// `name` as a site takes it in a file name: its English letters and numbers only, or
+    /// "webtoon" if that leaves nothing.
+    public static func uploadName(_ name: String) -> String {
+        let kept = name.unicodeScalars.filter { $0.isASCII && CharacterSet.alphanumerics.contains($0) }
+        return kept.isEmpty ? "webtoon" : String(String.UnicodeScalarView(kept))
+    }
+
     // MARK: - Texture to Data
 
     private enum ImageFormat {
@@ -84,6 +145,13 @@ public final class ImageExporter {
     /// Encode a CPU-readable texture from `litCanvas`: 8-bit BGRA, or half floats as 16-bit
     /// PNG. Tagged Display P3, the colour space the canvas is drawn in.
     private static func imageData(from texture: MTLTexture, format: ImageFormat) -> Data? {
+        guard let cgImage = cgImage(from: texture) else { return nil }
+        return encode(cgImage, format: format)
+    }
+
+    /// A CPU-readable texture from `litCanvas` as an image, top row first: 8-bit, or 16-bit
+    /// from half floats. Tagged Display P3.
+    private static func cgImage(from texture: MTLTexture) -> CGImage? {
         let width = texture.width, height = texture.height
         guard let colorSpace = CGColorSpace(name: CGColorSpace.displayP3) else { return nil }
         let cgImage: CGImage?
@@ -118,8 +186,10 @@ public final class ImageExporter {
             else { return nil }
             cgImage = ctx.makeImage()
         }
-        guard let cgImage else { return nil }
+        return cgImage
+    }
 
+    private static func encode(_ cgImage: CGImage, format: ImageFormat) -> Data? {
         let data = NSMutableData()
         let type: UTType, options: [CFString: Any]
         switch format {

@@ -8,6 +8,8 @@ struct CanvasSizePreset: Identifiable {
     let height: Int
     /// The printed page's trim and safe area, for a print format; nil for a plain canvas.
     var page: PageFrame? = nil
+    /// Where a strip for the screen is cut for upload; nil for anything else.
+    var slices: SliceMarks? = nil
 
     var label: String { "\(name) (\(width)×\(height))" }
 
@@ -21,6 +23,7 @@ struct CanvasSizePreset: Identifiable {
         .init(name: "A4 @ 300dpi", width: 2480, height: 3508),
         usComic,
         mangaB5,
+        mangaBW,
         webtoon,
     ]
 
@@ -36,10 +39,17 @@ struct CanvasSizePreset: Identifiable {
     static let mangaB5 = printPage("Manga B5", trim: millimetres(182, 257), bleed: millimetres(3),
                                    safe: millimetres(150, 220), dpi: 400)
 
+    /// The same B5 manga page at the 600 dpi publishers ask for in black and white, where
+    /// the ink and the screentone need the resolution. 4441 × 6213 pixels, 27.6 megapixels:
+    /// a device offers it only if it takes that many.
+    static let mangaBW = printPage("Manga B&W", trim: millimetres(182, 257), bleed: millimetres(3),
+                                   safe: millimetres(150, 220), dpi: 600)
+
     /// A vertical-scroll webtoon strip: twice the 800 pixels WEBTOON shows across, to draw
     /// at and halve on export, and three of its 1,280-pixel upload slices tall at that
-    /// scale. A screen, not a page, so no frame.
-    static let webtoon = CanvasSizePreset(name: "Webtoon", width: 1600, height: 7680)
+    /// scale, marked where the sliced export cuts. A screen, not a page, so no frame.
+    static let webtoon = CanvasSizePreset(name: "Webtoon", width: 1600, height: 7680,
+                                          slices: .webtoon(canvasWidth: 1600))
 
     /// A print format as a canvas: the page with its bleed at `dpi`, and its frame. Sizes
     /// in inches; `bleed` past the trim on every side, and the safe area `safe` across, in
@@ -59,11 +69,15 @@ struct CanvasSizePreset: Identifiable {
         CGSize(width: millimetres(width), height: millimetres(height))
     }
 
-    /// The frame a new canvas of `size` starts with: a print format's, when the size is
-    /// one's, however it was chosen (a tile, the panel, Same as last, the default size,
-    /// or Custom typed to the same pixels).
-    static func page(for size: CGSize) -> PageFrame? {
-        presets.first { $0.width == Int(size.width) && $0.height == Int(size.height) }?.page
+    /// The guides a new canvas of `size` starts with: a format's page frame or slice marks,
+    /// when the size is one's, however it was chosen (a tile, the panel, Same as last, the
+    /// default size, or Custom typed to the same pixels); none for any other size.
+    static func guides(for size: CGSize) -> CanvasGuides {
+        var guides = CanvasGuides()
+        let preset = presets.first { $0.width == Int(size.width) && $0.height == Int(size.height) }
+        guides.page = preset?.page
+        guides.slices = preset?.slices
+        return guides
     }
 }
 

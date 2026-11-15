@@ -164,8 +164,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         do {
             let viewModel = CanvasViewModel(canvasSize: size)
             viewModel.untitledName = title
-            // A print format's size starts with its page frame
-            viewModel.guides.page = CanvasSizePreset.page(for: size)
+            // A format's size starts with its page frame or slice marks
+            viewModel.guides = CanvasSizePreset.guides(for: size)
             if fullScreen { viewModel.fillScreen() }
             let canvasView = CanvasView(frame: NSRect(x: 0, y: 0, width: 800, height: 600), device: metalContext.device)
             try canvasView.configure(context: metalContext, viewModel: viewModel)
@@ -652,6 +652,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         let exportJPEGItem = NSMenuItem(title: "Export JPEG...", action: #selector(handleExportJPEG), keyEquivalent: "e")
         exportJPEGItem.keyEquivalentModifierMask = [.command, .shift]
         fileMenu.addItem(exportJPEGItem)
+        fileMenu.addItem(withTitle: "Export Webtoon Slices...", action: #selector(handleExportSlices), keyEquivalent: "")
         fileMenu.addItem(NSMenuItem.separator())
         // Time-lapse: filled in as it opens, from the front canvas's recorder
         let timelapseItem = NSMenuItem(title: "Time-lapse", action: nil, keyEquivalent: "")
@@ -743,6 +744,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         guidesMenu.addItem(withTitle: "Clear Guides", action: #selector(clearGuides), keyEquivalent: "")
         // Only on a canvas made at a print format (see menuNeedsUpdate)
         guidesMenu.addItem(withTitle: "Show Page Frame", action: #selector(togglePageFrame), keyEquivalent: "").isHidden = true
+        guidesMenu.addItem(withTitle: "Show Slice Marks", action: #selector(toggleSliceMarks), keyEquivalent: "").isHidden = true
         guidesItem.submenu = guidesMenu
         viewMenu.addItem(guidesItem)
         viewMenu.addItem(NSMenuItem.separator())
@@ -925,6 +927,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc private func togglePageFrame() {
         changeGuides { $0.page?.isShown.toggle() }
+    }
+
+    @objc private func toggleSliceMarks() {
+        changeGuides { $0.slices?.isShown.toggle() }
     }
 
     private func changeGuides(_ change: (inout CanvasGuides) -> Void) {
@@ -1232,6 +1238,25 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
+    /// The canvas cut at its slice marks (a webtoon's, or WEBTOON's for any canvas without
+    /// them) into a folder of JPEGs the user names, numbered from the top.
+    @objc private func handleExportSlices() {
+        guard let store = activeStore else { return }
+        let viewModel = store.viewModel
+        let slices = viewModel.guides.slices ?? .webtoon(canvasWidth: viewModel.canvasSize.width)
+        let name = viewModel.displayName
+        let panel = NSSavePanel()
+        panel.nameFieldStringValue = "\(name) slices"
+        panel.message = "A folder of JPEGs, \(slices.exportWidth) pixels across, one for each slice"
+        panel.prompt = "Export"
+        panel.begin { response in
+            guard response == .OK, let url = panel.url else { return }
+            store.canvasView.commitPendingEdits()
+            do { try ImageExporter.exportSlices(renderer: store.canvasView.renderer, slices: slices, to: url, name: name) }
+            catch { DiagnosticsLog.shared.error(error, doing: "exporting slices"); NSAlert(error: error).runModal() }
+        }
+    }
+
     @objc private func handleSave() {
         guard let store = activeStore else { return }
         saveCanvas(store: store, targetWindow: NSApp.keyWindow, completion: nil)
@@ -1422,6 +1447,9 @@ extension AppDelegate: NSMenuDelegate {
             case "Show Page Frame":
                 item.isHidden = guides.page == nil
                 item.state = guides.page?.isShown == true ? .on : .off
+            case "Show Slice Marks":
+                item.isHidden = guides.slices == nil
+                item.state = guides.slices?.isShown == true ? .on : .off
             default:
                 if item.tag > 0 { item.state = Int(guides.gridSpacing) == item.tag ? .on : .off }
             }
