@@ -94,6 +94,13 @@ final class FormatMarksOverlay: UIView {
             let p = tail.applying(toView), d = r * 0.45
             handles.addEllipse(in: CGRect(x: p.x - d, y: p.y - d, width: 2 * d, height: 2 * d))
         }
+        if let base = layout.baseHandle {
+            // A diamond at the end of the tail's base, which sets how wide it is
+            let p = base.applying(toView), d = r * 1.2
+            handles.addLines(between: [CGPoint(x: p.x, y: p.y - d), CGPoint(x: p.x + d, y: p.y), CGPoint(x: p.x, y: p.y + d),
+                                       CGPoint(x: p.x - d, y: p.y)])
+            handles.closeSubpath()
+        }
         let w = layout.widthHandle.applying(toView)
         handles.addRect(CGRect(x: w.x - r, y: w.y - r, width: 2 * r, height: 2 * r))
         balloonHandles.path = handles

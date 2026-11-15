@@ -63,20 +63,28 @@ public struct BalloonLook: Codable, Hashable {
     public var fill: BalloonFill
     /// The tail's shape; nil for the kind's own.
     public var tail: BalloonTail?
-    /// How wide the tail is, as a share of its usual width: its root's breadth, a lightning
-    /// band's, the bubbles' size.
+    /// How wide the tail is, as a share of its usual width in proportion to the body: its
+    /// root's breadth, a lightning band's, the bubbles' size. Bubbles still go by it; a wedge
+    /// or lightning does where `tailBase` is not set (balloons from build 17 and 43).
     public var tailWidth: CGFloat
+    /// How wide the tail's base is where it leaves the body, in sizes of the lettering, so it
+    /// keeps its width as the balloon grows or shrinks; nil for a base in proportion to the
+    /// body, as tails always were. Wedges and lightning; bubbles have no base.
+    public var tailBase: CGFloat?
 
-    /// The narrowest and widest a tail is made.
+    /// The narrowest and widest a tail is made, as a share of its usual width.
     public static let tailWidths: ClosedRange<CGFloat> = 0.3...3
+    /// The narrowest and widest a tail's base is set, in sizes of the lettering.
+    public static let tailBases: ClosedRange<CGFloat> = 0.25...8
 
     public init(shape: BalloonShape? = nil, line: BalloonLine = .solid, fill: BalloonFill = .white, tail: BalloonTail? = nil,
-                tailWidth: CGFloat = 1) {
+                tailWidth: CGFloat = 1, tailBase: CGFloat? = nil) {
         self.shape = shape
         self.line = line
         self.fill = fill
         self.tail = tail
         self.tailWidth = tailWidth
+        self.tailBase = tailBase
     }
 }
 
@@ -222,6 +230,27 @@ enum BalloonGeometry {
         }
         path.closeSubpath()
         return path
+    }
+
+    /// A tail's base `width` wide, its ends the one to the right of the way to `tip` first:
+    /// square to the way to the tip, centred where the tail faces it on the ellipse's edge,
+    /// eased in toward the middle until both ends are inside, so neither shows past the edge;
+    /// no wider than the ellipse is across it.
+    static func base(of width: CGFloat, on e: Ellipse, facing t: CGFloat, to tip: CGPoint) -> (right: CGPoint, left: CGPoint) {
+        var reach: CGFloat = 0.94
+        var ends = (right: CGPoint.zero, left: CGPoint.zero)
+        func inside(_ q: CGPoint) -> Bool { hypot((q.x - e.center.x) / e.a, (q.y - e.center.y) / e.b) <= 0.96 }
+        for _ in 0..<30 {
+            let middle = point(on: e, at: t, reach: reach)
+            let length = max(hypot(tip.x - middle.x, tip.y - middle.y), 0.001)
+            let n = CGPoint(x: -(tip.y - middle.y) / length, y: (tip.x - middle.x) / length)
+            let across = 1 / ((n.x / e.a) * (n.x / e.a) + (n.y / e.b) * (n.y / e.b)).squareRoot()
+            let half = min(width / 2, across * 0.9)
+            ends = (CGPoint(x: middle.x - n.x * half, y: middle.y - n.y * half), CGPoint(x: middle.x + n.x * half, y: middle.y + n.y * half))
+            if inside(ends.right), inside(ends.left) { break }
+            reach *= 0.92
+        }
+        return ends
     }
 
     /// Where the line from `from` toward `to` first leaves `shape`, `from` being inside it.

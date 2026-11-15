@@ -89,7 +89,7 @@ public struct Balloon: Codable, Equatable, Identifiable {
     // look; older builds ignore them. A look's part a later build adds reads as the plain one.
     private enum CodingKeys: String, CodingKey {
         case id, style, center, text, wrapWidth, face, drawnFont, fontSize, allCaps, tail, bold, italic
-        case shape, line, fill, tailShape, tailWidth, tailPinned
+        case shape, line, fill, tailShape, tailWidth, tailBase, tailPinned
     }
 
     public init(from decoder: Decoder) throws {
@@ -110,7 +110,8 @@ public struct Balloon: Codable, Equatable, Identifiable {
             try c.decodeIfPresent(String.self, forKey: key).flatMap(T.init(rawValue:))
         }
         look = BalloonLook(shape: try part(.shape), line: try part(.line) ?? .solid, fill: try part(.fill) ?? .white,
-                           tail: try part(.tailShape), tailWidth: try c.decodeIfPresent(CGFloat.self, forKey: .tailWidth) ?? 1)
+                           tail: try part(.tailShape), tailWidth: try c.decodeIfPresent(CGFloat.self, forKey: .tailWidth) ?? 1,
+                           tailBase: try c.decodeIfPresent(CGFloat.self, forKey: .tailBase))
         tailPinned = try c.decodeIfPresent(Bool.self, forKey: .tailPinned) ?? false
     }
 
@@ -133,6 +134,7 @@ public struct Balloon: Codable, Equatable, Identifiable {
         if look.fill != .white { try c.encode(look.fill.rawValue, forKey: .fill) }
         try c.encodeIfPresent(look.tail?.rawValue, forKey: .tailShape)
         if look.tailWidth != 1 { try c.encode(look.tailWidth, forKey: .tailWidth) }
+        try c.encodeIfPresent(look.tailBase, forKey: .tailBase)
         if tailPinned { try c.encode(tailPinned, forKey: .tailPinned) }
     }
 
@@ -251,6 +253,9 @@ public struct BalloonLayout {
     public let lineWidth: CGFloat
     /// What drawing it can touch, outline and words.
     public let bounds: CGRect
+    /// The ends of the tail's base, the one to the right of the way to the tip first, for a
+    /// wedge or a lightning tail; nil for bubbles or no tail.
+    public let base: (right: CGPoint, left: CGPoint)?
     private let frame: CTFrame?
 
     public init(_ balloon: Balloon) {
@@ -314,7 +319,7 @@ public struct BalloonLayout {
         let line = max(1.5, (size * 0.075).rounded(.up))
         lineWidth = balloon.look.line == .heavy ? line * 2 : line
         let pad = size * 0.5
-        body = Self.body(of: balloon, around: textBox, pad: pad, lineWidth: line)
+        (body, base) = Self.body(of: balloon, around: textBox, pad: pad, lineWidth: line)
         let outline = balloon.style == .sound ? textBox : body.boundingBoxOfPath
         // A double line reaches half again as far out as one
         let reach = lineWidth * (balloon.look.line == .double ? 1.5 : 1) + 2
@@ -329,30 +334,38 @@ public struct BalloonLayout {
 
     /// The body, its tail joined on: its shape round the words, reshaped by a wavy or
     /// electric line, and the tail grown from the ellipse inside it, as wide as its look says.
-    private static func body(of balloon: Balloon, around box: CGRect, pad: CGFloat, lineWidth: CGFloat) -> CGPath {
-        guard let shape = balloon.shape else { return CGMutablePath() }
+    private static func body(of balloon: Balloon, around box: CGRect, pad: CGFloat, lineWidth: CGFloat)
+        -> (CGPath, (right: CGPoint, left: CGPoint)?) {
+        guard let shape = balloon.shape else { return (CGMutablePath(), nil) }
         let size = balloon.fontSize
         // Its own irregular shapes, the same every time it is drawn
         var random = BalloonRandom(balloon.id)
         var (outline, e) = Self.outline(shape, of: balloon.style, around: box, pad: pad, size: size, lineWidth: lineWidth,
                                         random: &random)
         outline = balloon.look.line.reshaping(outline, lineWidth: lineWidth)
-        guard balloon.style.hasTail, let tip = balloon.tail, outside(tip, of: e), !outline.contains(tip) else { return outline }
+        guard balloon.style.hasTail, let tip = balloon.tail, outside(tip, of: e), !outline.contains(tip) else { return (outline, nil) }
         let scale = max(0.1, balloon.look.tailWidth)
-        // The base: either side of where the tip points, on the ellipse's edge, the one to
-        // the right of the way out first; wider or narrower as the tail is
         let t = atan2((tip.y - e.center.y) / e.b, (tip.x - e.center.x) / e.a)
-        let spread = min(0.9, 0.2 * scale)
-        let first = BalloonGeometry.point(on: e, at: t - spread, reach: 0.96)
-        let second = BalloonGeometry.point(on: e, at: t + spread, reach: 0.96)
+        // The base's ends, the one to the right of the way out first: either side of where
+        // the tip points on the ellipse's edge, in proportion to the body; or as wide as the
+        // look sets, square to the way to the tip
+        let first: CGPoint, second: CGPoint
+        if let width = balloon.look.tailBase {
+            (first, second) = BalloonGeometry.base(of: width * size, on: e, facing: t, to: tip)
+        } else {
+            let spread = min(0.9, 0.2 * scale)
+            first = BalloonGeometry.point(on: e, at: t - spread, reach: 0.96)
+            second = BalloonGeometry.point(on: e, at: t + spread, reach: 0.96)
+        }
         switch balloon.tailShape {
         case .curved, .straight:
-            return outline.union(wedge(first, second, through: e.center, to: tip, curved: balloon.tailShape == .curved))
+            let tail = wedge(first, second, through: e.center, to: tip, curved: balloon.tailShape == .curved)
+            return (outline.union(tail), (first, second))
         case .lightning:
             guard let tail = BalloonGeometry.lightning(left: second, right: first, through: e.center, to: tip, size: size) else {
-                return outline
+                return (outline, nil)
             }
-            return outline.union(tail)
+            return (outline.union(tail), (first, second))
         case .bubbles:
             // From just clear of the body: a cloud's bubbles start past where its scallops can
             // bulge, as they always have; any other's past where the line to the tip leaves it
@@ -367,7 +380,7 @@ public struct BalloonLayout {
             let path = CGMutablePath()
             path.addPath(outline)
             addBubbles(to: path, from: start, clear: clear, to: tip, size: size, scale: scale)
-            return path
+            return (path, nil)
         }
     }
 
@@ -526,6 +539,25 @@ public struct BalloonLayout {
 
     /// The handle that points the tail, at its tip; nil for a style with none.
     public var tailHandle: CGPoint? { balloon.style.hasTail ? balloon.tail : nil }
+
+    /// The handle that sets how wide the tail's base is, at its left end; nil for bubbles or
+    /// no tail.
+    public var baseHandle: CGPoint? { base?.left }
+
+    /// How wide the tail's base is, in canvas pixels; nil for bubbles or no tail.
+    public var baseWidth: CGFloat? { base.map { hypot($0.left.x - $0.right.x, $0.left.y - $0.right.y) } }
+
+    /// The base's width, in sizes of the lettering, for an end dragged to `point`: twice its
+    /// distance from the base's middle along the base, within the narrowest and widest.
+    public func baseSize(draggedTo point: CGPoint) -> CGFloat? {
+        guard let base, balloon.fontSize > 0 else { return nil }
+        let middle = CGPoint(x: (base.left.x + base.right.x) / 2, y: (base.left.y + base.right.y) / 2)
+        let length = max(hypot(base.left.x - base.right.x, base.left.y - base.right.y), 0.001)
+        let along = CGPoint(x: (base.left.x - base.right.x) / length, y: (base.left.y - base.right.y) / length)
+        let half = abs((point.x - middle.x) * along.x + (point.y - middle.y) * along.y)
+        let range = BalloonLook.tailBases
+        return min(range.upperBound, max(range.lowerBound, 2 * half / balloon.fontSize))
+    }
 
 
     /// The handle that sets how wide the words run: at the right of the wrap width.

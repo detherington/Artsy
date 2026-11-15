@@ -129,8 +129,9 @@ class SelectionOverlayView: NSView {
     }
 
     /// A picked-up balloon: a dashed box round it, a round handle at its tail's tip (with a
-    /// dot in it when the tip is pinned) and a square one at the right of its words' width,
-    /// in the accent, a few points across at any zoom.
+    /// dot in it when the tip is pinned), a diamond at the end of the tail's base, which sets
+    /// how wide it is, and a square at the right of its words' width, in the accent, a few
+    /// points across at any zoom.
     private func drawBalloonSelection(_ layout: BalloonLayout, transform: CGAffineTransform) {
         var transform = transform
         let colour = NSColor(cgColor: BalloonSelectionStyle.colour) ?? .systemRed
@@ -156,6 +157,21 @@ class SelectionOverlayView: NSView {
             let p = tail.applying(transform), d = r * 0.45
             colour.setFill()
             NSBezierPath(ovalIn: NSRect(x: p.x - d, y: p.y - d, width: 2 * d, height: 2 * d)).fill()
+        }
+        if let base = layout.baseHandle {
+            // A diamond at the end of the tail's base, which sets how wide it is
+            let p = base.applying(transform), d = r * 1.2
+            let path = NSBezierPath()
+            path.move(to: NSPoint(x: p.x, y: p.y + d))
+            path.line(to: NSPoint(x: p.x + d, y: p.y))
+            path.line(to: NSPoint(x: p.x, y: p.y - d))
+            path.line(to: NSPoint(x: p.x - d, y: p.y))
+            path.close()
+            NSColor.white.setFill()
+            path.fill()
+            path.lineWidth = 1.5
+            colour.setStroke()
+            path.stroke()
         }
         handle(layout.widthHandle, round: false)
     }
