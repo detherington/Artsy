@@ -146,12 +146,24 @@ final class PenScrollView: NSScrollView {
         forwarding = true
         defer { forwarding = false }
         for type in [NSEvent.EventType.rightMouseDown, .rightMouseUp] {
-            if let event = NSEvent.mouseEvent(with: type, location: pressed.down.locationInWindow, modifierFlags: [],
-                                              timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: window.windowNumber,
-                                              context: nil, eventNumber: 0, clickCount: 1, pressure: 1) {
+            if let event = Self.rightClick(type, at: pressed.down.locationInWindow, in: window) {
                 NSApp.sendEvent(event)
             }
         }
+    }
+
+    /// A right-click's press or lift at `point` in `window`, from the second button. Made as
+    /// a mouse event of the right type it would still say it came from the first button
+    /// (`NSEvent.mouseEvent` leaves the button number 0), and since macOS 27 SwiftUI goes by
+    /// the button: a button under the pen took it for a click and acted on it.
+    static func rightClick(_ type: NSEvent.EventType, at point: NSPoint, in window: NSWindow) -> NSEvent? {
+        guard let made = NSEvent.mouseEvent(with: type, location: point, modifierFlags: [],
+                                            timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: window.windowNumber,
+                                            context: nil, eventNumber: 0, clickCount: 1, pressure: 1)
+        else { return nil }
+        guard let cg = made.cgEvent?.copy() else { return made }
+        cg.setIntegerValueField(.mouseEventButtonNumber, value: Int64(CGMouseButton.right.rawValue))
+        return NSEvent(cgEvent: cg) ?? made
     }
 
     /// Move the content with the pen: `dy` is the pen's movement in window points, up
