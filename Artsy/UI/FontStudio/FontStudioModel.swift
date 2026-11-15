@@ -83,6 +83,9 @@ final class FontStudioModel: ObservableObject {
         }
         redoStack.removeAll()
         library.update(font)
+        // The step ends with the font as the library keeps it, stamped with when it changed,
+        // so the next change in a run starts from what the step ended with and joins it
+        if let kept = library.font(id: font.id), !undoStack.isEmpty { undoStack[undoStack.count - 1].after = kept }
         objectWillChange.send()
     }
 

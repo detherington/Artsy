@@ -88,6 +88,9 @@ and reference layers carry a small mark beside their names.
   fill keeping the alpha; the three properties undone, redone, saved and loaded; the
   panel's switches (one reference at a time, the bottom layer never clipped, each a step).
   13 run in the engine package on the iPad simulator (the panel's needs the Mac app).
+  The Mac suite on 2026-11-15 (after #88): the panel's test passes. The switches' row
+  moved the layers panel's buttons and rows down 38 pt, which the older layers-panel
+  ShellTest taps by position, so it tapped the switches; its offsets now count the row.
 - Gap closing on a 4441 × 6213 page (the 600-dpi manga page), timed in a release build
   outside the app: about 0.14 s for gaps of 4 or 10 pixels on top of the fill itself.
   The grow back works outward from the region's edge; a pass over the whole canvas per
