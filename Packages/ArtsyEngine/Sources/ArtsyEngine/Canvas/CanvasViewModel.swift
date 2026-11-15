@@ -158,6 +158,12 @@ public final class CanvasViewModel: ObservableObject {
 
     // Bucket fill tool — tolerance in 0-255 color distance units per channel.
     @Published public var fillTolerance: Int = 16
+    /// What a fill reads to find its region: the layer it fills, the picture, or the inks.
+    @Published public var fillSource: FillSource = .layer
+    /// Pixels: a break in the lines up to twice as wide still holds a fill (0 to 10).
+    @Published public var fillCloseGaps: Int = 0
+    /// Pixels a fill spreads past its region, under the lines' soft edges (0 to 8).
+    @Published public var fillSpread: Int = 0
 
     // Symmetry — mirrors each stroke around the canvas center.
     @Published public var symmetryMode: SymmetryMode = .off

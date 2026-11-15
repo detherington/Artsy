@@ -1030,37 +1030,7 @@ class CanvasView: MTKView {
         let viewPoint = convert(event.locationInWindow, from: nil)
         let canvasPoint = viewModel.transform.viewToCanvas(viewPoint, viewSize: bounds.size)
 
-        let cs = viewModel.canvasSize
-        guard canvasPoint.x >= 0, canvasPoint.x < cs.width,
-              canvasPoint.y >= 0, canvasPoint.y < cs.height else { return }
-
-        // Snapshot BEFORE dispatching async work so redo/undo captures pre-fill state.
-        viewModel.saveUndoSnapshot(renderer: renderer, description: "Fill", changing: .layer(viewModel.layerStack?.activeLayer))
-        let fillStep = viewModel.undoManager.lastStepToken
-        let fillStarted = DispatchTime.now().uptimeNanoseconds
-
-        // Run fill in the background — returns immediately so the UI stays responsive.
-        BucketFill.fillAsync(
-            renderer: renderer,
-            layer: layer,
-            canvasPoint: canvasPoint,
-            canvasSize: cs,
-            fillColor: viewModel.currentColor,
-            tolerance: viewModel.fillTolerance,
-            selectionPath: viewModel.selectionPath,
-            shouldApply: { [weak viewModel, weak layer] in
-                // Not if the fill was undone before it finished, or its layer is gone
-                guard let viewModel, let layer, viewModel.undoManager.holds(fillStep),
-                      viewModel.layerStack?.layers.contains(where: { $0 === layer }) == true else { return false }
-                return true
-            }
-        ) { [weak renderer, weak layer] in
-            guard let renderer = renderer, let layer = layer else { return }
-            DiagnosticsLog.shared.note(.tool, String(format: "fill landed after %.2f s", Double(DispatchTime.now().uptimeNanoseconds - fillStarted) / 1e9))
-            renderer.updateThumbnail(for: layer)
-            // The pixels changed after the undo step noted them: tell the display
-            renderer.viewModel?.noteContentChanged()
-        }
+        viewModel.bucketFill(at: canvasPoint, renderer: renderer)
     }
 
     // MARK: - Selection Helpers

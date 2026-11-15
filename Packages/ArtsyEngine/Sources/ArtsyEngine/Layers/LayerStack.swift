@@ -82,6 +82,16 @@ public final class LayerStack: ObservableObject {
         activeLayerIndex = 1
     }
 
+    /// The layer a clipped layer shows through: the first unclipped layer beneath it, the
+    /// bottom layer counting whatever it says. Nil for a layer not clipped, or the bottom
+    /// one, which has nothing to clip to.
+    public func clippingBase(of index: Int) -> Layer? {
+        guard layers.indices.contains(index), index > 0, layers[index].isClipped else { return nil }
+        var below = index - 1
+        while below > 0, layers[below].isClipped { below -= 1 }
+        return layers[below]
+    }
+
     public func addLayer(above index: Int, name: String? = nil) throws -> Int {
         guard layers.count < layerLimit else {
             throw LayerError.maxLayersReached(layerLimit)
@@ -124,6 +134,21 @@ public final class LayerStack: ObservableObject {
         let lower = layers[index - 1]
 
         guard let commandBuffer = renderer.context.commandQueue.makeCommandBuffer() else { return false }
+        // Clipped to the layer it merges into, it lands only where that layer has paint;
+        // the base is read from a copy, as a pass cannot read the texture it draws into.
+        // Clipped to a base further down, the lower layer is clipped to it too and keeps
+        // what is merged hidden outside it.
+        var clip: MTLTexture? = nil
+        if clippingBase(of: index) === lower,
+           let copy = try? textureManager.makeCanvasTexture(width: lower.texture.width, height: lower.texture.height,
+                                                            label: "MergeClip"),
+           let blit = commandBuffer.makeBlitCommandEncoder() {
+            blit.copy(from: lower.texture, sourceSlice: 0, sourceLevel: 0, sourceOrigin: MTLOrigin(x: 0, y: 0, z: 0),
+                      sourceSize: MTLSize(width: lower.texture.width, height: lower.texture.height, depth: 1),
+                      to: copy, destinationSlice: 0, destinationLevel: 0, destinationOrigin: MTLOrigin(x: 0, y: 0, z: 0))
+            blit.endEncoding()
+            clip = copy
+        }
         // As the canvas showed it: the upper layer's blend mode against what is under it
         renderer.compositor.compositeLayer(
             source: upper.texture,
@@ -132,6 +157,7 @@ public final class LayerStack: ObservableObject {
             blendMode: upper.blendMode,
             stroke: nil,
             tempTexture: renderer.blendTempTexture,
+            clippedTo: clip,
             commandBuffer: commandBuffer
         )
         // Thick paint on top of thick paint adds up
@@ -162,6 +188,8 @@ public final class LayerStack: ObservableObject {
         copy.isVisible = source.isVisible
         copy.isLocked = source.isLocked
         copy.lettering = source.lettering
+        copy.isClipped = source.isClipped
+        copy.isAlphaLocked = source.isAlphaLocked
         copy.opacity = source.opacity
         copy.blendMode = source.blendMode
         guard let commandBuffer = renderer.context.commandQueue.makeCommandBuffer() else { throw LayerError.duplicateFailed }
@@ -190,14 +218,19 @@ public final class LayerStack: ObservableObject {
             color: MTLClearColor(red: 1, green: 1, blue: 1, alpha: 1))
 
         for (index, layer) in layers.enumerated() where layer.isVisible {
+            // A clipped layer as the canvas shows it: through its base's paint, at its
+            // base's opacity, and hidden with it
+            let base = clippingBase(of: index)
+            if let base, !base.isVisible { continue }
             renderer.compositor.compositeLayer(
                 source: layer.texture,
                 onto: result.texture,
-                opacity: layer.opacity,
+                opacity: layer.opacity * (base?.opacity ?? 1),
                 // The bottom layer has nothing under it to blend with
                 blendMode: index == 0 ? .normal : layer.blendMode,
                 stroke: nil,
                 tempTexture: renderer.blendTempTexture,
+                clippedTo: base?.texture,
                 commandBuffer: commandBuffer
             )
             if let height = layer.heightTexture,

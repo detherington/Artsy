@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		55441CAB1E39DEE7D0BC3FED /* FlatsClippingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F66B8D3ED092ED58A5D16B40 /* FlatsClippingTests.swift */; };
 		BEB2D84A37C8598F4367325B /* TimelapseTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8485B7790360F4446DED4DBD /* TimelapseTests.swift */; };
 		91ECF0ED897F81F6D9DC1BFA /* PenWithoutPressureTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D2DF3D11A65CB2653F6D45D0 /* PenWithoutPressureTests.swift */; };
 		AEA9A275E980969E24EC15E5 /* PhotoCanvasTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B409E6A5FE3844D615C7A326 /* PhotoCanvasTests.swift */; };
@@ -87,6 +88,7 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		F66B8D3ED092ED58A5D16B40 /* FlatsClippingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FlatsClippingTests.swift; sourceTree = "<group>"; };
 		8485B7790360F4446DED4DBD /* TimelapseTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimelapseTests.swift; sourceTree = "<group>"; };
 		D2DF3D11A65CB2653F6D45D0 /* PenWithoutPressureTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PenWithoutPressureTests.swift; sourceTree = "<group>"; };
 		B409E6A5FE3844D615C7A326 /* PhotoCanvasTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhotoCanvasTests.swift; sourceTree = "<group>"; };
@@ -270,6 +272,7 @@
 		B48AF066E85C8962CFFD499C /* ArtsyTests */ = {
 			isa = PBXGroup;
 			children = (
+				F66B8D3ED092ED58A5D16B40 /* FlatsClippingTests.swift */,
 				8485B7790360F4446DED4DBD /* TimelapseTests.swift */,
 				D2DF3D11A65CB2653F6D45D0 /* PenWithoutPressureTests.swift */,
 				B409E6A5FE3844D615C7A326 /* PhotoCanvasTests.swift */,
@@ -591,6 +594,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				55441CAB1E39DEE7D0BC3FED /* FlatsClippingTests.swift in Sources */,
 				BEB2D84A37C8598F4367325B /* TimelapseTests.swift in Sources */,
 				91ECF0ED897F81F6D9DC1BFA /* PenWithoutPressureTests.swift in Sources */,
 				AEA9A275E980969E24EC15E5 /* PhotoCanvasTests.swift in Sources */,

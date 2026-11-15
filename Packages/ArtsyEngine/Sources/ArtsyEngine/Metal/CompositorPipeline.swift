@@ -50,6 +50,8 @@ public final class CompositorPipeline {
         var wetMap: MTLTexture? = nil
         var wetNow: Float = 0
         var dryingTime: Float = 1
+        /// The layer's alpha is locked: the stroke changes only the colour of what is there.
+        var alphaLock = false
     }
 
     /// Mirrors `StrokeMergeParams` in Shaders.metal.
@@ -64,6 +66,7 @@ public final class CompositorPipeline {
         var blendsWhenWet: Float
         var wetNow: Float
         var dryingTime: Float
+        var alphaLock: Int32
 
         init(_ stroke: StrokeOverlay?) {
             opacity = stroke?.opacity ?? 0
@@ -76,6 +79,7 @@ public final class CompositorPipeline {
             blendsWhenWet = stroke?.wetMap == nil ? 0 : (stroke?.wet?.blendsWhenWet ?? 0)
             wetNow = stroke?.wetNow ?? 0
             dryingTime = stroke?.dryingTime ?? 1
+            alphaLock = stroke?.alphaLock == true ? 1 : 0
         }
     }
 
@@ -126,6 +130,7 @@ public final class CompositorPipeline {
         stroke: StrokeOverlay?,
         tempTexture: MTLTexture?,
         regions: [MTLScissorRect]? = nil,
+        clippedTo base: MTLTexture? = nil,
         commandBuffer: MTLCommandBuffer
     ) {
         if let regions, regions.isEmpty { return }
@@ -146,6 +151,8 @@ public final class CompositorPipeline {
                 bindPaper(encoder, wetMap: stroke.wetMap)
                 encoder.setFragmentBytes(&strokeParams, length: MemoryLayout<StrokeMergeParams>.size, index: 2)
             }
+            // A clipped layer's base, whose alpha it shows through
+            if let base { encoder.setFragmentTexture(base, index: 6) }
         }
 
         guard blendMode != .normal, let tempTexture else {
@@ -155,8 +162,13 @@ public final class CompositorPipeline {
             passDesc.colorAttachments[0].storeAction = .store
 
             guard let encoder = commandBuffer.makeRenderCommandEncoder(descriptor: passDesc) else { return }
-            encoder.setRenderPipelineState(stroke == nil ? context.compositeNormalPipelineState
-                                                         : context.compositeNormalWithStrokePipelineState)
+            if base != nil {
+                encoder.setRenderPipelineState(stroke == nil ? context.compositeNormalClippedPipelineState
+                                                             : context.compositeNormalWithStrokeClippedPipelineState)
+            } else {
+                encoder.setRenderPipelineState(stroke == nil ? context.compositeNormalPipelineState
+                                                             : context.compositeNormalWithStrokePipelineState)
+            }
             bindCommon(encoder)
             drawQuad(encoder, regions: regions)
             encoder.endEncoding()
@@ -182,8 +194,13 @@ public final class CompositorPipeline {
         passDesc.colorAttachments[0].storeAction = .store
 
         guard let encoder = commandBuffer.makeRenderCommandEncoder(descriptor: passDesc) else { return }
-        encoder.setRenderPipelineState(stroke == nil ? context.compositeBlendPipelineState
-                                                     : context.compositeBlendWithStrokePipelineState)
+        if base != nil {
+            encoder.setRenderPipelineState(stroke == nil ? context.compositeBlendClippedPipelineState
+                                                         : context.compositeBlendWithStrokeClippedPipelineState)
+        } else {
+            encoder.setRenderPipelineState(stroke == nil ? context.compositeBlendPipelineState
+                                                         : context.compositeBlendWithStrokePipelineState)
+        }
         bindCommon(encoder)
         encoder.setFragmentTexture(destination, index: 1)
         encoder.setFragmentBytes(&mode, length: MemoryLayout<Int32>.size, index: 1)

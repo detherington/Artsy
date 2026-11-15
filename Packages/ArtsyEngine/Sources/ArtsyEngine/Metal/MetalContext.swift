@@ -44,6 +44,11 @@ public final class MetalContext {
     public let compositeBlendPipelineState: MTLRenderPipelineState
     // Active-layer variants that merge the in-progress stroke into the layer first
     public let compositeNormalWithStrokePipelineState: MTLRenderPipelineState
+    /// The same four passes for a layer clipped to the one below, its base at texture 6.
+    public let compositeNormalClippedPipelineState: MTLRenderPipelineState
+    public let compositeNormalWithStrokeClippedPipelineState: MTLRenderPipelineState
+    public let compositeBlendClippedPipelineState: MTLRenderPipelineState
+    public let compositeBlendWithStrokeClippedPipelineState: MTLRenderPipelineState
     public let compositeBlendWithStrokePipelineState: MTLRenderPipelineState
     /// Removes the source's coverage from the destination (eraser strokes).
     public let compositeErasePipelineState: MTLRenderPipelineState
@@ -59,6 +64,7 @@ public final class MetalContext {
     public let maskedCutPipelineState: MTLComputePipelineState
     public let maskedClearPipelineState: MTLComputePipelineState
     public let maskedFillPipelineState: MTLComputePipelineState
+    public let maskedFillKeepAlphaPipelineState: MTLComputePipelineState
     /// Fills a mip level of a texture from the level above, a 2×2 box per texel
     public let mipPipelineState: MTLComputePipelineState
     /// A loaded brush's carry: filled at pen-down, and brought up to date as the brush goes
@@ -222,6 +228,22 @@ public final class MetalContext {
             device: device, library: library, vertexDescriptor: compVD,
             fragmentFunction: "compositeBlendWithStroke", blending: .replace
         )
+        self.compositeNormalClippedPipelineState = try MetalContext.makeCompositePipeline(
+            device: device, library: library, vertexDescriptor: compVD,
+            fragmentFunction: "compositeNormalClipped", blending: .sourceOver
+        )
+        self.compositeNormalWithStrokeClippedPipelineState = try MetalContext.makeCompositePipeline(
+            device: device, library: library, vertexDescriptor: compVD,
+            fragmentFunction: "compositeNormalWithStrokeClipped", blending: .sourceOver
+        )
+        self.compositeBlendClippedPipelineState = try MetalContext.makeCompositePipeline(
+            device: device, library: library, vertexDescriptor: compVD,
+            fragmentFunction: "compositeBlendClipped", blending: .replace
+        )
+        self.compositeBlendWithStrokeClippedPipelineState = try MetalContext.makeCompositePipeline(
+            device: device, library: library, vertexDescriptor: compVD,
+            fragmentFunction: "compositeBlendWithStrokeClipped", blending: .replace
+        )
 
         self.compositeStrokeMergePipelineState = try MetalContext.makeCompositePipeline(
             device: device, library: library, vertexDescriptor: compVD,
@@ -299,6 +321,8 @@ public final class MetalContext {
         }
         self.maskedClearPipelineState = try device.makeComputePipelineState(function: maskedClearFunc)
         self.maskedFillPipelineState = try device.makeComputePipelineState(function: Self.function("maskedFillKernel", in: library))
+        self.maskedFillKeepAlphaPipelineState = try device.makeComputePipelineState(
+            function: Self.function("maskedFillKeepAlphaKernel", in: library))
         self.mipPipelineState = try device.makeComputePipelineState(function: Self.function("mipKernel", in: library))
         self.loadedBrushFillPipelineState = try device.makeComputePipelineState(function: Self.function("loadedBrushFillKernel", in: library))
         self.loadedBrushTransferPipelineState = try device.makeComputePipelineState(function: Self.function("loadedBrushTransferKernel", in: library))

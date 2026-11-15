@@ -40,6 +40,10 @@ public final class CanvasDocument {
             let blendMode: String
             /// A lettering layer's balloons; none in a document from before them.
             var lettering: [Balloon]? = nil
+            /// Clipping, alpha lock and the reference mark; off in a document from before them.
+            var isClipped: Bool? = nil
+            var isAlphaLocked: Bool? = nil
+            var isReference: Bool? = nil
         }
     }
 
@@ -105,7 +109,10 @@ public final class CanvasDocument {
                 isLocked: layer.isLocked,
                 opacity: layer.opacity,
                 blendMode: layer.blendMode.rawValue,
-                lettering: layer.lettering
+                lettering: layer.lettering,
+                isClipped: layer.isClipped ? true : nil,
+                isAlphaLocked: layer.isAlphaLocked ? true : nil,
+                isReference: layer.isReference ? true : nil
             )
         }
         let doc = DocumentData(
@@ -403,6 +410,9 @@ public final class CanvasDocument {
             layer.opacity = layerInfo.opacity
             layer.blendMode = LayerBlendMode(rawValue: layerInfo.blendMode) ?? .normal
             layer.lettering = layerInfo.lettering
+            layer.isClipped = layerInfo.isClipped ?? false
+            layer.isAlphaLocked = layerInfo.isAlphaLocked ?? false
+            layer.isReference = layerInfo.isReference ?? false
 
             // Load PNG into the layer's texture
             let layerFile = layersDir.appendingPathComponent("layer-\(i).png")

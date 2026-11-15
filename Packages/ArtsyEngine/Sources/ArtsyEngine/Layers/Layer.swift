@@ -33,6 +33,14 @@ public final class Layer: Identifiable, ObservableObject {
     @Published public var isLocked: Bool = false
     @Published public var opacity: Float = 1.0
     @Published public var blendMode: LayerBlendMode = .normal
+    /// Clipped to the layer below: shown only where the first unclipped layer beneath it
+    /// (its base) has paint.
+    @Published public var isClipped = false
+    /// Its alpha locked: painting changes the colour of what is there and adds nothing
+    /// where nothing is.
+    @Published public var isAlphaLocked = false
+    /// The layer fills read when they fill from the reference (the inks, for flats).
+    @Published public var isReference = false
 
     public let texture: MTLTexture
     /// Paint thickness per pixel (impasto), the same size as `texture`. Nil until a brush
