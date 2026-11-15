@@ -139,15 +139,49 @@ final class GuidesTests: XCTestCase {
         XCTAssertNil(CanvasSizePreset.page(for: CGSize(width: 2048, height: 2048)))
     }
 
-    /// The start screen offers the comic page on a device that takes a 4,175-pixel side,
-    /// and not on one that does not.
-    func testTheStartScreenOffersTheComicPageWhereItFits() {
+    /// A manga page is B5 with 3 mm of bleed at 400 dpi, its inner frame of 150 × 220 mm
+    /// the safe area, both in the middle of the page though not the same distance in.
+    func testAMangaPageIsB5WithItsBleedAndInnerFrame() throws {
+        let manga = CanvasSizePreset.mangaB5
+        XCTAssertEqual(manga.width, 2961, "188 mm at 400 dpi")
+        XCTAssertEqual(manga.height, 4142, "263 mm")
+        let page = try XCTUnwrap(manga.page)
+        let px: CGFloat = 400 / 25.4
+        XCTAssertEqual(page.trim.width, 182 * px, accuracy: 0.01)
+        XCTAssertEqual(page.trim.height, 257 * px, accuracy: 0.01)
+        XCTAssertEqual(page.safe.width, 150 * px, accuracy: 0.01)
+        XCTAssertEqual(page.safe.height, 220 * px, accuracy: 0.01)
+        for rect in [page.trim, page.safe] {
+            XCTAssertEqual(rect.midX, 2961 / 2, accuracy: 0.01, "in the middle")
+            XCTAssertEqual(rect.midY, 4142 / 2, accuracy: 0.01)
+        }
+        XCTAssertGreaterThan(page.safe.minY - page.trim.minY, page.safe.minX - page.trim.minX, "deeper at the head and foot than at the sides")
+        XCTAssertEqual(CanvasSizePreset.page(for: CGSize(width: 2961, height: 4142)), page)
+    }
+
+    /// A webtoon is a strip for the screen, twice WEBTOON's 800 pixels across and three of
+    /// its 1,280-pixel slices tall at that scale: no page, so no frame.
+    func testAWebtoonIsAStripWithNoFrame() {
+        let webtoon = CanvasSizePreset.webtoon
+        XCTAssertEqual(webtoon.width, 2 * 800)
+        XCTAssertEqual(webtoon.height, 3 * 2 * 1280)
+        XCTAssertNil(webtoon.page)
+        XCTAssertNil(CanvasSizePreset.page(for: CGSize(width: 1600, height: 7680)))
+    }
+
+    /// The start screen offers the formats by their pixels: on a device whose largest
+    /// square is 4,096 a side, the comic pages and the webtoon strip, taller than that,
+    /// all fit; on one of 3,072 none does.
+    func testTheStartScreenOffersTheFormatsWhereTheyFit() {
         let last = CGSize(width: 2048, height: 2048)
-        let roomy = StartView.sizes(last: last, screen: nil, maxSide: 8192)
+        let formats = ["US Comic", "Manga B5", "Webtoon"]
+        let roomy = StartView.sizes(last: last, screen: nil, maxSide: 4096)
+        for name in formats { XCTAssertTrue(roomy.contains { $0.name == name }, name) }
         let comic = roomy.first { $0.name == "US Comic" }
         XCTAssertEqual(comic?.width, 2750)
         XCTAssertEqual(comic?.height, 4175)
-        XCTAssertNil(StartView.sizes(last: last, screen: nil, maxSide: 4096).first { $0.name == "US Comic" })
+        let small = StartView.sizes(last: last, screen: nil, maxSide: 3072)
+        for name in formats { XCTAssertFalse(small.contains { $0.name == name }, name) }
     }
 
     func testTheOverlayDrawsThePageFrameAndHidesIt() throws {

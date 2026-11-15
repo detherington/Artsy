@@ -20,20 +20,43 @@ struct CanvasSizePreset: Identifiable {
         .init(name: "HD Portrait", width: 1080, height: 1920),
         .init(name: "A4 @ 300dpi", width: 2480, height: 3508),
         usComic,
+        mangaB5,
+        webtoon,
     ]
 
     /// The standard US comic book page, as Marvel, DC and Image print a single issue:
     /// trimmed at 6⅝ × 10³⁄₁₆ inches, with ⅛ inch of bleed past the trim and the safe
     /// area ¼ inch inside it, at 400 dpi. 2750 × 4175 pixels.
-    static let usComic = printPage("US Comic", trim: CGSize(width: 6.625, height: 10.1875), bleed: 0.125, safe: 0.25, dpi: 400)
+    static let usComic = printPage("US Comic", trim: CGSize(width: 6.625, height: 10.1875), bleed: 0.125,
+                                   safe: CGSize(width: 6.125, height: 9.6875), dpi: 400)
+
+    /// A manga page as a Japanese magazine prints it and Clip Studio sets it up: trimmed at
+    /// B5, 182 × 257 mm, with 3 mm of bleed, and the inner frame the panels sit in,
+    /// 150 × 220 mm, as the safe area; at 400 dpi, as the US page. 2961 × 4142 pixels.
+    static let mangaB5 = printPage("Manga B5", trim: millimetres(182, 257), bleed: millimetres(3),
+                                   safe: millimetres(150, 220), dpi: 400)
+
+    /// A vertical-scroll webtoon strip: twice the 800 pixels WEBTOON shows across, to draw
+    /// at and halve on export, and three of its 1,280-pixel upload slices tall at that
+    /// scale. A screen, not a page, so no frame.
+    static let webtoon = CanvasSizePreset(name: "Webtoon", width: 1600, height: 7680)
 
     /// A print format as a canvas: the page with its bleed at `dpi`, and its frame. Sizes
-    /// in inches; `bleed` past the trim and `safe` inside it, on every side.
-    static func printPage(_ name: String, trim: CGSize, bleed: CGFloat, safe: CGFloat, dpi: CGFloat) -> CanvasSizePreset {
+    /// in inches; `bleed` past the trim on every side, and the safe area `safe` across, in
+    /// the middle.
+    static func printPage(_ name: String, trim: CGSize, bleed: CGFloat, safe: CGSize, dpi: CGFloat) -> CanvasSizePreset {
         let width = Int(((trim.width + 2 * bleed) * dpi).rounded())
         let height = Int(((trim.height + 2 * bleed) * dpi).rounded())
-        let page = PageFrame(canvasSize: CGSize(width: width, height: height), trimInset: bleed * dpi, safeInset: (bleed + safe) * dpi)
+        let page = PageFrame(canvasSize: CGSize(width: width, height: height),
+                             trim: CGSize(width: trim.width * dpi, height: trim.height * dpi),
+                             safe: CGSize(width: safe.width * dpi, height: safe.height * dpi))
         return CanvasSizePreset(name: name, width: width, height: height, page: page)
+    }
+
+    /// Millimetres in inches, for the formats measured in them.
+    static func millimetres(_ value: CGFloat) -> CGFloat { value / 25.4 }
+    static func millimetres(_ width: CGFloat, _ height: CGFloat) -> CGSize {
+        CGSize(width: millimetres(width), height: millimetres(height))
     }
 
     /// The frame a new canvas of `size` starts with: a print format's, when the size is
@@ -68,7 +91,7 @@ struct NewCanvasView: View {
         let defW = prefs.defaultCanvasWidth
         let defH = prefs.defaultCanvasHeight
         if let match = CanvasSizePreset.presets.first(where: { $0.width == defW && $0.height == defH }),
-           max(match.width, match.height) <= maxSide {
+           LayerStack.fits(width: match.width, height: match.height, largestSide: maxSide) {
             _selectedPreset = State(initialValue: match)
             _useCustom = State(initialValue: false)
         } else {
@@ -81,7 +104,7 @@ struct NewCanvasView: View {
 
     /// The presets this device takes.
     private var presets: [CanvasSizePreset] {
-        CanvasSizePreset.presets.filter { max($0.width, $0.height) <= maxSide }
+        CanvasSizePreset.presets.filter { LayerStack.fits(width: $0.width, height: $0.height, largestSide: maxSide) }
     }
 
     private var resolvedSize: CGSize {
