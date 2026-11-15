@@ -47,6 +47,14 @@ public final class LayerStack: ObservableObject {
         return min(maxCanvasSide, max(1024, side))
     }
 
+    /// Whether a canvas of `width` × `height` fits a device whose largest square canvas is
+    /// `largestSide` a side: no side past `maxCanvasSide`, and no more pixels than that
+    /// square, since the memory goes by the pixel. A tall strip, a webtoon's, fits where a
+    /// square of its height would not.
+    public static func fits(width: Int, height: Int, largestSide: Int) -> Bool {
+        width > 0 && height > 0 && max(width, height) <= maxCanvasSide && width * height <= largestSide * largestSide
+    }
+
     /// Where new layers' textures are cleared. Set by whoever renders this stack; a new
     /// texture holds whatever its memory held before.
     public var commandQueue: MTLCommandQueue?

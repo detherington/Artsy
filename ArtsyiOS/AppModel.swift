@@ -56,7 +56,7 @@ final class AppModel: ObservableObject {
             case .noEngine: return "The drawing engine could not start"
             case .couldNotWrite: return "The canvas could not be written"
             case .tooLarge(let width, let height, let side):
-                return "A \(width) × \(height) canvas is more than this device takes: up to \(side) × \(side)."
+                return "A \(width) × \(height) canvas is more than this device takes: up to \(side) × \(side), or as many pixels in another shape."
             }
         }
     }
@@ -64,7 +64,7 @@ final class AppModel: ObservableObject {
     /// The error for a canvas of `size` this device cannot take, or nil for one it can.
     func tooLarge(_ width: Int, _ height: Int) -> Failure? {
         let side = largestCanvasSide
-        return max(width, height) > side ? .tooLarge(width: width, height: height, side: side) : nil
+        return LayerStack.fits(width: width, height: height, largestSide: side) ? nil : .tooLarge(width: width, height: height, side: side)
     }
 
     /// The app's own folder: On My iPad ▸ Artsy in Files, where new canvases go.

@@ -3,7 +3,8 @@
 A canvas made for a printed comic page: the size of the page with its bleed, and the
 page's frame drawn over the canvas, so the artist can see where the printer cuts and
 where lettering and faces are safe. The first format is the standard US comic book
-page; others (manga B5, European album, digest, webtoon strip) can follow as presets.
+page; the second a manga page (B5), and beside them a webtoon strip, which is a size
+for the screen with no page to frame. Others (European album, digest) can follow.
 
 ## The US comic page
 
@@ -22,16 +23,56 @@ resolution, and the frame is easy to change per preset.
 
 400 dpi, between the 300 a printer asks for in colour and the 600 inked line art is
 often drawn at: 11.5 megapixels, less than the Large preset, so it opens on every Mac
-and on iPads with the memory for a 4,175-pixel side (`LayerStack.largestCanvasSide`
-leaves it out on a device that cannot take it, as with Huge).
+and on any device that takes a canvas of that many pixels (see "Fitting a device").
+
+## The manga page
+
+A page as a Japanese magazine prints it, and as Clip Studio's comic setup and the
+common manuscript templates lay it out:
+
+| | millimetres | pixels at 400 dpi |
+|---|---|---|
+| Full bleed (the canvas) | 188 × 263 | 2961 × 4142 |
+| Trim (B5) | 182 × 257 | 2866 × 4047, about 47 px in from each edge |
+| Inner frame (the safe area) | 150 × 220 | 2362 × 3465, about 299 px in at the sides, 339 at the head and foot |
+
+The bleed is 3 mm (Clip Studio offers 3 or 5). The inner frame (基本枠) is where the
+panels sit; it is not the same distance in on every side, so `PageFrame` gained an
+initialiser from the trim's and safe area's sizes, each centred, and `printPage` now
+takes the safe area as a size (the US page's is 6⅛ × 9¹¹⁄₁₆ inches, the same frame as
+before). One template gives the B5 inner frame as 152 × 227 mm; printers' own sheets
+win, and the numbers are one line.
+
+400 dpi as the US page. Publishers ask 600 for black-and-white manga; a 600-dpi page is
+4441 × 6213, 27.6 megapixels, which most iPads would not offer, so that is a choice to
+make per artist rather than the preset's.
+
+## The webtoon strip
+
+1600 × 7680, no frame. WEBTOON shows a strip 800 pixels across and takes uploads of up
+to 800 × 1,280 each; the strip is drawn at twice that width, to halve on export, and is
+three of those uploads tall at that scale. It stops at 7,680 because no side may pass
+8,192 (`LayerStack.maxCanvasSide`); a longer episode is several canvases.
+
+## Fitting a device
+
+A device's cap was its largest square canvas, `LayerStack.largestCanvasSide`, applied
+to the longest side: a 1600 × 7680 strip, 12.3 megapixels, was refused by a device with
+a 4 GB budget, whose square is 5,888 a side (34.7 megapixels). The memory goes by the pixel, and that side
+is itself a square root of pixels, so a canvas now fits when it has no more pixels than
+that square and no side past 8,192 (`LayerStack.fits`). The start screen's tiles, the
+New Canvas panel's presets and the iPad's check before making or opening a canvas use
+it; squares fit exactly as before. The Custom fields still clamp each side to the
+square's side.
 
 ## What it is
 
 - **`PageFrame`** (engine, `CanvasGuides.swift`): the trim and safe-area rectangles in
   canvas pixels, and whether they are shown. It lives in `CanvasGuides.page`, so it saves
   with the document's guides; an older document has no key for it and opens with none.
-- **The preset** (`CanvasSizePreset.usComic`, shared UI): built from the format in
-  inches and a resolution, so the next format is one line. It sits in the preset list,
+- **The presets** (`CanvasSizePreset.usComic`, `.mangaB5`, `.webtoon`, shared UI): a
+  print format built from its sizes in inches (`millimetres(...)` converts) and a
+  resolution, so the next format is one line. It sits in the preset list,
   so the start screen's tiles, the New Canvas panel and the default-size setting all
   offer it with nothing more.
 - **A new canvas at a print format's size gets its frame** (`CanvasSizePreset.page(for:)`),
@@ -51,8 +92,9 @@ leaves it out on a device that cannot take it, as with Huge).
 
 ## Later
 
-- More formats: manga (B5 with its own trim and safe), European album, digest, magazine,
-  a webtoon strip (800 px wide, tall).
+- More formats: European album, digest, magazine; the manga tankōbon (B6, or 5 × 7½
+  inches in the US editions); a 600-dpi manga page for black and white.
+- Webtoon: marks at each upload slice, and an export that slices.
 - Panel layouts: a page of panel borders drawn on a layer of their own, with gutters.
 - Export trimmed to the page as well as with its bleed.
 
@@ -75,3 +117,17 @@ leaves it out on a device that cannot take it, as with Huge).
   renderer's first frame fitted it (it now waits for `CanvasRenderer.hasInitializedTransform`,
   which is set just before that first fit so the fit is what the overlay sees); and
   zoomed in, its lines ran over the tool rail (the overlay now clips to its bounds).
+
+## Status (2026-11-15, branch `manga-webtoon`)
+
+- Manga B5 and Webtoon presets, `PageFrame(canvasSize:trim:safe:)`, and `LayerStack.fits`
+  in the start screen, the New Canvas panel and the iPad's size check. Four new tests
+  (the manga page's frame, the webtoon's strip, the formats on the start screen by
+  pixels, `fits` itself); the full Mac suite runs 345 with only the known
+  `ShellTests.testAPenHeldStillIsARightClick` failing.
+- Seen on the Mac: all three formats on the start screen, and the New Canvas panel
+  growing to its fifth row of presets (360 × 535) with nothing cut off.
+- Seen on the iPad Pro 13-inch simulator, whose cap is 7,424 a side: the Manga B5 and
+  Webtoon tiles (the strip would have been left out by the old longest-side rule); a
+  manga canvas with its inner frame deeper at the head and foot than at the sides; a
+  webtoon canvas with no frame, which takes a stroke.

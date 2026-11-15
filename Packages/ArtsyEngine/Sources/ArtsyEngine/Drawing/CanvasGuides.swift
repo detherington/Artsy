@@ -105,4 +105,16 @@ public struct PageFrame: Codable, Equatable {
         trim = canvas.insetBy(dx: trimInset, dy: trimInset)
         safe = canvas.insetBy(dx: safeInset, dy: safeInset)
     }
+
+    /// The frame of a page whose bleed is the whole canvas: a trim of `trim` and a safe
+    /// area of `safe`, both in the middle of it. For a format whose safe area is not the
+    /// same distance in on every side, as a manga page's inner frame is not.
+    public init(canvasSize: CGSize, trim: CGSize, safe: CGSize) {
+        func centred(_ size: CGSize) -> CGRect {
+            CGRect(x: (canvasSize.width - size.width) / 2, y: (canvasSize.height - size.height) / 2,
+                   width: size.width, height: size.height)
+        }
+        self.trim = centred(trim)
+        self.safe = centred(safe)
+    }
 }

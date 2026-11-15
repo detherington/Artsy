@@ -43,6 +43,17 @@ final class ScaleTests: XCTestCase {
         XCTAssertGreaterThanOrEqual(LayerStack.layerLimit(forCanvasPixels: side * side, memoryBudget: 4 * gigabyte), 2)
     }
 
+    /// A canvas fits a device by its pixels, the memory's measure, so a tall strip fits
+    /// where a square of its height would not; no side goes past the format's cap.
+    func testACanvasFitsADeviceByItsPixels() {
+        XCTAssertTrue(LayerStack.fits(width: 4096, height: 4096, largestSide: 4096), "the square itself")
+        XCTAssertFalse(LayerStack.fits(width: 4097, height: 4096, largestSide: 4096))
+        XCTAssertTrue(LayerStack.fits(width: 1600, height: 7680, largestSide: 4096), "a webtoon strip, fewer pixels than the square")
+        XCTAssertFalse(LayerStack.fits(width: 1600, height: 7680, largestSide: 3072), "but more than a smaller one")
+        XCTAssertFalse(LayerStack.fits(width: 1024, height: 9000, largestSide: 8192), "no side past the cap, however few the pixels")
+        XCTAssertFalse(LayerStack.fits(width: 0, height: 2048, largestSide: 8192))
+    }
+
     func testTheLayerLimitFollowsTheCanvasSizeAndTheMemory() throws {
         let gigabyte = 1 << 30
         XCTAssertEqual(LayerStack.layerLimit(forCanvasPixels: 2048 * 2048, memoryBudget: 16 * gigabyte), 32)

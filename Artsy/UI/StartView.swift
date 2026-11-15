@@ -344,10 +344,12 @@ struct StartView: View {
     /// cap would only fail again), and so is one that repeats an earlier tile. When the
     /// last canvas was the screen's, Full screen stands first in its place: it makes the
     /// same canvas and opens it as the screen.
+    /// A size fits by its pixels (`LayerStack.fits`), so a tall strip is offered where a
+    /// square of its height would not be.
     static func sizes(last: CGSize, screen: CGSize?, maxSide: Int) -> [Size] {
         var sizes: [Size] = []
         func offer(_ size: Size) {
-            guard max(size.width, size.height) <= maxSide, size.width > 0, size.height > 0,
+            guard LayerStack.fits(width: size.width, height: size.height, largestSide: maxSide),
                   !sizes.contains(where: { $0.width == size.width && $0.height == size.height }) else { return }
             sizes.append(size)
         }
