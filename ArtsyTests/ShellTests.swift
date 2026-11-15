@@ -308,9 +308,11 @@ final class ShellTests: XCTestCase {
         if ProcessInfo.processInfo.environment["ARTSY_SNAPSHOT_DIR"] != nil { snapshot(host, named: "layers-panel") }
         XCTAssertEqual(layerStack.layers.map(\.name), ["Background", "Layer 1"])
 
-        // The buttons sit under the header (44), the blend row (44) and the opacity row
-        // (44): a 52 pt row with four buttons spread across it
-        let buttonsY: CGFloat = 520 - (44 + 88 + 26)
+        // The buttons sit under the header (44), the blend row (44), the opacity row (44)
+        // and the clip, lock alpha and reference switches (30, and 8 below): a 52 pt row
+        // with four buttons spread across it
+        let switches: CGFloat = 30 + 8
+        let buttonsY: CGFloat = 520 - (44 + 88 + switches + 26)
         func button(_ n: CGFloat) -> NSPoint { NSPoint(x: Chrome.panelWidth / 8 * (2 * n + 1), y: buttonsY) }
         click(at: button(0))
         XCTAssertEqual(layerStack.layers.map(\.name), ["Background", "Layer 1", "Layer 2"], "Add")
@@ -326,7 +328,7 @@ final class ShellTests: XCTestCase {
 
         // The rows, the top layer first, start under the buttons' divider; a tap on the
         // second row (Paper) selects it
-        let rowsTop: CGFloat = 44 + 88 + 52 + 6
+        let rowsTop: CGFloat = 44 + 88 + switches + 52 + 6
         let row = LayersPanelContent.rowHeight + 2
         func rowY(_ n: CGFloat) -> CGFloat { 520 - (rowsTop + row * n + LayersPanelContent.rowHeight / 2) }
         send(.leftMouseDown, at: NSPoint(x: 150, y: rowY(1)), time: 1)

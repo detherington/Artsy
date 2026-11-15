@@ -131,6 +131,12 @@ merged with Core Graphics, written as TrueType that Core Text reads from memory.
   SwiftUI's late update cleared the stroke in progress; the pad now keeps a stroke while
   the pen is down.
 - Not yet seen on the Mac (it builds); the Mac suite has not run on this branch.
+- The Mac suite, first run with these on 2026-11-15 (after #88): the studio's test found
+  that kerning dragged through several values saved a step for each. A run of one kind
+  joins its last step only if that step ended where the change starts, and the step kept
+  the font as edited while the library keeps it stamped with when it changed, so they
+  never matched. The step now ends with the library's copy (branch `studio-kern-undo`),
+  and the studio's tests pass.
 
 ### The second slice (kerning, versions, family, imports)
 
