@@ -1,6 +1,8 @@
 import XCTest
 import AVFoundation
+#if canImport(Artsy)
 @testable import Artsy
+#endif
 @testable import ArtsyEngine
 
 /// The time-lapse: a frame for every settled change and none while the pen is down, the

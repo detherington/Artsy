@@ -2,7 +2,9 @@ import XCTest
 import SwiftUI
 import ImageIO
 import UniformTypeIdentifiers
+#if canImport(Artsy)
 @testable import Artsy
+#endif
 @testable import ArtsyEngine
 
 /// The list behind the start screen: newest first, one entry a document, capped,
@@ -116,6 +118,9 @@ final class RecentCanvasesTests: XCTestCase {
         XCTAssertEqual(store.url(of: store.entries[0])?.standardizedFileURL.path, after.standardizedFileURL.path)
     }
 
+    // The start screen is the app's, drawn by AppKit: Mac only, not in the engine
+    // package's tests on iPad
+    #if canImport(Artsy)
     /// The screen drawn: with a canvas in the list, its green thumbnail is on the screen,
     /// large, beside the sizes' white outlines and the words; with nothing, only those
     /// (the chrome's own red, the mark and the first size, is not green and is not
@@ -226,4 +231,5 @@ final class RecentCanvasesTests: XCTestCase {
             window.contentView = nil
         }
     }
+    #endif
 }
