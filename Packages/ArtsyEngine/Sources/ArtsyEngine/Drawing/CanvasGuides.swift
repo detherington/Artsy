@@ -13,6 +13,9 @@ public struct CanvasGuides: Codable, Equatable {
     /// Canvas x of each vertical guide line.
     public var verticals: [CGFloat] = []
     public var snapsToGuides = true
+    /// The printed page's frame, for a canvas made at a print format; nil for any other.
+    /// Optional so that a document from before it decodes with none.
+    public var page: PageFrame?
 
     /// How close the pen has to come to a line to snap to it, in screen points.
     public static let snapDistance: CGFloat = 8
@@ -83,5 +86,23 @@ public struct CanvasGuides: Codable, Equatable {
         self.gridSpacing = gridSpacing
         self.horizontals = horizontals
         self.verticals = verticals
+    }
+}
+
+/// A printed page's frame on a canvas that holds the page with its bleed: the trim,
+/// where the printer cuts, and the safe area inside it, where lettering and anything
+/// that must not be lost belongs. The canvas past the trim is the bleed. Canvas pixels;
+/// drawn over the canvas, never into the picture, and not snapped to.
+public struct PageFrame: Codable, Equatable {
+    public var trim: CGRect
+    public var safe: CGRect
+    public var isShown = true
+
+    /// The frame of a page whose bleed is the whole canvas: the trim `trimInset` pixels in
+    /// from each edge, the safe area `safeInset`.
+    public init(canvasSize: CGSize, trimInset: CGFloat, safeInset: CGFloat) {
+        let canvas = CGRect(origin: .zero, size: canvasSize)
+        trim = canvas.insetBy(dx: trimInset, dy: trimInset)
+        safe = canvas.insetBy(dx: safeInset, dy: safeInset)
     }
 }

@@ -44,7 +44,9 @@ public final class CanvasRenderer: NSObject, MTKViewDelegate {
     public let canvasSize: CGSize
     public weak var viewModel: CanvasViewModel?
 
-    private var hasInitializedTransform = false
+    /// Whether the first frame has fitted the canvas to the view. Until then the transform
+    /// is the default one, and anything drawn over the canvas waits for it.
+    public private(set) var hasInitializedTransform = false
 
     // In-progress stroke. Regions are texture pixels (origin top-left).
     /// Ribbon brushes: index of the last path point whose geometry is in `activeStrokeTexture`.
@@ -201,8 +203,9 @@ public final class CanvasRenderer: NSObject, MTKViewDelegate {
         }
 
         if !hasInitializedTransform && view.bounds.size.width > 0 {
-            viewModel.zoomToFit(viewSize: view.bounds.size)
+            // Set first, so whoever watches the transform sees the fit as the first one
             hasInitializedTransform = true
+            viewModel.zoomToFit(viewSize: view.bounds.size)
         }
 
         // NSEvent timestamps are system uptime, so the rest is measured on the same clock

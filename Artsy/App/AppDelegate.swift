@@ -164,6 +164,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         do {
             let viewModel = CanvasViewModel(canvasSize: size)
             viewModel.untitledName = title
+            // A print format's size starts with its page frame
+            viewModel.guides.page = CanvasSizePreset.page(for: size)
             if fullScreen { viewModel.fillScreen() }
             let canvasView = CanvasView(frame: NSRect(x: 0, y: 0, width: 800, height: 600), device: metalContext.device)
             try canvasView.configure(context: metalContext, viewModel: viewModel)
@@ -739,6 +741,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         guidesMenu.addItem(withTitle: "Add Vertical Guide", action: #selector(addVerticalGuide), keyEquivalent: "")
         guidesMenu.addItem(withTitle: "Snap to Guides", action: #selector(toggleSnapToGuides), keyEquivalent: "")
         guidesMenu.addItem(withTitle: "Clear Guides", action: #selector(clearGuides), keyEquivalent: "")
+        // Only on a canvas made at a print format (see menuNeedsUpdate)
+        guidesMenu.addItem(withTitle: "Show Page Frame", action: #selector(togglePageFrame), keyEquivalent: "").isHidden = true
         guidesItem.submenu = guidesMenu
         viewMenu.addItem(guidesItem)
         viewMenu.addItem(NSMenuItem.separator())
@@ -917,6 +921,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc private func clearGuides() {
         changeGuides { $0.horizontals.removeAll(); $0.verticals.removeAll() }
+    }
+
+    @objc private func togglePageFrame() {
+        changeGuides { $0.page?.isShown.toggle() }
     }
 
     private func changeGuides(_ change: (inout CanvasGuides) -> Void) {
@@ -1411,6 +1419,9 @@ extension AppDelegate: NSMenuDelegate {
             case "Snap to Grid": item.state = guides.snapsToGrid ? .on : .off
             case "Snap to Guides": item.state = guides.snapsToGuides ? .on : .off
             case "Clear Guides": item.isEnabled = !guides.isEmpty
+            case "Show Page Frame":
+                item.isHidden = guides.page == nil
+                item.state = guides.page?.isShown == true ? .on : .off
             default:
                 if item.tag > 0 { item.state = Int(guides.gridSpacing) == item.tag ? .on : .off }
             }
