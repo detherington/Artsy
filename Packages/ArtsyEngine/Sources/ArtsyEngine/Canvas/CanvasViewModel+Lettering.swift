@@ -126,7 +126,9 @@ extension CanvasViewModel {
             layer.isLocked = true
             layerStack.activeLayerIndex = current
         }
-        let balloon = Balloon.new(balloonStyle, at: point, face: balloonFace,
+        // A drawn font since deleted is not carried on
+        let drawn = balloonDrawnFont.flatMap { DrawnFontLibrary.shared.font(id: $0)?.id }
+        let balloon = Balloon.new(balloonStyle, at: point, face: balloonFace, drawnFont: drawn,
                                   fontSize: Balloon.fontSize(canvasWidth: canvasSize.width), allCaps: balloonCaps)
         layer.lettering = (layer.lettering ?? []) + [balloon]
         renderer.drawLettering(layer.lettering ?? [], into: layer, in: BalloonLayout(balloon).bounds)

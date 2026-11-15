@@ -16,6 +16,8 @@ extension AppModel {
             closeDocument()
         case "showBrushStudio":
             showStudio()
+        case "showFontStudio":
+            showFontStudio()
         case "showSettings":
             present(sheet: SettingsView(), size: CGSize(width: 480, height: 560))
         case "showShortcuts":
@@ -93,6 +95,21 @@ extension AppModel {
                                      previewRenderer: try? BrushPreview(context: context))
         studioModel = model
         present(sheet: BrushStudioView(model: model, library: BrushLibrary.shared), size: CGSize(width: 460, height: 760))
+    }
+
+    /// The Font Studio over the canvas, on the font the balloon in hand is set in if it has
+    /// one, with Done to close it.
+    private func showFontStudio() {
+        let viewModel = session?.viewModel
+        let model = FontStudioModel(library: DrawnFontLibrary.shared,
+                                    font: viewModel?.selectedBalloon?.drawnFont ?? viewModel?.balloonDrawnFont)
+        fontStudioModel = model
+        // Over the whole screen: a sheet's swipe down to close would take strokes drawn downward
+        let host = UIHostingController(rootView: FontStudioView(model: model, done: { [weak self] in self?.dismissTop {} })
+            .background(Chrome.background.ignoresSafeArea()))
+        host.modalPresentationStyle = .fullScreen
+        host.overrideUserInterfaceStyle = Chrome.interfaceStyle
+        present(host)
     }
 
     private func show(_ error: Error, doing what: String) {

@@ -179,6 +179,8 @@ public final class CanvasViewModel: ObservableObject {
     /// How a new balloon is set: the style, face and capitals last chosen.
     @Published public var balloonStyle: BalloonStyle = .speech
     @Published public var balloonFace: LetteringFace = .dialogue
+    /// The drawn font the next balloon is set in, over its face; nil for the face alone.
+    @Published public var balloonDrawnFont: UUID?
     @Published public var balloonCaps = true
     /// The Letter tool's gesture in progress.
     var letteringGesture: LetteringGesture?

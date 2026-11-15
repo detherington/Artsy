@@ -16,6 +16,7 @@ enum BalloonSelectionStyle {
 struct LetteringPanel: View {
     @ObservedObject var viewModel: CanvasViewModel
     let actions: ChromeActions
+    @ObservedObject private var fonts = DrawnFontLibrary.shared
     @FocusState private var typing: Bool
 
     static let width: CGFloat = 300
@@ -44,14 +45,18 @@ struct LetteringPanel: View {
             if let balloon {
                 editor(for: balloon)
             } else {
+                // The next balloon's face, or a drawn font over it
+                let drawn = fonts.font(id: viewModel.balloonDrawnFont)?.id
                 HStack(spacing: 4) {
                     ForEach(LetteringFace.allCases) { face in
-                        SquareChoice(text: face.rawValue, isSelected: viewModel.balloonFace == face, height: 30,
+                        SquareChoice(text: face.rawValue, isSelected: drawn == nil && viewModel.balloonFace == face, height: 30,
                                      font: Chrome.labelFont, help: "Letter in the \(face.rawValue) face") {
                             viewModel.balloonFace = face
+                            viewModel.balloonDrawnFont = nil
                         }
                     }
                 }
+                drawnFonts(selected: drawn) { id in viewModel.balloonDrawnFont = id }
                 Text("Tap the page to place a balloon; tap one to change it.")
                     .font(Chrome.labelFont)
                     .foregroundColor(Chrome.secondaryText)
@@ -94,14 +99,20 @@ struct LetteringPanel: View {
         .background(Chrome.control)
         .overlay(Rectangle().strokeBorder(Chrome.hairline))
 
+        let drawn = fonts.font(id: balloon.drawnFont)?.id
         HStack(spacing: 4) {
             ForEach(LetteringFace.allCases) { face in
-                SquareChoice(text: face.rawValue, isSelected: balloon.face == face, height: 30, font: Chrome.labelFont,
+                SquareChoice(text: face.rawValue, isSelected: drawn == nil && balloon.face == face, height: 30, font: Chrome.labelFont,
                              help: "Letter in the \(face.rawValue) face") {
                     viewModel.balloonFace = face
-                    change("Lettering Face") { $0.face = face }
+                    viewModel.balloonDrawnFont = nil
+                    change("Lettering Face") { $0.face = face; $0.drawnFont = nil }
                 }
             }
+        }
+        drawnFonts(selected: drawn) { id in
+            viewModel.balloonDrawnFont = id
+            change("Lettering Face") { $0.drawnFont = id }
         }
         HStack(spacing: 6) {
             Text("size")
@@ -132,6 +143,25 @@ struct LetteringPanel: View {
                 .frame(width: 52)
             }
         }
+        HStack(spacing: 6) {
+            SquareChoice(text: "bold", isSelected: balloon.bold, height: 30, font: Chrome.futura(12, bold: true),
+                         help: "The words in bold") {
+                change("Bold") { $0.bold.toggle() }
+            }
+            .frame(width: 56)
+            SquareChoice(text: "italic", isSelected: balloon.italic, height: 30, font: Chrome.labelFont.italic(),
+                         help: "The words in italic") {
+                change("Italic") { $0.italic.toggle() }
+            }
+            .frame(width: 56)
+            Text(verbatim: "*word* stresses it")
+                .font(Chrome.labelFont)
+                .foregroundColor(Chrome.secondaryText)
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+                .help("Words between asterisks are set in bold italic, as comics stress a word")
+            Spacer(minLength: 0)
+        }
         Button {
             guard let renderer = actions.renderer() else { return }
             viewModel.deleteSelectedBalloon(renderer: renderer)
@@ -145,6 +175,42 @@ struct LetteringPanel: View {
         }
         .buttonStyle(.plain)
         .help("Take this balloon off the page (Delete)")
+    }
+
+    /// The artist's drawn fonts, each named in itself, and the way into the Font Studio.
+    private func drawnFonts(selected: UUID?, choose: @escaping (UUID) -> Void) -> some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 4) {
+                ForEach(fonts.fonts) { font in
+                    SquareChoice(text: font.name, isSelected: selected == font.id, height: 30,
+                                 font: DrawnFonts.font(id: font.id, size: 15, fallback: GlyphSheetDrawing.markFace).map { Font($0) }
+                                    ?? Chrome.labelFont,
+                                 help: "Letter in \(font.name), drawn in the Font Studio") {
+                        choose(font.id)
+                    }
+                    .frame(minWidth: 64)
+                    .fixedSize(horizontal: true, vertical: false)
+                    .padding(.horizontal, 2)
+                }
+                Button {
+                    actions.app("showFontStudio")
+                } label: {
+                    HStack(spacing: 5) {
+                        Image(systemName: "pencil.and.outline")
+                        Text(fonts.fonts.isEmpty ? "draw a font" : "font studio")
+                    }
+                    .font(Chrome.labelFont)
+                    .foregroundColor(Chrome.secondaryText)
+                    .padding(.horizontal, 8)
+                    .frame(height: 30)
+                    .overlay(Rectangle().strokeBorder(Chrome.hairline))
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .help("Draw your own lettering fonts (⇧⌘L)")
+            }
+            .id(fonts.revision)
+        }
     }
 
     /// The style: the picked-up balloon's, and the next one's.

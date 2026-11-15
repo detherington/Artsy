@@ -1,4 +1,5 @@
 import CoreGraphics
+import Foundation
 import Metal
 
 extension CanvasRenderer {
@@ -49,5 +50,29 @@ extension CanvasRenderer {
         blit.endEncoding()
         commandBuffer.commit()
         viewModel?.noteContentChanged()
+    }
+
+    /// Sets again every balloon set in one of the drawn fonts `ids`, which changed (or went):
+    /// each drawn where it is now and, with room for its words having run larger before,
+    /// round about. Every balloon a region touches is drawn in it, so the room costs only
+    /// time. Not a step to undo: the font changed, not the page.
+    public func redrawBalloons(setIn ids: Set<UUID>) {
+        guard let viewModel, let layerStack = viewModel.layerStack else { return }
+        var changed = false
+        for layer in layerStack.layers {
+            guard let balloons = layer.lettering else { continue }
+            let affected = balloons.filter { $0.drawnFont.map(ids.contains) == true }
+            guard !affected.isEmpty else { continue }
+            for balloon in affected {
+                let bounds = BalloonLayout(balloon).bounds
+                let room = max(bounds.width, bounds.height) * 0.5 + balloon.fontSize * 2
+                drawLettering(balloons, into: layer, in: bounds.insetBy(dx: -room, dy: -room))
+            }
+            updateThumbnail(for: layer)
+            changed = true
+        }
+        guard changed else { return }
+        viewModel.letteringRevision += 1
+        viewModel.markDirty()
     }
 }

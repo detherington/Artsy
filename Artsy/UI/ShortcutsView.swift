@@ -36,6 +36,7 @@ enum Shortcuts {
             Entry(keys: "D", does: "Black on white again"),
             Entry(keys: "⌥ click", does: "Pan"),
             Entry(keys: "⇧⌘B", does: "Brush Studio"),
+            Entry(keys: "⇧⌘L", does: "Font Studio"),
         ]),
         Group(title: "View", entries: [
             Entry(keys: "⌘0", does: "Zoom to fit"),

@@ -41,6 +41,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         // The engine asks the platform for the pen in use and for its own diagnostics lines
         CanvasViewModel.currentPenKey = { TabletEventHandler.currentPenKey }
+        // The drawn lettering fonts, read and registered before any balloon is set
+        _ = DrawnFontLibrary.shared
         ChromeActions.commitPendingEdits = { [weak self] in self?.activeStorePublic?.canvasView.commitPendingEdits() }
         DiagnosticsLog.platformDetails = {
             let screens = NSScreen.screens.map { "\(Int($0.frame.width))×\(Int($0.frame.height)) @\($0.backingScaleFactor)x" }
@@ -779,6 +781,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         let startItem = NSMenuItem(title: "Start", action: #selector(showStart), keyEquivalent: "n")
         startItem.keyEquivalentModifierMask = [.command, .shift]
         windowMenu.addItem(startItem)
+        windowMenu.addItem(withTitle: "Font Studio…", action: #selector(showFontStudio), keyEquivalent: "L")
         windowMenuItem.submenu = windowMenu
         NSApp.windowsMenu = windowMenu
 
@@ -826,6 +829,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc private func handleUndo() {
+        if let studio = fontStudioWindow, studio.isKeyWindow {
+            fontStudioModel?.undo()
+            return
+        }
         guard let store = activeStore else { return }
         // Route through CanvasView so transform-session intra-session undo runs
         // when a session is active.
@@ -833,6 +840,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc private func handleRedo() {
+        if let studio = fontStudioWindow, studio.isKeyWindow {
+            fontStudioModel?.redo()
+            return
+        }
         guard let store = activeStore else { return }
         store.canvasView.performRedoAction()
     }
@@ -1006,6 +1017,30 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         window.makeKeyAndOrderFront(nil)
     }
     private var brushStudioModel: BrushStudioModel?
+    private var fontStudioWindow: NSWindow?
+    private var fontStudioModel: FontStudioModel?
+
+    /// The Font Studio, where lettering fonts are drawn: one window, whatever canvas is open,
+    /// on the font the lettering in hand is set in if it has one.
+    @objc private func showFontStudio() {
+        let model = fontStudioModel ?? FontStudioModel(library: DrawnFontLibrary.shared,
+                                                       font: activeStore?.viewModel.selectedBalloon?.drawnFont
+                                                           ?? activeStore?.viewModel.balloonDrawnFont)
+        fontStudioModel = model
+        let window = fontStudioWindow ?? {
+            let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 1080, height: 800),
+                                  styleMask: [.titled, .closable, .resizable, .miniaturizable], backing: .buffered, defer: false)
+            window.title = "Font Studio"
+            window.isReleasedWhenClosed = false
+            window.appearance = Chrome.appearance
+            window.minSize = NSSize(width: 820, height: 640)
+            window.contentView = NSHostingView(rootView: FontStudioView(model: model))
+            window.center()
+            return window
+        }()
+        fontStudioWindow = window
+        window.makeKeyAndOrderFront(nil)
+    }
 
     /// Opens the studio on the active canvas's current brush. Reopening it binds it to
     /// whichever canvas is active then.

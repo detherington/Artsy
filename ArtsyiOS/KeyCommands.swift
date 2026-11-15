@@ -77,6 +77,7 @@ enum KeyCommands {
             Entry("exportPNG", "Export PNG", "e", .command) { app("handleExportPNG") },
             Entry("exportJPEG", "Export JPEG", "e", [.command, .shift]) { app("handleExportJPEG") },
             Entry("studio", "Brush Studio", "b", [.command, .shift]) { app("showBrushStudio") },
+            Entry("fontStudio", "Font Studio", "l", [.command, .shift]) { app("showFontStudio") },
             Entry("settings", "Settings", ",", .command) { app("showSettings") },
             Entry("shortcuts", "Keyboard Shortcuts", "/", .command) { app("showShortcuts") },
         ]
