@@ -115,6 +115,8 @@ public final class CanvasRenderer: NSObject, MTKViewDelegate {
     private var heightBeforeStroke: MTLTexture?
     /// What has changed since `compositeTexture` was last brought up to date.
     private var pendingRegions: [MTLScissorRect] = []
+    /// Told when drawn fonts change, to set the balloons in them again.
+    private var drawnFontObserver: NSObjectProtocol?
 
     public init(context: MetalContext, canvasSize: CGSize) throws {
         self.context = context
@@ -147,6 +149,16 @@ public final class CanvasRenderer: NSObject, MTKViewDelegate {
         textureManager.clearTexture(compositeTexture, commandBuffer: commandBuffer)
         commandBuffer.commit()
         commandBuffer.waitUntilCompleted()
+
+        drawnFontObserver = NotificationCenter.default.addObserver(forName: DrawnFontLibrary.fontsDidChange, object: nil,
+                                                                   queue: .main) { [weak self] note in
+            guard let ids = note.userInfo?["ids"] as? Set<UUID> else { return }
+            self?.redrawBalloons(setIn: ids)
+        }
+    }
+
+    deinit {
+        if let drawnFontObserver { NotificationCenter.default.removeObserver(drawnFontObserver) }
     }
 
     /// One view per mip level of a texture, level 0 first.

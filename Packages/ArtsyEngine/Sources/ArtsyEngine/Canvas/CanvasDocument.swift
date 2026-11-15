@@ -27,6 +27,9 @@ public final class CanvasDocument {
         let activeLayerIndex: Int
         /// Grid and guide lines; absent in documents from before they existed.
         var guides: CanvasGuides? = nil
+        /// The drawn fonts the balloons are set in, so the words can be set again wherever
+        /// the document is opened; absent when there are none.
+        var fonts: [DrawnFont]? = nil
 
         struct LayerInfo: Codable {
             let id: String
@@ -111,7 +114,8 @@ public final class CanvasDocument {
             canvasHeight: Int(viewModel.canvasSize.height),
             layers: layerInfos,
             activeLayerIndex: layerStack.activeLayerIndex,
-            guides: viewModel.guides
+            guides: viewModel.guides,
+            fonts: drawnFonts(of: layerStack)
         )
         let jsonData = try JSONEncoder().encode(doc)
         do {
@@ -262,6 +266,16 @@ public final class CanvasDocument {
         cmdBuf.commit()
     }
 
+    /// The lettering fonts the stack's balloons are set in, as the library has them, but for
+    /// imported ones that may not be embedded; nil for none.
+    static func drawnFonts(of layerStack: LayerStack) -> [DrawnFont]? {
+        let ids = Set(layerStack.layers.flatMap { $0.lettering ?? [] }.compactMap(\.drawnFont))
+        guard !ids.isEmpty else { return nil }
+        // An imported font whose maker does not allow it to travel stays behind
+        let fonts = DrawnFontLibrary.shared.fonts(withIDs: ids).filter { $0.imported?.embeddable != false }
+        return fonts.isEmpty ? nil : fonts
+    }
+
     // MARK: - Load
 
     /// The document's description, read and checked. The layers' pixels come with
@@ -410,6 +424,15 @@ public final class CanvasDocument {
             layerStack.activeLayerIndex = doc.activeLayerIndex
         }
         if let guides = doc.guides { viewModel.guides = guides }
+        // Fonts the document brought join the library; any it has in another version set
+        // their balloons again
+        if let fonts = doc.fonts, !fonts.isEmpty {
+            if Thread.isMainThread {
+                DrawnFontLibrary.shared.adopt(fonts)
+            } else {
+                DispatchQueue.main.async { DrawnFontLibrary.shared.adopt(fonts) }
+            }
+        }
 
         DiagnosticsLog.shared.note(.document, String(format: "opened %@ (%d×%d, %d layers, %d with thickness) in %.2f s",
                                                      url.lastPathComponent, doc.canvasWidth, doc.canvasHeight, layerStack.layers.count,

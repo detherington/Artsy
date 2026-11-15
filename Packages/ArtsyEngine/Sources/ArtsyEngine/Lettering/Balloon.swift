@@ -48,23 +48,71 @@ public struct Balloon: Codable, Equatable, Identifiable {
     /// How wide the words run before they wrap.
     public var wrapWidth: CGFloat
     public var face: LetteringFace
+    /// A font the artist drew (`DrawnFonts`), set in place of the face, which stays for the
+    /// characters the font lacks and for when the font is gone. Nil for the face alone.
+    public var drawnFont: UUID?
     /// The face's size, in canvas pixels.
     public var fontSize: CGFloat
     /// Set in capitals, as comics are lettered.
     public var allCaps: Bool
     /// Where the tail points; nil for none.
     public var tail: CGPoint?
+    /// The words in bold and in italic: a drawn font's own bold and italic, a face's where it
+    /// has one, else drawn heavier or slanted. Words between asterisks are bold italic anyway.
+    public var bold: Bool
+    public var italic: Bool
 
     public init(style: BalloonStyle, center: CGPoint, text: String = "", wrapWidth: CGFloat, face: LetteringFace,
-                fontSize: CGFloat, allCaps: Bool = true, tail: CGPoint? = nil) {
+                drawnFont: UUID? = nil, fontSize: CGFloat, allCaps: Bool = true, tail: CGPoint? = nil,
+                bold: Bool = false, italic: Bool = false) {
         self.style = style
         self.center = center
         self.text = text
         self.wrapWidth = wrapWidth
         self.face = face
+        self.drawnFont = drawnFont
         self.fontSize = fontSize
         self.allCaps = allCaps
         self.tail = tail
+        self.bold = bold
+        self.italic = italic
+    }
+
+    // Balloons saved before bold and italic read as neither; older builds ignore them
+    private enum CodingKeys: String, CodingKey {
+        case id, style, center, text, wrapWidth, face, drawnFont, fontSize, allCaps, tail, bold, italic
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(UUID.self, forKey: .id)
+        style = try c.decode(BalloonStyle.self, forKey: .style)
+        center = try c.decode(CGPoint.self, forKey: .center)
+        text = try c.decode(String.self, forKey: .text)
+        wrapWidth = try c.decode(CGFloat.self, forKey: .wrapWidth)
+        face = try c.decode(LetteringFace.self, forKey: .face)
+        drawnFont = try c.decodeIfPresent(UUID.self, forKey: .drawnFont)
+        fontSize = try c.decode(CGFloat.self, forKey: .fontSize)
+        allCaps = try c.decode(Bool.self, forKey: .allCaps)
+        tail = try c.decodeIfPresent(CGPoint.self, forKey: .tail)
+        bold = try c.decodeIfPresent(Bool.self, forKey: .bold) ?? false
+        italic = try c.decodeIfPresent(Bool.self, forKey: .italic) ?? false
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(id, forKey: .id)
+        try c.encode(style, forKey: .style)
+        try c.encode(center, forKey: .center)
+        try c.encode(text, forKey: .text)
+        try c.encode(wrapWidth, forKey: .wrapWidth)
+        try c.encode(face, forKey: .face)
+        try c.encodeIfPresent(drawnFont, forKey: .drawnFont)
+        try c.encode(fontSize, forKey: .fontSize)
+        try c.encode(allCaps, forKey: .allCaps)
+        try c.encodeIfPresent(tail, forKey: .tail)
+        if bold { try c.encode(bold, forKey: .bold) }
+        if italic { try c.encode(italic, forKey: .italic) }
     }
 
     /// A lettering size for a canvas `canvasWidth` across: about 8 points at print size on
@@ -75,9 +123,9 @@ public struct Balloon: Codable, Equatable, Identifiable {
 
     /// A new balloon at `point` in `style`: words wrapping at about nine of the size, and
     /// for a balloon that speaks, a tail down and to the left of it.
-    public static func new(_ style: BalloonStyle, at point: CGPoint, face: LetteringFace, fontSize: CGFloat,
-                           allCaps: Bool) -> Balloon {
-        var balloon = Balloon(style: style, center: point, wrapWidth: fontSize * 9, face: face,
+    public static func new(_ style: BalloonStyle, at point: CGPoint, face: LetteringFace, drawnFont: UUID? = nil,
+                           fontSize: CGFloat, allCaps: Bool) -> Balloon {
+        var balloon = Balloon(style: style, center: point, wrapWidth: fontSize * 9, face: face, drawnFont: drawnFont,
                               fontSize: style == .sound ? fontSize * 2 : fontSize, allCaps: allCaps)
         if style.hasTail {
             balloon.tail = CGPoint(x: point.x - fontSize * 2, y: point.y - fontSize * 5)
@@ -87,6 +135,87 @@ public struct Balloon: Codable, Equatable, Identifiable {
 
     /// The words as they are set.
     public var displayText: String { allCaps ? text.uppercased() : text }
+
+    /// The words in runs, stressed or not: a word or words between asterisks are stressed,
+    /// as a letterer sets them in bold italic, the asterisks gone. An asterisk with no partner
+    /// after it stays, as a footnote's does.
+    public static func stressRuns(in text: String) -> [(text: String, stressed: Bool)] {
+        var runs: [(text: String, stressed: Bool)] = []
+        var current = "", stressed = false
+        let characters = Array(text)
+        func flush() {
+            if !current.isEmpty { runs.append((current, stressed)) }
+            current = ""
+        }
+        for (i, character) in characters.enumerated() {
+            if character == "*" {
+                if stressed {
+                    flush()
+                    stressed = false
+                    continue
+                }
+                if characters[(i + 1)...].contains("*") {
+                    flush()
+                    stressed = true
+                    continue
+                }
+            }
+            current.append(character)
+        }
+        flush()
+        return runs
+    }
+}
+
+/// The fonts a balloon's words are set in, by style: a drawn font's own family, an imported
+/// font or a face with a heavier or slanted stand-in for a member it lacks.
+enum LetteringType {
+    /// The lean of a stand-in italic.
+    static let slant: CGFloat = tan(12 * .pi / 180)
+
+    /// The font for `balloon`'s words in `style` at `size`, and whether to draw them heavier
+    /// for a bold the font does not have.
+    static func font(for balloon: Balloon, size: CGFloat, style: DrawnFontStyle) -> (font: CTFont, heavier: Bool) {
+        let face = balloon.face.postScriptName
+        if let id = balloon.drawnFont {
+            // Characters a drawn font lacks in the face's own italic, where it has one
+            let fallback = style.isItalic
+                ? standIn(CTFontCreateWithName(face as CFString, size, nil), style: .italic).font : nil
+            let fallbackName = fallback.map { CTFontCopyPostScriptName($0) as String } ?? face
+            if let exact = DrawnFonts.font(id: id, size: size, style: style, fallback: fallbackName) { return (exact, false) }
+            if let regular = DrawnFonts.font(id: id, size: size, fallback: face) { return standIn(regular, style: style) }
+        }
+        let base = CTFontCreateWithName(face as CFString, size, nil)
+        guard style != .regular else { return (base, false) }
+        // The faces are their families' bold cuts already: bold is drawn heavier still
+        let (font, _) = standIn(base, style: .italic)
+        return (style.isItalic ? font : base, style.isBold)
+    }
+
+    /// `font`'s `style`: its family's own member where there is one, else slanted, and drawn
+    /// heavier for a bold it lacks.
+    static func standIn(_ font: CTFont, style: DrawnFontStyle) -> (font: CTFont, heavier: Bool) {
+        var result = font
+        if style.isItalic {
+            if let italic = CTFontCreateCopyWithSymbolicTraits(font, 0, nil, .traitItalic, .traitItalic),
+               CTFontGetSymbolicTraits(italic).contains(.traitItalic) {
+                result = italic
+            } else {
+                var matrix = CGAffineTransform(a: 1, b: 0, c: slant, d: 1, tx: 0, ty: 0)
+                result = CTFontCreateCopyWithAttributes(font, 0, &matrix, nil)
+            }
+        }
+        var heavier = false
+        if style.isBold {
+            if let bold = CTFontCreateCopyWithSymbolicTraits(result, 0, nil, .traitBold, .traitBold),
+               CTFontGetSymbolicTraits(bold).contains(.traitBold), !CTFontGetSymbolicTraits(font).contains(.traitBold) {
+                result = bold
+            } else {
+                heavier = true
+            }
+        }
+        return (result, heavier)
+    }
 }
 
 /// Everything drawn of a balloon, worked out once: the words set at their width, the
@@ -106,21 +235,42 @@ public struct BalloonLayout {
     public init(_ balloon: Balloon) {
         self.balloon = balloon
         let size = max(1, balloon.fontSize)
-        let font = CTFontCreateWithName(balloon.face.postScriptName as CFString, size, nil)
         var alignment = CTTextAlignment.center
         let paragraph: CTParagraphStyle = withUnsafePointer(to: &alignment) { pointer in
             var setting = CTParagraphStyleSetting(spec: .alignment, valueSize: MemoryLayout<CTTextAlignment>.size, value: pointer)
             return CTParagraphStyleCreate(&setting, 1)
         }
-        // An empty balloon is drawn the size of a short word, so it can be seen and found
-        let words = balloon.displayText
-        let measured = words.isEmpty ? "WORD" : words
-        func attributed(_ string: String) -> NSAttributedString {
-            NSAttributedString(string: string, attributes: [
-                NSAttributedString.Key(kCTFontAttributeName as String): font,
-                NSAttributedString.Key(kCTForegroundColorAttributeName as String): CGColor(gray: 0, alpha: 1),
-                NSAttributedString.Key(kCTParagraphStyleAttributeName as String): paragraph,
-            ])
+        // The words in runs, stressed words bold italic, a drawn font's repeats in its other
+        // versions; an empty balloon is drawn the size of a short word, so it can be seen
+        var runs = Balloon.stressRuns(in: balloon.displayText)
+        let words = runs.map(\.text).joined()
+        if let id = balloon.drawnFont {
+            var varied = Array(DrawnFonts.vary(words, font: id))
+            runs = runs.map { run in
+                let taken = String(varied.prefix(run.text.count))
+                varied.removeFirst(min(run.text.count, varied.count))
+                return (taken, run.stressed)
+            }
+        }
+        let measured = words.isEmpty ? [(text: "WORD", stressed: false)] : runs
+        func attributed(_ runs: [(text: String, stressed: Bool)]) -> NSAttributedString {
+            let result = NSMutableAttributedString()
+            for run in runs {
+                let style = DrawnFontStyle(bold: balloon.bold || run.stressed, italic: balloon.italic || run.stressed)
+                let (font, heavier) = LetteringType.font(for: balloon, size: size, style: style)
+                var attributes: [NSAttributedString.Key: Any] = [
+                    NSAttributedString.Key(kCTFontAttributeName as String): font,
+                    NSAttributedString.Key(kCTForegroundColorAttributeName as String): CGColor(gray: 0, alpha: 1),
+                    NSAttributedString.Key(kCTParagraphStyleAttributeName as String): paragraph,
+                ]
+                if heavier {
+                    // Filled and outlined: heavier by a twentieth of the size
+                    attributes[NSAttributedString.Key(kCTStrokeWidthAttributeName as String)] = -5.0
+                    attributes[NSAttributedString.Key(kCTStrokeColorAttributeName as String)] = CGColor(gray: 0, alpha: 1)
+                }
+                result.append(NSAttributedString(string: run.text, attributes: attributes))
+            }
+            return result
         }
         let wrap = max(size, balloon.wrapWidth)
         let setter = CTFramesetterCreateWithAttributedString(attributed(measured))
@@ -134,7 +284,7 @@ public struct BalloonLayout {
         } else {
             // Set at the wrap width, centred, so the lines break where they were measured
             let frameRect = CGRect(x: center.x - wrap / 2, y: textBox.minY, width: wrap, height: textHeight + 1)
-            frame = CTFramesetterCreateFrame(CTFramesetterCreateWithAttributedString(attributed(words)),
+            frame = CTFramesetterCreateFrame(CTFramesetterCreateWithAttributedString(attributed(runs)),
                                              CFRange(location: 0, length: 0), CGPath(rect: frameRect, transform: nil), nil)
         }
 

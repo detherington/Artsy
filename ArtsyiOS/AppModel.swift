@@ -19,10 +19,13 @@ final class AppModel: ObservableObject {
     weak var presenter: UIViewController?
     /// The Studio's model while its sheet is up.
     var studioModel: BrushStudioModel?
+    var fontStudioModel: FontStudioModel?
     /// A picker's delegate while the picker is up.
     var pickerDelegate: AnyObject?
 
     init() {
+        // The drawn lettering fonts, read and registered before any balloon is set
+        _ = DrawnFontLibrary.shared
         do {
             let made = try MetalContext()
             context = made
