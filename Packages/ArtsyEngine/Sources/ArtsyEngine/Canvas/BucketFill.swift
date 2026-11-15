@@ -22,27 +22,38 @@ public enum BucketFill {
         let mask: [UInt8]
     }
 
+    /// - Parameter source: what the fill reads to find its region, if not the layer it
+    ///   fills: the picture as it looks (the composite), or the reference layer (the inks).
+    /// - Parameter closingGaps: pixels: a break in the lines up to twice as wide holds.
+    /// - Parameter spread: pixels the fill grows past its region, under the lines.
+    /// - Parameter keepingAlpha: the layer's alpha is locked: the fill colours only what is there.
     /// - Parameter shouldApply: asked on the main thread when the fill is ready to land,
     ///   seconds later on a big canvas; false if the undo step it was given has been undone
     ///   meanwhile, or its layer is gone.
     public static func fillAsync(
         renderer: CanvasRenderer,
         layer: Layer,
+        reading source: MTLTexture? = nil,
         canvasPoint: CGPoint,
         canvasSize: CGSize,
         fillColor: StrokeColor,
         tolerance: Int,
         selectionPath: CGPath?,
+        closingGaps: Int = 0,
+        spread: Int = 0,
+        keepingAlpha: Bool = false,
         shouldApply: @escaping () -> Bool = { true },
         onComplete: @escaping () -> Void
     ) {
         let width = layer.texture.width
         let height = layer.texture.height
+        let read = source ?? layer.texture
 
         // Canvas coords are Y-up; textures are Y-down. Flip.
         let sx = Int(canvasPoint.x.rounded())
         let sy = Int((canvasSize.height - canvasPoint.y).rounded())
-        guard sx >= 0, sx < width, sy >= 0, sy < height else {
+        guard sx >= 0, sx < width, sy >= 0, sy < height, read.width == width, read.height == height,
+              read.pixelFormat == .rgba16Float else {
             onComplete()
             return
         }
@@ -55,11 +66,15 @@ public enum BucketFill {
             onComplete()
             return
         }
-        blit.copy(from: layer.texture, to: staging)
+        // The top level only: the composite keeps smaller levels of its own elsewhere
+        blit.copy(from: read, sourceSlice: 0, sourceLevel: 0, sourceOrigin: MTLOrigin(x: 0, y: 0, z: 0),
+                  sourceSize: MTLSize(width: width, height: height, depth: 1),
+                  to: staging, destinationSlice: 0, destinationLevel: 0, destinationOrigin: MTLOrigin(x: 0, y: 0, z: 0))
         blit.endEncoding()
 
         let context = renderer.context
         let targetTexture = layer.texture
+        let readsOwnLayer = source == nil || source === layer.texture
 
         cmdBuf.addCompletedHandler { _ in
             DispatchQueue.global(qos: .userInitiated).async {
@@ -69,11 +84,14 @@ public enum BucketFill {
                     width: width, height: height,
                     fillColor: fillColor,
                     tolerance: tolerance,
-                    selectionPath: selectionPath
+                    selectionPath: selectionPath,
+                    readsOwnLayer: readsOwnLayer,
+                    closingGaps: closingGaps,
+                    spread: spread
                 )
                 DispatchQueue.main.async {
                     if let result, shouldApply() {
-                        apply(result, color: fillColor, to: targetTexture, context: context)
+                        apply(result, color: fillColor, to: targetTexture, keepingAlpha: keepingAlpha, context: context)
                     }
                     onComplete()
                 }
@@ -82,8 +100,10 @@ public enum BucketFill {
         cmdBuf.commit()
     }
 
-    /// Write the fill's colour where its mask says, and nowhere else.
-    public static func apply(_ result: Result, color: StrokeColor, to target: MTLTexture, context: MetalContext) {
+    /// Write the fill's colour where its mask says, and nowhere else; on a layer whose
+    /// alpha is locked, at each pixel's own alpha.
+    public static func apply(_ result: Result, color: StrokeColor, to target: MTLTexture, keepingAlpha: Bool = false,
+                             context: MetalContext) {
         let desc = MTLTextureDescriptor.texture2DDescriptor(pixelFormat: .r8Unorm, width: result.width,
                                                             height: result.height, mipmapped: false)
         desc.usage = .shaderRead
@@ -98,7 +118,7 @@ public enum BucketFill {
         }
         var colour = SIMD4<Float>(color.red, color.green, color.blue, color.alpha)
         var origin = SIMD2<UInt32>(UInt32(result.origin.x), UInt32(result.origin.y))
-        encoder.setComputePipelineState(context.maskedFillPipelineState)
+        encoder.setComputePipelineState(keepingAlpha ? context.maskedFillKeepAlphaPipelineState : context.maskedFillPipelineState)
         encoder.setTexture(target, index: 0)
         encoder.setTexture(mask, index: 1)
         encoder.setBytes(&colour, length: MemoryLayout<SIMD4<Float>>.size, index: 0)
@@ -112,14 +132,20 @@ public enum BucketFill {
 
     // MARK: - Background pipeline
 
-    /// The pixels the fill reaches from the seed, as a mask; nil when there is nothing to fill.
+    /// The pixels the fill reaches from the seed, as a mask; nil when there is nothing to
+    /// fill. The pixels like the seed's (within the tolerance, inside any selection) are
+    /// found first, then the region of them joined to the seed (`FillMask`), with a gap in
+    /// the lines closed and the region spread if asked.
     private static func performFill(
         staging: MTLTexture,
         startX sx: Int, startY sy: Int,
         width: Int, height: Int,
         fillColor: StrokeColor,
         tolerance: Int,
-        selectionPath: CGPath?
+        selectionPath: CGPath?,
+        readsOwnLayer: Bool,
+        closingGaps: Int,
+        spread: Int
     ) -> Result? {
         let pixelCount = width * height
         let bytesPerRow = width * 8
@@ -141,22 +167,20 @@ public enum BucketFill {
         }
         os_signpost(.end, log: log, name: "getBytes", signpostID: signpostRead)
 
-        // 2. Sample target color from the seed pixel (as F16 bits then F32 for compare).
+        // 2. The seed's colour, and the fill's
         let targetIdx = (sy * width + sx) * 4
         let targetR = Float(Float16(bitPattern: pixels[targetIdx + 0]))
         let targetG = Float(Float16(bitPattern: pixels[targetIdx + 1]))
         let targetB = Float(Float16(bitPattern: pixels[targetIdx + 2]))
         let targetA = Float(Float16(bitPattern: pixels[targetIdx + 3]))
-
-        // New color as F16 bits (write directly; no scaling).
         let newR = Float16(fillColor.red).bitPattern
         let newG = Float16(fillColor.green).bitPattern
         let newB = Float16(fillColor.blue).bitPattern
         let newA = Float16(fillColor.alpha).bitPattern
 
-        // Already same color at seed → nothing to do.
-        if pixels[targetIdx + 0] == newR && pixels[targetIdx + 1] == newG &&
-           pixels[targetIdx + 2] == newB && pixels[targetIdx + 3] == newA {
+        // Filling a layer's own colour with itself does nothing
+        if readsOwnLayer, pixels[targetIdx + 0] == newR, pixels[targetIdx + 1] == newG,
+           pixels[targetIdx + 2] == newB, pixels[targetIdx + 3] == newA {
             return nil
         }
 
@@ -172,93 +196,56 @@ public enum BucketFill {
             if selMask![sy * width + sx] == 0 { return nil }
         }
 
-        // The pixels reached, and the box around them
-        var filled = [UInt8](repeating: 0, count: pixelCount)
-        var minX = width, maxX = -1, minY = height, maxY = -1
-
-        // 4. Scanline flood fill, unsafe pointers all the way down.
+        // 4. The pixels like the seed's
         let signpostFill = OSSignpostID(log: log)
         os_signpost(.begin, log: log, name: "scanlineFill", signpostID: signpostFill)
-
-        pixels.withUnsafeMutableBufferPointer { pbuf in
-            let p = pbuf.baseAddress!
-            let maskPtr: UnsafePointer<UInt8>? = selMask?.withUnsafeBufferPointer { $0.baseAddress }
-            // NOTE: selMask's underlying memory is owned by the `selMask` array on
-            // the caller's stack; we only use maskPtr inside the same synchronous block.
-
-            @inline(__always)
-            func matchesF16(_ x: Int, _ y: Int) -> Bool {
-                if let m = maskPtr, m[y * width + x] == 0 { return false }
-                let i = (y * width + x) * 4
-                // Skip if already the new color (prevents re-seeding).
-                if p[i] == newR && p[i + 1] == newG && p[i + 2] == newB && p[i + 3] == newA {
-                    return false
-                }
-                let r = Float(Float16(bitPattern: p[i]))
-                let g = Float(Float16(bitPattern: p[i + 1]))
-                let b = Float(Float16(bitPattern: p[i + 2]))
-                let a = Float(Float16(bitPattern: p[i + 3]))
-                let dr = r - targetR
-                let dg = g - targetG
-                let db = b - targetB
-                let da = a - targetA
-                return (dr*dr + dg*dg + db*db + da*da) <= tolSq
-            }
-
-            @inline(__always)
-            func setPixelF16(_ x: Int, _ y: Int) {
-                let i = (y * width + x) * 4
-                p[i] = newR; p[i + 1] = newG; p[i + 2] = newB; p[i + 3] = newA
-                filled[y * width + x] = 255
-            }
-
-            var stack: [Int32] = [Int32(sx), Int32(sy)]  // flat (x, y) pairs
-            stack.reserveCapacity(4096)
-
-            while stack.count >= 2 {
-                let seedY = Int(stack.removeLast())
-                let seedX = Int(stack.removeLast())
-                if !matchesF16(seedX, seedY) { continue }
-
-                var lx = seedX
-                while lx > 0 && matchesF16(lx - 1, seedY) { lx -= 1 }
-                var rx = seedX
-                while rx < width - 1 && matchesF16(rx + 1, seedY) { rx += 1 }
-
-                // Fill span
-                for xi in lx...rx { setPixelF16(xi, seedY) }
-                minX = min(minX, lx); maxX = max(maxX, rx)
-                minY = min(minY, seedY); maxY = max(maxY, seedY)
-
-                // Scan neighbor rows for new seeds
-                if seedY > 0 {
-                    var inRun = false
-                    for xi in lx...rx {
-                        if matchesF16(xi, seedY - 1) {
-                            if !inRun { stack.append(Int32(xi)); stack.append(Int32(seedY - 1)); inRun = true }
-                        } else { inRun = false }
-                    }
-                }
-                if seedY < height - 1 {
-                    var inRun = false
-                    for xi in lx...rx {
-                        if matchesF16(xi, seedY + 1) {
-                            if !inRun { stack.append(Int32(xi)); stack.append(Int32(seedY + 1)); inRun = true }
-                        } else { inRun = false }
-                    }
+        var open = [UInt8](repeating: 0, count: pixelCount)
+        pixels.withUnsafeBufferPointer { p in
+            open.withUnsafeMutableBufferPointer { o in
+                let selection = selMask
+                for i in 0..<pixelCount {
+                    if let selection, selection[i] == 0 { continue }
+                    let c = i * 4
+                    // On its own layer, paint already the fill's colour is not filled again
+                    if readsOwnLayer, p[c] == newR, p[c + 1] == newG, p[c + 2] == newB, p[c + 3] == newA { continue }
+                    let dr = Float(Float16(bitPattern: p[c])) - targetR
+                    let dg = Float(Float16(bitPattern: p[c + 1])) - targetG
+                    let db = Float(Float16(bitPattern: p[c + 2])) - targetB
+                    let da = Float(Float16(bitPattern: p[c + 3])) - targetA
+                    if dr * dr + dg * dg + db * db + da * da <= tolSq { o[i] = 1 }
                 }
             }
         }
 
+        // 5. The region joined to the seed, a gap closed; spread under the lines
+        guard var region = FillMask.region(open: open, width: width, height: height, seed: (sx, sy),
+                                           closingGaps: closingGaps) else {
+            os_signpost(.end, log: log, name: "scanlineFill", signpostID: signpostFill)
+            return nil
+        }
+        if spread > 0 {
+            region = FillMask.dilate(region, width: width, height: height, radius: spread)
+            if let selMask { for i in 0..<pixelCount where selMask[i] == 0 { region[i] = 0 } }
+        }
         os_signpost(.end, log: log, name: "scanlineFill", signpostID: signpostFill)
-        guard maxX >= minX, maxY >= minY else { return nil }
 
-        // 5. The mask of what was reached, cropped to its box.
+        // 6. The mask of what was reached, cropped to its box.
+        var minX = width, maxX = -1, minY = height, maxY = -1
+        for y in 0..<height {
+            let row = y * width
+            for x in 0..<width where region[row + x] != 0 {
+                if x < minX { minX = x }
+                if x > maxX { maxX = x }
+                if y < minY { minY = y }
+                maxY = y
+            }
+        }
+        guard maxX >= minX, maxY >= minY else { return nil }
         let boxW = maxX - minX + 1, boxH = maxY - minY + 1
         var mask = [UInt8](repeating: 0, count: boxW * boxH)
         for y in 0..<boxH {
             let row = (minY + y) * width + minX
-            mask.replaceSubrange(y * boxW ..< (y + 1) * boxW, with: filled[row ..< row + boxW])
+            for x in 0..<boxW where region[row + x] != 0 { mask[y * boxW + x] = 255 }
         }
         return Result(origin: (minX, minY), width: boxW, height: boxH, mask: mask)
     }

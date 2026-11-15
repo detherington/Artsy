@@ -19,6 +19,8 @@ final class MainLayout: NSView {
     /// The Letter tool's panel, over the canvas's top-right corner; empty, and no size, with
     /// any other tool.
     private let lettering: NSHostingView<LetteringPanel>
+    /// The Fill tool's panel, in the same corner; empty with any other tool.
+    private let fillPanel: NSHostingView<FillPanel>
     private let selectionOverlay = SelectionOverlayView()
     private var railWidth: NSLayoutConstraint!
     private var barHeight: NSLayoutConstraint!
@@ -44,6 +46,7 @@ final class MainLayout: NSView {
         pill = NSHostingView(rootView: ChromePillView(viewModel: viewModel, previews: previews, actions: actions))
         zoomHUD = NSHostingView(rootView: ZoomHUDView(viewModel: viewModel))
         lettering = NSHostingView(rootView: LetteringPanel(viewModel: viewModel, actions: actions))
+        fillPanel = NSHostingView(rootView: FillPanel(viewModel: viewModel))
         layersDocked = viewModel.isLayersDocked
         chromeHidden = viewModel.isChromeHidden
         super.init(frame: .zero)
@@ -51,7 +54,7 @@ final class MainLayout: NSView {
 
         selectionOverlay.viewModel = viewModel
         selectionOverlay.wantsLayer = true
-        for view in [rail, canvasView, selectionOverlay, dock, bar, pill, zoomHUD, lettering] as [NSView] {
+        for view in [rail, canvasView, selectionOverlay, dock, bar, pill, zoomHUD, lettering, fillPanel] as [NSView] {
             view.translatesAutoresizingMaskIntoConstraints = false
             addSubview(view)
         }
@@ -99,6 +102,8 @@ final class MainLayout: NSView {
 
             lettering.trailingAnchor.constraint(equalTo: canvasView.trailingAnchor, constant: -12),
             lettering.topAnchor.constraint(equalTo: canvasView.topAnchor, constant: 12),
+            fillPanel.trailingAnchor.constraint(equalTo: canvasView.trailingAnchor, constant: -12),
+            fillPanel.topAnchor.constraint(equalTo: canvasView.topAnchor, constant: 12),
         ])
         selectionOverlay.startAnimation()
 

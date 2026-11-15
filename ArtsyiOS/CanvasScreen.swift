@@ -36,6 +36,9 @@ struct CanvasScreen: View {
                         LetteringPanel(viewModel: viewModel, actions: session.actions)
                             .padding(12)
                             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
+                        FillPanel(viewModel: viewModel)
+                            .padding(12)
+                            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
                         if hidden {
                             ChromePillView(viewModel: viewModel, previews: session.previews, actions: session.actions)
                                 .padding(12)

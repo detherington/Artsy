@@ -264,29 +264,10 @@ final class PaintingView: MTKView {
         viewModel.currentTool = .brush
     }
 
-    /// A bucket fill from the touch, as on the Mac: the undo step saved first, the fill
-    /// in the background, applied only if the step still stands when it lands.
+    /// A bucket fill from the touch, as on the Mac (`CanvasViewModel.bucketFill`).
     private func fill(at canvasPoint: CGPoint) {
-        guard let viewModel, let renderer, let layer = viewModel.layerStack?.activeLayer, !layer.isLocked else { return }
-        let size = viewModel.canvasSize
-        guard canvasPoint.x >= 0, canvasPoint.x < size.width, canvasPoint.y >= 0, canvasPoint.y < size.height else { return }
-        viewModel.saveUndoSnapshot(renderer: renderer, description: "Fill", changing: .layer(layer))
-        let step = viewModel.undoManager.lastStepToken
-        let started = DispatchTime.now().uptimeNanoseconds
-        BucketFill.fillAsync(
-            renderer: renderer, layer: layer, canvasPoint: canvasPoint, canvasSize: size,
-            fillColor: viewModel.currentColor, tolerance: viewModel.fillTolerance, selectionPath: viewModel.selectionPath,
-            shouldApply: { [weak viewModel, weak layer] in
-                guard let viewModel, let layer, viewModel.undoManager.holds(step),
-                      viewModel.layerStack?.layers.contains(where: { $0 === layer }) == true else { return false }
-                return true
-            }
-        ) { [weak renderer, weak layer] in
-            guard let renderer, let layer else { return }
-            DiagnosticsLog.shared.note(.tool, String(format: "fill landed after %.2f s", Double(DispatchTime.now().uptimeNanoseconds - started) / 1e9))
-            renderer.updateThumbnail(for: layer)
-            renderer.viewModel?.noteContentChanged()
-        }
+        guard let viewModel, let renderer else { return }
+        viewModel.bucketFill(at: canvasPoint, renderer: renderer)
     }
 
     // MARK: - Two fingers: pan, pinch, turn

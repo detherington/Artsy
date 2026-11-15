@@ -417,16 +417,21 @@ public final class CanvasRenderer: NSObject, MTKViewDelegate {
         for (i, layer) in layerStack.layers.enumerated() {
             guard layer.isVisible else { continue }
             let isActive = i == layerStack.activeLayerIndex
+            // A clipped layer shows through its base's paint, at its base's opacity, and
+            // is hidden with it
+            let base = layerStack.clippingBase(of: i)
+            if let base, !base.isVisible { continue }
 
             compositor.compositeLayer(
                 source: layer.texture,
                 onto: compositeTexture,
-                opacity: layer.opacity,
+                opacity: layer.opacity * (base?.opacity ?? 1),
                 // Bottom layer always uses normal blending (no destination to blend with)
                 blendMode: i == 0 ? .normal : layer.blendMode,
                 stroke: isActive ? stroke : nil,
                 tempTexture: blendTempTexture,
                 regions: regions,
+                clippedTo: base?.texture,
                 commandBuffer: commandBuffer
             )
             // Thick paint on top of thick paint adds up
@@ -697,6 +702,8 @@ public final class CanvasRenderer: NSObject, MTKViewDelegate {
             opacity: opacity, erase: brush.category == .utility, accumulates: accumulates,
             mixing: brush.mixing, wet: brush.category == .utility || brush.water != nil ? nil : brush.wet
         )
+        // On a layer whose alpha is locked, the stroke changes only the colour of what is there
+        overlay.alphaLock = viewModel.layerStack?.activeLayer?.isAlphaLocked == true
         // A wash meets the paint under it wet or dry
         if let layer = viewModel.layerStack?.activeLayer, let wetMap = layer.wetTexture {
             overlay.wetMap = wetMap
@@ -815,6 +822,8 @@ public final class CanvasRenderer: NSObject, MTKViewDelegate {
             let isVisible: Bool
             let opacity: Float
             let blendMode: LayerBlendMode
+            let isClipped: Bool
+            let isAlphaLocked: Bool
         }
         let layers: [LayerState]
         let activeLayerIndex: Int
@@ -823,7 +832,8 @@ public final class CanvasRenderer: NSObject, MTKViewDelegate {
 
         init(viewModel: CanvasViewModel, layerStack: LayerStack) {
             layers = layerStack.layers.map {
-                LayerState(id: $0.id, isVisible: $0.isVisible, opacity: $0.opacity, blendMode: $0.blendMode)
+                LayerState(id: $0.id, isVisible: $0.isVisible, opacity: $0.opacity, blendMode: $0.blendMode,
+                           isClipped: $0.isClipped, isAlphaLocked: $0.isAlphaLocked)
             }
             activeLayerIndex = layerStack.activeLayerIndex
             strokeOpacity = viewModel.brushOpacity
@@ -1013,16 +1023,19 @@ public final class CanvasRenderer: NSObject, MTKViewDelegate {
         }
     }
 
-    /// Every visible layer flattened onto `destination`, each with its blend mode and
-    /// opacity as the canvas shows them, without the stroke in progress or a tool's preview.
+    /// Every visible layer flattened onto `destination`, each with its blend mode, opacity
+    /// and clipping as the canvas shows them, without the stroke in progress or a tool's
+    /// preview.
     public func flattenLayers(onto destination: MTLTexture, commandBuffer: MTLCommandBuffer) {
-        guard let layers = viewModel?.layerStack?.layers else { return }
-        for (index, layer) in layers.enumerated() where layer.isVisible {
+        guard let stack = viewModel?.layerStack else { return }
+        for (index, layer) in stack.layers.enumerated() where layer.isVisible {
+            let base = stack.clippingBase(of: index)
+            if let base, !base.isVisible { continue }
             compositor.compositeLayer(
-                source: layer.texture, onto: destination, opacity: layer.opacity,
+                source: layer.texture, onto: destination, opacity: layer.opacity * (base?.opacity ?? 1),
                 // The bottom layer has nothing under it to blend with
                 blendMode: index == 0 ? .normal : layer.blendMode,
-                stroke: nil, tempTexture: blendTempTexture, commandBuffer: commandBuffer
+                stroke: nil, tempTexture: blendTempTexture, clippedTo: base?.texture, commandBuffer: commandBuffer
             )
         }
     }
@@ -1426,6 +1439,13 @@ public final class CanvasRenderer: NSObject, MTKViewDelegate {
                 }
             } else if isSmudging {
                 // Already in the layer
+            } else if activeLayer.isAlphaLocked, let overlay {
+                // The layer keeps its alpha: the stroke changes only the colour of what is
+                // there, by the merge its preview showed; an eraser changes nothing
+                if !isErasing {
+                    compositor.mergeStroke(overlay, onto: activeLayer.texture, tempTexture: blendTempTexture,
+                                           regions: [strokeRegion], commandBuffer: commandBuffer)
+                }
             } else if isErasing {
                 compositor.erase(
                     source: activeStrokeTexture, from: activeLayer.texture,

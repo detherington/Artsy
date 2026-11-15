@@ -25,7 +25,7 @@ struct LayersPanelContent: View {
     var body: some View {
         VStack(spacing: 0) {
             if let active = layerStack.activeLayer {
-                LayerControls(layer: active, actions: actions)
+                LayerControls(layer: active, isBottom: layerStack.activeLayerIndex == 0, actions: actions)
                 Divider().overlay(Chrome.hairline)
             }
             buttons
@@ -43,6 +43,9 @@ struct LayersPanelContent: View {
                             select: { actions.select(index) },
                             toggleVisibility: { actions.toggleVisibility(of: layer) },
                             toggleLock: { actions.toggleLock(of: layer) },
+                            toggleClipping: { actions.toggleClipping(of: layer) },
+                            toggleAlphaLock: { actions.toggleAlphaLock(of: layer) },
+                            toggleReference: { actions.toggleReference(of: layer) },
                             duplicate: { actions.duplicate(at: index) },
                             mergeDown: { actions.mergeDown(at: index) },
                             delete: { actions.delete(at: index) }
@@ -96,9 +99,12 @@ struct LayersPanelContent: View {
     }
 }
 
-/// The selected layer's blend mode and opacity, above the list.
+/// The selected layer's blend mode, opacity, clipping, alpha lock and reference mark,
+/// above the list.
 struct LayerControls: View {
     @ObservedObject var layer: Layer
+    /// The bottom layer has nothing to clip to.
+    let isBottom: Bool
     let actions: LayerActions
 
     var body: some View {
@@ -125,6 +131,24 @@ struct LayerControls: View {
                         onEditingChanged: { began in if began { actions.saveStep("Layer Opacity") } }) {
                 "\(Int(($0 * 100).rounded()))%"
             }
+            HStack(spacing: 4) {
+                SquareChoice(text: "clip", isSelected: layer.isClipped, height: 30, font: Chrome.labelFont,
+                             help: "Show this layer only where the layer below has paint") {
+                    actions.toggleClipping(of: layer)
+                }
+                .disabled(isBottom)
+                .opacity(isBottom ? 0.4 : 1)
+                SquareChoice(text: "lock alpha", isSelected: layer.isAlphaLocked, height: 30, font: Chrome.labelFont,
+                             help: "Paint only where this layer already has paint") {
+                    actions.toggleAlphaLock(of: layer)
+                }
+                SquareChoice(text: "reference", isSelected: layer.isReference, height: 30, font: Chrome.labelFont,
+                             help: "The layer fills read their lines from, when the fill reads the reference") {
+                    actions.toggleReference(of: layer)
+                }
+            }
+            .padding(.horizontal, 16)
+            .padding(.bottom, 8)
         }
     }
 }
@@ -139,6 +163,9 @@ struct LayerRow: View {
     let select: () -> Void
     let toggleVisibility: () -> Void
     let toggleLock: () -> Void
+    let toggleClipping: () -> Void
+    let toggleAlphaLock: () -> Void
+    let toggleReference: () -> Void
     let duplicate: () -> Void
     let mergeDown: () -> Void
     let delete: () -> Void
@@ -150,6 +177,14 @@ struct LayerRow: View {
                 .foregroundColor(Chrome.secondaryText.opacity(0.7))
                 .frame(width: 24, height: LayersPanelContent.rowHeight)
                 .help("Drag to reorder")
+            if layer.isClipped && canMergeDown {
+                // Clipped to the layer below: set in, with an arrow down to it
+                Image(systemName: "arrow.turn.left.down")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundColor(Chrome.secondaryText)
+                    .frame(width: 16)
+                    .help("Clipped to the layer below")
+            }
             ZStack {
                 Rectangle().fill(Chrome.control)
                 if let thumb = layer.thumbnail {
@@ -165,6 +200,12 @@ struct LayerRow: View {
                 .font(Chrome.font)
                 .foregroundColor(isActive ? Chrome.text : Chrome.secondaryText)
                 .lineLimit(1)
+            if layer.isAlphaLocked {
+                mark("checkerboard.rectangle", help: "Alpha locked")
+            }
+            if layer.isReference {
+                mark("scope", help: "The reference fills read")
+            }
             Spacer(minLength: 4)
             rowButton(layer.isVisible ? "eye" : "eye.slash", on: layer.isVisible, help: layer.isVisible ? "Hide" : "Show",
                       action: toggleVisibility)
@@ -186,8 +227,19 @@ struct LayerRow: View {
             Button("Duplicate", action: duplicate)
             Button("Merge Down", action: mergeDown).disabled(!canMergeDown)
             Divider()
+            Button(layer.isClipped ? "Release Clipping" : "Clip to Below", action: toggleClipping).disabled(!canMergeDown)
+            Button(layer.isAlphaLocked ? "Unlock Alpha" : "Lock Alpha", action: toggleAlphaLock)
+            Button(layer.isReference ? "Clear Reference" : "Set as Reference", action: toggleReference)
+            Divider()
             Button("Delete", action: delete).disabled(!canDelete)
         }
+    }
+
+    private func mark(_ systemImage: String, help: String) -> some View {
+        Image(systemName: systemImage)
+            .font(.system(size: 11))
+            .foregroundColor(Chrome.secondaryText)
+            .help(help)
     }
 
     private func rowButton(_ systemImage: String, on: Bool, help: String, action: @escaping () -> Void) -> some View {
@@ -260,6 +312,28 @@ struct LayerActions {
     func toggleLock(of layer: Layer) {
         saveStep(layer.isLocked ? "Unlock Layer" : "Lock Layer")
         layer.isLocked.toggle()
+    }
+
+    /// Clip `layer` to the layer below, or release it; not the bottom layer.
+    func toggleClipping(of layer: Layer) {
+        guard let first = layerStack.layers.first, first !== layer || layer.isClipped else { return }
+        saveStep(layer.isClipped ? "Release Clipping" : "Clip to Below")
+        layer.isClipped.toggle()
+    }
+
+    func toggleAlphaLock(of layer: Layer) {
+        saveStep(layer.isAlphaLocked ? "Unlock Alpha" : "Lock Alpha")
+        layer.isAlphaLocked.toggle()
+    }
+
+    /// Mark `layer` as the one fills read, the only one; or clear the mark.
+    func toggleReference(of layer: Layer) {
+        saveStep(layer.isReference ? "Clear Reference" : "Reference Layer")
+        let marking = !layer.isReference
+        // The fill panel's note watches the stack, not each layer
+        layerStack.objectWillChange.send()
+        for other in layerStack.layers where other.isReference { other.isReference = false }
+        layer.isReference = marking
     }
 
     func setBlendMode(_ mode: LayerBlendMode, of layer: Layer) {

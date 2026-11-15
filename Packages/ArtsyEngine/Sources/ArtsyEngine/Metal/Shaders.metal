@@ -712,6 +712,7 @@ struct StrokeMergeParams {
     float blendsWhenWet; // above 0 the wash blends into paint still wet instead of glazing it (see wetness())
     float wetNow;       // the layer's wet map is read at this time, seconds since its epoch
     float dryingTime;   // how long paint stays wet at most, seconds
+    int   alphaLock;    // 1: the layer keeps its alpha; the stroke changes only its colour
 };
 
 // --- Wet and dry ---
@@ -760,7 +761,7 @@ static inline float4 wetWash(float4 coverage, float2 canvasPixel, float wet, con
 
 // The stroke, at its opacity, onto the layer. A glaze laid into wet paint (`wet` above 0)
 // blends with it as pigment instead, by that much.
-static inline float4 strokeOnto(float4 stroke, float4 layer, float wet, constant StrokeMergeParams &p) {
+static inline float4 strokeOntoFreely(float4 stroke, float4 layer, float wet, constant StrokeMergeParams &p) {
     if (p.erase != 0) return layer * (1.0 - stroke.a);
     if (p.mixing == 1) return pigmentOver(stroke, layer);
     if (p.mixing == 2) {
@@ -768,6 +769,16 @@ static inline float4 strokeOnto(float4 stroke, float4 layer, float wet, constant
         return wet > 0.0 ? mix(glazed, pigmentOver(stroke, layer), wet) : glazed;
     }
     return stroke + layer * (1.0 - stroke.a);
+}
+
+// The stroke onto the layer; on a layer whose alpha is locked, only the colour of what is
+// already there changes: the merged colour at the layer's own alpha, and an eraser does
+// nothing.
+static inline float4 strokeOnto(float4 stroke, float4 layer, float wet, constant StrokeMergeParams &p) {
+    if (p.alphaLock == 0) return strokeOntoFreely(stroke, layer, wet, p);
+    if (p.erase != 0 || layer.a <= 0.0) return layer;
+    float4 painted = strokeOntoFreely(stroke, layer, wet, p);
+    return float4(straight(painted) * layer.a, layer.a);
 }
 
 static inline float4 mergeStroke(float4 coverage, float4 layer, float2 canvasPixel, constant StrokeMergeParams &p,
@@ -875,6 +886,75 @@ fragment float4 compositeBlendWithStroke(
     return blendOver(merged * layerOpacity, dstTex.sample(s, in.texCoord), mode);
 }
 
+// --- Clipping ---
+//
+// A layer clipped to the one below shows only where its base has paint: the same passes,
+// the layer (with the stroke being drawn, for the active layer) multiplied by the base's
+// alpha before its opacity and blend mode. The base is bound at texture 6.
+
+fragment float4 compositeNormalClipped(
+    CompositeVertexOut in [[stage_in]],
+    texture2d<float> layer [[texture(0)]],
+    texture2d<float> base [[texture(6)]],
+    sampler s [[sampler(0)]],
+    constant float &layerOpacity [[buffer(0)]]
+) {
+    return layer.sample(s, in.texCoord) * (layerOpacity * base.sample(s, in.texCoord).a);
+}
+
+fragment float4 compositeNormalWithStrokeClipped(
+    CompositeVertexOut in [[stage_in]],
+    texture2d<float> layer [[texture(0)]],
+    texture2d<float> committed [[texture(2)]],
+    texture2d<float> tail [[texture(3)]],
+    texture2d<float> paper [[texture(4)]],
+    texture2d<float> wetMap [[texture(5)]],
+    texture2d<float> base [[texture(6)]],
+    sampler s [[sampler(0)]],
+    sampler paperSampler [[sampler(1)]],
+    constant float &layerOpacity [[buffer(0)]],
+    constant StrokeMergeParams &stroke [[buffer(2)]]
+) {
+    float4 merged = layerWithStroke(layer.sample(s, in.texCoord), committed.sample(s, in.texCoord),
+                                    tail.sample(s, in.texCoord), canvasPixel(in.texCoord, layer),
+                                    stroke, paper, paperSampler, wetMap, s);
+    return merged * (layerOpacity * base.sample(s, in.texCoord).a);
+}
+
+fragment float4 compositeBlendClipped(
+    CompositeVertexOut in [[stage_in]],
+    texture2d<float> srcTex [[texture(0)]],
+    texture2d<float> dstTex [[texture(1)]],
+    texture2d<float> base [[texture(6)]],
+    sampler s [[sampler(0)]],
+    constant float &layerOpacity [[buffer(0)]],
+    constant int &mode [[buffer(1)]]
+) {
+    float4 src = srcTex.sample(s, in.texCoord) * (layerOpacity * base.sample(s, in.texCoord).a);
+    return blendOver(src, dstTex.sample(s, in.texCoord), mode);
+}
+
+fragment float4 compositeBlendWithStrokeClipped(
+    CompositeVertexOut in [[stage_in]],
+    texture2d<float> srcTex [[texture(0)]],
+    texture2d<float> dstTex [[texture(1)]],
+    texture2d<float> committed [[texture(2)]],
+    texture2d<float> tail [[texture(3)]],
+    texture2d<float> paper [[texture(4)]],
+    texture2d<float> wetMap [[texture(5)]],
+    texture2d<float> base [[texture(6)]],
+    sampler s [[sampler(0)]],
+    sampler paperSampler [[sampler(1)]],
+    constant float &layerOpacity [[buffer(0)]],
+    constant int &mode [[buffer(1)]],
+    constant StrokeMergeParams &stroke [[buffer(2)]]
+) {
+    float4 merged = layerWithStroke(srcTex.sample(s, in.texCoord), committed.sample(s, in.texCoord),
+                                    tail.sample(s, in.texCoord), canvasPixel(in.texCoord, srcTex),
+                                    stroke, paper, paperSampler, wetMap, s);
+    return blendOver(merged * (layerOpacity * base.sample(s, in.texCoord).a), dstTex.sample(s, in.texCoord), mode);
+}
+
 // --- Display ---
 
 fragment float4 displayFragment(
@@ -929,6 +1009,21 @@ kernel void maskedFillKernel(
 ) {
     if (gid.x >= mask.get_width() || gid.y >= mask.get_height()) return;
     if (mask.read(gid).r > 0.5) target.write(half4(colour), origin + gid);
+}
+
+/// The same on a layer whose alpha is locked: the colour at each pixel's own alpha, so the
+/// fill changes the colour of what is there and adds nothing where nothing is.
+kernel void maskedFillKeepAlphaKernel(
+    texture2d<half, access::read_write> target [[texture(0)]],
+    texture2d<float, access::read> mask [[texture(1)]],
+    constant float4 &colour [[buffer(0)]],
+    constant uint2 &origin [[buffer(1)]],
+    uint2 gid [[thread_position_in_grid]]
+) {
+    if (gid.x >= mask.get_width() || gid.y >= mask.get_height()) return;
+    if (mask.read(gid).r <= 0.5) return;
+    half alpha = target.read(origin + gid).a;
+    target.write(half4(half3(colour.rgb) * alpha, alpha), origin + gid);
 }
 
 // Fills a mip level from the level above: each texel the mean of the 2x2 block over it.
