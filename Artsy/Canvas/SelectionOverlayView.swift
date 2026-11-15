@@ -35,6 +35,11 @@ class SelectionOverlayView: NSView {
 
         drawGuides(vm.guides, canvasSize: vm.canvasSize, zoom: vm.transform.scale, transform: transform)
 
+        // The balloon the Letter tool holds: its box, and handles for its tail and width
+        if vm.currentTool == .letter, let balloon = vm.selectedBalloon {
+            drawBalloonSelection(BalloonLayout(balloon), transform: transform)
+        }
+
         // Draw symmetry guide lines (subtle dashed lines across the canvas center)
         if vm.symmetryMode.isOn {
             drawSymmetryGuides(for: vm, transform: transform)
@@ -121,6 +126,32 @@ class SelectionOverlayView: NSView {
         if !lines.isEmpty {
             stroke(lines, color: NSColor.systemTeal.withAlphaComponent(0.85), width: 1)
         }
+    }
+
+    /// A picked-up balloon: a dashed box round it, a round handle at its tail's tip and a
+    /// square one at the right of its words' width, in the accent, a few points across at
+    /// any zoom.
+    private func drawBalloonSelection(_ layout: BalloonLayout, transform: CGAffineTransform) {
+        var transform = transform
+        let colour = NSColor(cgColor: BalloonSelectionStyle.colour) ?? .systemRed
+        let box = NSBezierPath(cgPath: CGPath(rect: layout.bounds, transform: &transform))
+        box.lineWidth = 1
+        box.setLineDash(BalloonSelectionStyle.dash, count: BalloonSelectionStyle.dash.count, phase: 0)
+        colour.setStroke()
+        box.stroke()
+        let r = BalloonSelectionStyle.handleRadius
+        func handle(_ point: CGPoint, round: Bool) {
+            let p = point.applying(transform)
+            let rect = NSRect(x: p.x - r, y: p.y - r, width: 2 * r, height: 2 * r)
+            let path = round ? NSBezierPath(ovalIn: rect) : NSBezierPath(rect: rect)
+            NSColor.white.setFill()
+            path.fill()
+            path.lineWidth = 1.5
+            colour.setStroke()
+            path.stroke()
+        }
+        if let tail = layout.tailHandle { handle(tail, round: true) }
+        handle(layout.widthHandle, round: false)
     }
 
     /// A print page's frame: the bleed past the trim under a light veil, the trim a solid

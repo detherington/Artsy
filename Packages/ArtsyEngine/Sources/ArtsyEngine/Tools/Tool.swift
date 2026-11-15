@@ -40,6 +40,8 @@ public enum ToolType: String, CaseIterable, Identifiable {
     case selection = "Selection"
     case shape = "Shape"
     case transform = "Transform"
+    /// Lettering: speech balloons, captions and sound effects, on a layer of their own.
+    case letter = "Letter"
     case pan = "Pan"
 
     public var id: String { rawValue }
@@ -53,6 +55,7 @@ public enum ToolType: String, CaseIterable, Identifiable {
         case .selection: return "S"
         case .shape: return "U"
         case .transform: return "T"
+        case .letter: return "L"
         case .pan: return "H"
         }
     }
@@ -66,6 +69,7 @@ public enum ToolType: String, CaseIterable, Identifiable {
         case .selection: return "rectangle.dashed"
         case .shape: return "square.on.circle"
         case .transform: return "arrow.up.left.and.down.right.and.arrow.up.right.and.down.left"
+        case .letter: return "text.bubble"
         case .pan: return "hand.raised"
         }
     }

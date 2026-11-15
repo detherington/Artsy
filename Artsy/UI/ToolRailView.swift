@@ -12,9 +12,9 @@ struct ToolRailView: View {
     /// Pan is a gesture (space, the middle button, two fingers), not a tool in the rail.
     /// On iPad, the tools the canvas there takes so far.
     #if os(macOS)
-    static let tools: [ToolType] = [.brush, .eraser, .fill, .eyedropper, .selection, .shape, .transform]
+    static let tools: [ToolType] = [.brush, .eraser, .fill, .eyedropper, .selection, .shape, .transform, .letter]
     #else
-    static let tools: [ToolType] = [.brush, .eraser, .fill, .eyedropper]
+    static let tools: [ToolType] = [.brush, .eraser, .fill, .eyedropper, .letter]
     #endif
 
     var body: some View {

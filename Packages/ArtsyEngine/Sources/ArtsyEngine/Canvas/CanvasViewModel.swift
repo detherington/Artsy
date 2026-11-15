@@ -168,6 +168,23 @@ public final class CanvasViewModel: ObservableObject {
     /// A grid and guide lines over the canvas, which the pen snaps to.
     @Published public var guides = CanvasGuides()
 
+    // Lettering (see CanvasViewModel+Lettering)
+    /// The balloon the Letter tool has picked up, if any.
+    @Published public var selectedBalloonID: UUID?
+    /// Counts every change to a balloon, so what draws balloons knows to draw again.
+    @Published public var letteringRevision = 0
+    /// Set when a balloon is placed, for the lettering panel's text box to take the
+    /// keyboard; the panel clears it when it has.
+    @Published public var balloonWantsKeyboard = false
+    /// How a new balloon is set: the style, face and capitals last chosen.
+    @Published public var balloonStyle: BalloonStyle = .speech
+    @Published public var balloonFace: LetteringFace = .dialogue
+    @Published public var balloonCaps = true
+    /// The Letter tool's gesture in progress.
+    var letteringGesture: LetteringGesture?
+    /// The last step saved by a lettering change, to fold the next one into it.
+    var lastLetteringStep: (balloon: UUID, kind: String, token: Int?)?
+
     /// `point` pulled onto any guide within reach, at the current zoom.
     private func snappedToGuides(_ point: StrokePoint) -> StrokePoint {
         guard guides.snapsAnything else { return point }
@@ -501,6 +518,7 @@ public final class CanvasViewModel: ObservableObject {
 
     public func performUndo(renderer: CanvasRenderer) {
         guard let layerStack = layerStack else { return }
+        defer { letteringRevision += 1 }
         undoManager.undo(layerStack: layerStack, viewModel: self, context: renderer.context)
         markDirty()
         renderer.updateAllThumbnails(in: layerStack)
@@ -509,6 +527,7 @@ public final class CanvasViewModel: ObservableObject {
 
     public func performRedo(renderer: CanvasRenderer) {
         guard let layerStack = layerStack else { return }
+        defer { letteringRevision += 1 }
         undoManager.redo(layerStack: layerStack, viewModel: self, context: renderer.context)
         markDirty()
         renderer.updateAllThumbnails(in: layerStack)

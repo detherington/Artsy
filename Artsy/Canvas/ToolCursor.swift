@@ -116,6 +116,7 @@ enum ToolCursor {
         case .selection:   return selection
         case .shape:       return shape
         case .transform:   return transformIdle
+        case .letter:      return NSCursor.iBeam
         case .pan:         return panHover
         }
     }

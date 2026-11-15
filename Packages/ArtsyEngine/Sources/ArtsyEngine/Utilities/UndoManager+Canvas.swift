@@ -37,6 +37,8 @@ public final class CanvasUndoManager {
         let isLocked: Bool
         let opacity: Float
         let blendMode: LayerBlendMode
+        /// A lettering layer's balloons, which a step brings back with its pixels.
+        var lettering: [Balloon]? = nil
         /// A GPU copy of the layer's pixels — or, for a layer the action will not change, the
         /// layer's own texture: it is in the right state when this step is undone, since
         /// every later change to it has been undone first.
@@ -420,6 +422,7 @@ public final class CanvasUndoManager {
                 isLocked: layer.isLocked,
                 opacity: layer.opacity,
                 blendMode: layer.blendMode,
+                lettering: layer.lettering,
                 texture: texture,
                 height: height,
                 isCopy: copies
@@ -471,7 +474,7 @@ public final class CanvasUndoManager {
                 let layer = layers[candidate.index]
                 snapshot.replaceLayer(at: candidate.index, with: LayerSnapshot(
                     id: layer.id, name: layer.name, isVisible: layer.isVisible, isLocked: layer.isLocked,
-                    opacity: layer.opacity, blendMode: layer.blendMode,
+                    opacity: layer.opacity, blendMode: layer.blendMode, lettering: layer.lettering,
                     texture: candidate.texture, height: candidate.height, isCopy: true
                 ))
             }
@@ -492,6 +495,7 @@ public final class CanvasUndoManager {
                 existing.isLocked = snap.isLocked
                 existing.opacity = snap.opacity
                 existing.blendMode = snap.blendMode
+                existing.lettering = snap.lettering
                 if snap.isCopy {
                     blitCopy(from: snap.texture, to: existing.texture, context: context)
                     restoreHeight(snap.height, to: existing, context: context)
@@ -510,6 +514,7 @@ public final class CanvasUndoManager {
                 layer.isLocked = snap.isLocked
                 layer.opacity = snap.opacity
                 layer.blendMode = snap.blendMode
+                layer.lettering = snap.lettering
                 newLayers.append(layer)
             } else {
                 // Layer was deleted and this snapshot copied it — recreate it
@@ -528,6 +533,7 @@ public final class CanvasUndoManager {
                 layer.isLocked = snap.isLocked
                 layer.opacity = snap.opacity
                 layer.blendMode = snap.blendMode
+                layer.lettering = snap.lettering
                 blitCopy(from: snap.texture, to: newTexture, context: context)
                 restoreHeight(snap.height, to: layer, context: context)
                 newLayers.append(layer)

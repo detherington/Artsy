@@ -16,6 +16,9 @@ final class MainLayout: NSView {
     private let dock: NSHostingView<LayersDockView>
     private let pill: NSHostingView<ChromePillView>
     private let zoomHUD: NSHostingView<ZoomHUDView>
+    /// The Letter tool's panel, over the canvas's top-right corner; empty, and no size, with
+    /// any other tool.
+    private let lettering: NSHostingView<LetteringPanel>
     private let selectionOverlay = SelectionOverlayView()
     private var railWidth: NSLayoutConstraint!
     private var barHeight: NSLayoutConstraint!
@@ -40,6 +43,7 @@ final class MainLayout: NSView {
         dock = NSHostingView(rootView: LayersDockView(viewModel: viewModel, renderer: canvasView.renderer))
         pill = NSHostingView(rootView: ChromePillView(viewModel: viewModel, previews: previews, actions: actions))
         zoomHUD = NSHostingView(rootView: ZoomHUDView(viewModel: viewModel))
+        lettering = NSHostingView(rootView: LetteringPanel(viewModel: viewModel, actions: actions))
         layersDocked = viewModel.isLayersDocked
         chromeHidden = viewModel.isChromeHidden
         super.init(frame: .zero)
@@ -47,7 +51,7 @@ final class MainLayout: NSView {
 
         selectionOverlay.viewModel = viewModel
         selectionOverlay.wantsLayer = true
-        for view in [rail, canvasView, selectionOverlay, dock, bar, pill, zoomHUD] as [NSView] {
+        for view in [rail, canvasView, selectionOverlay, dock, bar, pill, zoomHUD, lettering] as [NSView] {
             view.translatesAutoresizingMaskIntoConstraints = false
             addSubview(view)
         }
@@ -92,6 +96,9 @@ final class MainLayout: NSView {
 
             zoomHUD.centerXAnchor.constraint(equalTo: canvasView.centerXAnchor),
             zoomHUD.bottomAnchor.constraint(equalTo: canvasView.bottomAnchor, constant: -12),
+
+            lettering.trailingAnchor.constraint(equalTo: canvasView.trailingAnchor, constant: -12),
+            lettering.topAnchor.constraint(equalTo: canvasView.topAnchor, constant: 12),
         ])
         selectionOverlay.startAnimation()
 

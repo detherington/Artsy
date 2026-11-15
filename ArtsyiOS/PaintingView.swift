@@ -28,6 +28,8 @@ final class PaintingView: MTKView {
     private var strokeForceMaximum: Float = 0
     /// Whether a finger draws; two fingers always pan, pinch and turn.
     var fingerPaints = true
+    /// The touch holding a balloon with the Letter tool, if any.
+    private var letteringTouch: UITouch?
     /// A format's marks over the canvas (a page frame, slice marks), for a canvas that has them.
     private let formatMarks: FormatMarksOverlay
 
@@ -101,6 +103,11 @@ final class PaintingView: MTKView {
             pickColor(at: canvasPoint(of: touch))
         case .fill:
             fill(at: canvasPoint(of: touch))
+        case .letter:
+            // A pencil or a finger places, picks up and moves balloons
+            guard letteringTouch == nil else { return }
+            letteringTouch = touch
+            viewModel.letteringDown(at: canvasPoint(of: touch), renderer: renderer)
         default:
             // Selection, shapes and transforms are not on iPad yet
             break
@@ -108,6 +115,10 @@ final class PaintingView: MTKView {
     }
 
     override func touchesMoved(_ touches: Set<UITouch>, with event: UIEvent?) {
+        if let touch = letteringTouch, touches.contains(touch), let viewModel, let renderer {
+            viewModel.letteringDrag(to: canvasPoint(of: touch), renderer: renderer)
+            return
+        }
         guard let touch = drawingTouch, touches.contains(touch), let viewModel else { return }
         // Every sample the Pencil made since the last event, not only the last one
         for sample in event?.coalescedTouches(for: touch) ?? [touch] {
@@ -163,13 +174,21 @@ final class PaintingView: MTKView {
     }
 
     override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent?) {
+        if let touch = letteringTouch, touches.contains(touch) { endLettering(); return }
         guard let touch = drawingTouch, touches.contains(touch) else { return }
         endStroke(with: touch)
     }
 
     override func touchesCancelled(_ touches: Set<UITouch>, with event: UIEvent?) {
+        if let touch = letteringTouch, touches.contains(touch) { endLettering(); return }
         guard let touch = drawingTouch, touches.contains(touch) else { return }
         endStroke(with: touch)
+    }
+
+    private func endLettering() {
+        letteringTouch = nil
+        guard let viewModel, let renderer else { return }
+        viewModel.letteringUp(renderer: renderer)
     }
 
     private func endStroke(with touch: UITouch) {

@@ -161,6 +161,7 @@ public final class LayerStack: ObservableObject {
         let copy = try makeLayer(name: "\(source.name) copy")
         copy.isVisible = source.isVisible
         copy.isLocked = source.isLocked
+        copy.lettering = source.lettering
         copy.opacity = source.opacity
         copy.blendMode = source.blendMode
         guard let commandBuffer = renderer.context.commandQueue.makeCommandBuffer() else { throw LayerError.duplicateFailed }
