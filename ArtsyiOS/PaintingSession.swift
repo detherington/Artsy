@@ -50,6 +50,8 @@ final class PaintingSession: ObservableObject {
             if let stack = viewModel.layerStack { renderer.updateAllThumbnails(in: stack) }
         case .blank(let size):
             let fresh = CanvasViewModel(canvasSize: size)
+            // A print format's size starts with its page frame
+            fresh.guides.page = CanvasSizePreset.page(for: size)
             let drawn = try CanvasRenderer(context: context, canvasSize: size)
             drawn.viewModel = fresh
             try drawn.setupLayerStack(for: fresh)

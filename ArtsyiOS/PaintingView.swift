@@ -28,6 +28,8 @@ final class PaintingView: MTKView {
     private var strokeForceMaximum: Float = 0
     /// Whether a finger draws; two fingers always pan, pinch and turn.
     var fingerPaints = true
+    /// A print page's frame over the canvas, for a canvas that has one.
+    private let pageFrame: PageFrameOverlay
 
     /// The width the canvas was last fitted or laid out at, to tell a fold or a turn from
     /// the chrome coming and going.
@@ -37,7 +39,9 @@ final class PaintingView: MTKView {
     private var lastPan: CGPoint = .zero
 
     init(frame: CGRect, context: MetalContext, viewModel: CanvasViewModel, renderer: CanvasRenderer) {
+        pageFrame = PageFrameOverlay(viewModel: viewModel, renderer: renderer)
         super.init(frame: frame, device: context.device)
+        addSubview(pageFrame)
         self.viewModel = viewModel
         self.renderer = renderer
         colorPixelFormat = .bgra8Unorm
@@ -69,6 +73,7 @@ final class PaintingView: MTKView {
     /// fitted again. The rail and bar coming and going change it less, and keep the view.
     override func layoutSubviews() {
         super.layoutSubviews()
+        pageFrame.frame = bounds
         let width = bounds.width
         guard width > 0 else { return }
         if lastLayoutWidth > 0, abs(width - lastLayoutWidth) / lastLayoutWidth >= 0.25 {

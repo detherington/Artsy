@@ -106,10 +106,37 @@ class SelectionOverlayView: NSView {
             stroke(segments, color: NSColor(calibratedWhite: 1.0, alpha: 0.18), width: 1)
         }
 
+        if let page = guides.page, page.isShown {
+            drawPageFrame(page, canvasSize: canvasSize, transform: transform)
+        }
+
         let lines = guides.verticals.map { (CGPoint(x: $0, y: 0), CGPoint(x: $0, y: canvasSize.height)) }
             + guides.horizontals.map { (CGPoint(x: 0, y: $0), CGPoint(x: canvasSize.width, y: $0)) }
         if !lines.isEmpty {
             stroke(lines, color: NSColor.systemTeal.withAlphaComponent(0.85), width: 1)
+        }
+    }
+
+    /// A print page's frame: the bleed past the trim under a light veil, the trim a solid
+    /// blue line and the safe area a dashed one, a point wide at any zoom.
+    private func drawPageFrame(_ page: PageFrame, canvasSize: CGSize, transform: CGAffineTransform) {
+        var transform = transform
+        let bleed = CGMutablePath()
+        bleed.addRect(CGRect(origin: .zero, size: canvasSize))
+        bleed.addRect(page.trim)
+        if let path = bleed.copy(using: &transform) {
+            let veil = NSBezierPath(cgPath: path)
+            veil.windingRule = .evenOdd
+            NSColor(calibratedWhite: 0, alpha: PageFrameStyle.veilAlpha).setFill()
+            veil.fill()
+        }
+        let colour = NSColor(cgColor: PageFrameStyle.line) ?? .systemBlue
+        for (rect, dashed) in [(page.trim, false), (page.safe, true)] {
+            let line = NSBezierPath(cgPath: CGPath(rect: rect, transform: &transform))
+            line.lineWidth = 1
+            if dashed { line.setLineDash(PageFrameStyle.dash, count: PageFrameStyle.dash.count, phase: 0) }
+            colour.setStroke()
+            line.stroke()
         }
     }
 

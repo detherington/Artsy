@@ -461,6 +461,10 @@ struct AdjustPanelView: View {
                     PanelRow(systemImage: "arrow.left.and.right.righttriangle.left.righttriangle.right", label: "Flip view", note: "⌥⌘F", action: actions.flip)
 
                     PanelSectionLabel("Guides")
+                    if let page = viewModel.guides.page {
+                        PanelRow(systemImage: "rectangle.dashed", label: "Page frame", note: page.isShown ? "On" : "Off",
+                                 isSelected: page.isShown) { actions.changeGuides { $0.page?.isShown.toggle() } }
+                    }
                     PanelRow(systemImage: "grid", label: "Grid", note: viewModel.guides.showsGrid ? "On" : "Off",
                              isSelected: viewModel.guides.showsGrid) { actions.changeGuides { $0.showsGrid.toggle() } }
                     HStack(spacing: 6) {

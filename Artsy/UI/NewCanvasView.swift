@@ -6,6 +6,8 @@ struct CanvasSizePreset: Identifiable {
     let name: String
     let width: Int
     let height: Int
+    /// The printed page's trim and safe area, for a print format; nil for a plain canvas.
+    var page: PageFrame? = nil
 
     var label: String { "\(name) (\(width)×\(height))" }
 
@@ -17,7 +19,29 @@ struct CanvasSizePreset: Identifiable {
         .init(name: "HD Landscape", width: 1920, height: 1080),
         .init(name: "HD Portrait", width: 1080, height: 1920),
         .init(name: "A4 @ 300dpi", width: 2480, height: 3508),
+        usComic,
     ]
+
+    /// The standard US comic book page, as Marvel, DC and Image print a single issue:
+    /// trimmed at 6⅝ × 10³⁄₁₆ inches, with ⅛ inch of bleed past the trim and the safe
+    /// area ¼ inch inside it, at 400 dpi. 2750 × 4175 pixels.
+    static let usComic = printPage("US Comic", trim: CGSize(width: 6.625, height: 10.1875), bleed: 0.125, safe: 0.25, dpi: 400)
+
+    /// A print format as a canvas: the page with its bleed at `dpi`, and its frame. Sizes
+    /// in inches; `bleed` past the trim and `safe` inside it, on every side.
+    static func printPage(_ name: String, trim: CGSize, bleed: CGFloat, safe: CGFloat, dpi: CGFloat) -> CanvasSizePreset {
+        let width = Int(((trim.width + 2 * bleed) * dpi).rounded())
+        let height = Int(((trim.height + 2 * bleed) * dpi).rounded())
+        let page = PageFrame(canvasSize: CGSize(width: width, height: height), trimInset: bleed * dpi, safeInset: (bleed + safe) * dpi)
+        return CanvasSizePreset(name: name, width: width, height: height, page: page)
+    }
+
+    /// The frame a new canvas of `size` starts with: a print format's, when the size is
+    /// one's, however it was chosen (a tile, the panel, Same as last, the default size,
+    /// or Custom typed to the same pixels).
+    static func page(for size: CGSize) -> PageFrame? {
+        presets.first { $0.width == Int(size.width) && $0.height == Int(size.height) }?.page
+    }
 }
 
 struct NewCanvasView: View {
