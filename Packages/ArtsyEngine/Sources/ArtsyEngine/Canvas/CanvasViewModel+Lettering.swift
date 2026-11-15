@@ -5,7 +5,7 @@ import Foundation
 /// to undo it has been saved yet (it is, at the first change, so a tap that only picks a
 /// balloon up is not a step).
 struct LetteringGesture {
-    enum Part { case body, tail, width }
+    enum Part { case body, tail, base, width }
     let part: Part
     let balloon: UUID
     var last: CGPoint
@@ -36,7 +36,7 @@ extension CanvasViewModel {
 
     // MARK: - The tool
 
-    /// A press at `point`: on the picked-up balloon's tail tip or width handle, takes it;
+    /// A press at `point`: on the picked-up balloon's tail tip, tail base or width handle, takes it;
     /// on a balloon, picks it up to move; elsewhere, puts down the one picked up, or with
     /// none picked up, places a new balloon there and asks the panel for the keyboard.
     public func letteringDown(at point: CGPoint, renderer: CanvasRenderer) {
@@ -45,6 +45,10 @@ extension CanvasViewModel {
             let layout = BalloonLayout(selected)
             if let tail = layout.tailHandle, hypot(tail.x - point.x, tail.y - point.y) <= reach {
                 letteringGesture = LetteringGesture(part: .tail, balloon: selected.id, last: point)
+                return
+            }
+            if let base = layout.baseHandle, hypot(base.x - point.x, base.y - point.y) <= reach {
+                letteringGesture = LetteringGesture(part: .base, balloon: selected.id, last: point)
                 return
             }
             let width = layout.widthHandle
@@ -66,7 +70,7 @@ extension CanvasViewModel {
         placeBalloon(at: point, renderer: renderer)
     }
 
-    /// The press moved to `point`: moves the balloon, its tail's tip, or its width.
+    /// The press moved to `point`: moves the balloon, its tail's tip, its tail's base, or its width.
     public func letteringDrag(to point: CGPoint, renderer: CanvasRenderer) {
         guard var gesture = letteringGesture, let layer = letteringLayer else { return }
         let dx = point.x - gesture.last.x, dy = point.y - gesture.last.y
@@ -89,6 +93,9 @@ extension CanvasViewModel {
                 if let tail = balloon.tail, !balloon.tailPinned { balloon.tail = CGPoint(x: tail.x + dx, y: tail.y + dy) }
             case .tail:
                 balloon.tail = point
+            case .base:
+                // As wide as twice the press's distance from the base's middle, along it
+                if let size = BalloonLayout(balloon).baseSize(draggedTo: point) { balloon.look.tailBase = size }
             case .width:
                 balloon.wrapWidth = max(balloon.fontSize * 2.5, 2 * (point.x - balloon.center.x))
             }
@@ -99,6 +106,11 @@ extension CanvasViewModel {
     public func letteringUp(renderer: CanvasRenderer) {
         if letteringGesture?.saved == true, let layer = letteringLayer {
             renderer.updateThumbnail(for: layer)
+        }
+        // A base set by hand is the next balloon of the kind's too, as the panel's choices are
+        if let gesture = letteringGesture, gesture.saved, gesture.part == .base,
+           let balloon = balloons.first(where: { $0.id == gesture.balloon }) {
+            balloonLooks[balloon.style] = balloon.look
         }
         letteringGesture = nil
     }

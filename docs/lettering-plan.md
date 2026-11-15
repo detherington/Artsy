@@ -72,8 +72,12 @@ balloon with white words.
   - **fill**: white, cream, yellow, blue, pink, black (its words then white).
   - **tail** (for the kinds with one): curved, straight, bubbles, lightning (a zigzag,
     for a voice from a speaker). Choosing one puts a tail on a balloon that had none.
-  - **width**: the tail narrower or wider, 30% to 300% in steps of a quarter (its base,
-    a lightning band, the bubbles' size). And, with a balloon picked up, **tip**: pins
+  - **base**: how wide the tail is where it leaves the balloon, in pixels, narrower or
+    wider by a quarter at a time; or drag the diamond at the end of the tail's base
+    along it. A base set this way keeps its width as the balloon grows or shrinks; one
+    never set ("auto") is in proportion to the body, as tails always were. Bubbles have
+    no base, so for them the row is **size**, the bubbles larger or smaller. And, with a
+    balloon picked up, **tip**: pins
     the tail's tip where it is on the page, on its speaker, so moving the balloon leaves
     the tip there and the tail stretches back to it; unpinned, the tip goes with the
     balloon as before. A pinned tip's round handle has a ring (iPad) or dot (Mac) in it,
@@ -107,10 +111,15 @@ balloon with white words.
   and a half, on a tile of paper so a black line shows on the dark panel; they show the
   real shapes in the current look. A choice edits the balloon's look as it is when
   tapped, not as the panel last drew it, so quick choices in a row each keep.
-- **Tail width** is part of the look (`tailWidth`, saved when not 1): the base's spread
-  round the ellipse, which the lightning band follows, and the bubbles' radii. **A pinned
-  tip** is the balloon's (`tailPinned`, saved when set): a move of the body leaves its
-  tip where it is.
+- **The tail's base** is part of the look (`tailBase`, in sizes of the lettering, saved
+  when set): its ends square to the way to the tip, centred where the tail faces it on
+  the ellipse's edge, eased in toward the middle until both are inside the body, and no
+  wider than the ellipse is across there; the lightning band follows it. Unset, the base
+  is the spread round the ellipse it always was, scaled by `tailWidth` (the first width
+  setting, in builds 17 and 43, still read), which now sizes only bubbles in the panel.
+  The diamond handle sits at the base's left end; a drag sets the width to twice the
+  press's distance from the base's middle along it. **A pinned tip** is the balloon's
+  (`tailPinned`, saved when set): a move of the body leaves its tip where it is.
 
 ## Status (2026-11-15, branch `balloon-looks`)
 
@@ -133,6 +142,13 @@ balloon with white words.
   line, a yellow fill and bubbles, and a pinned tip staying put as its balloon moved.
 - A first reading of "pin a start point" pinned where the tail leaves the balloon; Darrell
   meant the tip, so that was taken out.
+- The first width setting scaled the tail with the balloon (a share of its usual width,
+  which goes by the body's size), where Darrell wanted to set the width of the tail's
+  base itself (branch `tail-base`): two more tests, a base set by width keeping it at
+  three balloon widths, square to the tip, inside the body even when wider than a short
+  balloon, and the diamond dragged to set it as one step. Seen on the iPad simulator:
+  the diamond at the base's end, a drag widening the base from 111 to 376 px, and the
+  panel's minus bringing it to 193 in one step.
 
 ## Later
 

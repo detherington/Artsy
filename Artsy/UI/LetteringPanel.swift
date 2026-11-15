@@ -265,13 +265,29 @@ struct LetteringPanel: View {
                     }
                 }
             }
-            lookRow("width") {
-                ChromeButton(systemImage: "minus", size: 30, help: "A narrower tail") { setTailWidth(times: 1 / 1.25) }
-                Text("\(Int((look.tailWidth * 100).rounded()))%")
-                    .font(Chrome.valueFont)
-                    .foregroundColor(Chrome.text)
-                    .frame(minWidth: 46)
-                ChromeButton(systemImage: "plus", size: 30, help: "A wider tail") { setTailWidth(times: 1.25) }
+            // A wedge's or lightning's base, as wide as set; bubbles, which have none, their size
+            let bubbles = (look.tail ?? style.ownTail) == .bubbles
+            lookRow(bubbles ? "size" : "base") {
+                if bubbles {
+                    ChromeButton(systemImage: "minus", size: 30, help: "Smaller bubbles") { setTailWidth(times: 1 / 1.25) }
+                    Text("\(Int((look.tailWidth * 100).rounded()))%")
+                        .font(Chrome.valueFont)
+                        .foregroundColor(Chrome.text)
+                        .frame(minWidth: 46)
+                    ChromeButton(systemImage: "plus", size: 30, help: "Larger bubbles") { setTailWidth(times: 1.25) }
+                } else {
+                    ChromeButton(systemImage: "minus", size: 30, help: "A narrower base where the tail leaves the balloon") {
+                        setTailBase(times: 1 / 1.25)
+                    }
+                    Text(baseReadout(look))
+                        .font(Chrome.valueFont)
+                        .foregroundColor(Chrome.text)
+                        .frame(minWidth: 46)
+                        .help("How wide the tail is where it leaves the balloon, in pixels; or drag the diamond at its end")
+                    ChromeButton(systemImage: "plus", size: 30, help: "A wider base where the tail leaves the balloon") {
+                        setTailBase(times: 1.25)
+                    }
+                }
                 Spacer(minLength: 4)
                 if let balloon = viewModel.selectedBalloon, balloon.tail != nil {
                     let pinned = balloon.tailPinned
@@ -298,10 +314,35 @@ struct LetteringPanel: View {
         }
     }
 
-    /// The tail's width `times` what it is, in twentieths, within the narrowest and widest.
+    /// How wide the tail's base is, in canvas pixels: the picked-up balloon's as drawn, or the
+    /// next one's where it is set; "auto" for a base in proportion to the body.
+    private func baseReadout(_ look: BalloonLook) -> String {
+        if let balloon = viewModel.selectedBalloon {
+            return BalloonLayout(balloon).baseWidth.map { "\(Int($0.rounded()))" } ?? "–"
+        }
+        guard let base = look.tailBase else { return "auto" }
+        return "\(Int((base * Balloon.fontSize(canvasWidth: viewModel.canvasSize.width)).rounded()))"
+    }
+
+    /// The tail's base `times` as wide as it is now (as drawn, where it is in proportion to
+    /// the body), in twentieths of the lettering's size, within the narrowest and widest.
+    private func setTailBase(times factor: CGFloat) {
+        let current: CGFloat
+        if let balloon = viewModel.selectedBalloon {
+            current = balloon.look.tailBase
+                ?? BalloonLayout(balloon).baseWidth.map { $0 / max(balloon.fontSize, 1) } ?? 2
+        } else {
+            current = viewModel.balloonLook(for: viewModel.balloonStyle).tailBase ?? 2
+        }
+        let range = BalloonLook.tailBases
+        let size = min(range.upperBound, max(range.lowerBound, (current * factor * 20).rounded() / 20))
+        editLook("Tail Base") { $0.tailBase = size }
+    }
+
+    /// The bubbles' size `times` what it is, in twentieths, within the smallest and largest.
     private func setTailWidth(times factor: CGFloat) {
         let range = BalloonLook.tailWidths
-        editLook("Tail Width") { look in
+        editLook("Bubble Size") { look in
             look.tailWidth = min(range.upperBound, max(range.lowerBound, (look.tailWidth * factor * 20).rounded() / 20))
         }
     }

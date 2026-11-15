@@ -215,6 +215,58 @@ final class BalloonLookTests: XCTestCase {
         XCTAssertEqual(BalloonLayout(balloon(.thought, BalloonLook(tailWidth: 1))).body, BalloonLayout(balloon(.thought)).body)
     }
 
+    /// A tail's base set by width keeps it however wide the balloon is, where one in
+    /// proportion to the body grows with it; its ends sit inside the body, square to the way
+    /// to the tip, and the tail still reaches its tip. Bubbles have no base.
+    func testATailsBaseKeepsItsWidth() throws {
+        func layout(wrap: CGFloat, base: CGFloat?, tail: BalloonTail = .straight, text: String? = nil) -> BalloonLayout {
+            var b = balloon(.speech, BalloonLook(tail: tail, tailBase: base), wrap: wrap)
+            if let text { b.text = text }
+            return BalloonLayout(b)
+        }
+        let narrowAuto = try XCTUnwrap(layout(wrap: 90, base: nil).baseWidth)
+        let wideAuto = try XCTUnwrap(layout(wrap: 300, base: nil).baseWidth)
+        XCTAssertGreaterThan(wideAuto, narrowAuto * 1.3, "in proportion, a wider balloon has a wider base")
+
+        for wrap: CGFloat in [90, 200, 300] {
+            for tail in [BalloonTail.curved, .straight, .lightning] {
+                let l = layout(wrap: wrap, base: 2, tail: tail)
+                let name = "\(tail), \(wrap) wide"
+                XCTAssertEqual(try XCTUnwrap(l.baseWidth), 40, accuracy: 0.01, "\(name): two sizes of 20")
+                let ends = try XCTUnwrap(l.base)
+                let plain = BalloonLayout({ var b = l.balloon; b.tail = nil; return b }()).body
+                XCTAssertTrue(plain.contains(ends.left) && plain.contains(ends.right), "\(name): its ends inside the body")
+                let middle = CGPoint(x: (ends.left.x + ends.right.x) / 2, y: (ends.left.y + ends.right.y) / 2)
+                let square = (ends.left.x - ends.right.x) * (tip.x - middle.x) + (ends.left.y - ends.right.y) * (tip.y - middle.y)
+                XCTAssertEqual(square / (40 * hypot(tip.x - middle.x, tip.y - middle.y)), 0, accuracy: 1e-6, "\(name): square to the tip")
+                let closest = points(of: l.body).map { hypot($0.x - tip.x, $0.y - tip.y) }.min() ?? .infinity
+                XCTAssertLessThan(closest, 1.5, "\(name): reaching its tip")
+                XCTAssertTrue(l.bounds.contains(l.body.boundingBoxOfPath), name)
+            }
+        }
+
+        // Wider than a short balloon is across: kept inside it
+        let short = layout(wrap: 200, base: 8, text: "Hi!")
+        let ends = try XCTUnwrap(short.base)
+        let plain = BalloonLayout({ var b = short.balloon; b.tail = nil; return b }()).body
+        XCTAssertTrue(plain.contains(ends.left) && plain.contains(ends.right))
+        XCTAssertLessThan(try XCTUnwrap(short.baseWidth), 160)
+
+        XCTAssertNil(BalloonLayout(balloon(.thought, BalloonLook(tailBase: 2))).base, "bubbles have no base")
+        XCTAssertNil(BalloonLayout(balloon(.speech, BalloonLook(tailBase: 2), tail: nil)).baseHandle, "nor does no tail")
+
+        // An end dragged out: twice its distance from the middle, along the base
+        let set = layout(wrap: 200, base: 2)
+        let e = try XCTUnwrap(set.base)
+        let middle = CGPoint(x: (e.left.x + e.right.x) / 2, y: (e.left.y + e.right.y) / 2)
+        let along = CGPoint(x: (e.left.x - e.right.x) / 40, y: (e.left.y - e.right.y) / 40)
+        XCTAssertEqual(set.baseHandle, e.left)
+        XCTAssertEqual(try XCTUnwrap(set.baseSize(draggedTo: CGPoint(x: middle.x + along.x * 30, y: middle.y + along.y * 30))), 3,
+                       accuracy: 1e-6)
+        XCTAssertEqual(try XCTUnwrap(set.baseSize(draggedTo: CGPoint(x: middle.x + along.x * 900, y: middle.y + along.y * 900))),
+                       BalloonLook.tailBases.upperBound, "no wider than the widest")
+    }
+
     // MARK: - Lines and fills
 
     /// Dashed, double, heavy and no line are only how the outline is stroked; heavy is twice
@@ -333,10 +385,11 @@ final class BalloonLookTests: XCTestCase {
     /// balloon from before looks reads as it was; a part a later build adds reads as plain.
     func testALookSavesWithItsBalloon() throws {
         let plain = try JSONSerialization.jsonObject(with: JSONEncoder().encode(balloon(.speech))) as? [String: Any]
-        for key in ["shape", "line", "fill", "tailShape", "tailWidth", "tailPinned"] {
+        for key in ["shape", "line", "fill", "tailShape", "tailWidth", "tailBase", "tailPinned"] {
             XCTAssertNil(plain?[key], "the plain look saves no \(key)")
         }
-        var looked = balloon(.shout, BalloonLook(shape: .jagged, line: .electric, fill: .yellow, tail: .lightning, tailWidth: 1.5))
+        var looked = balloon(.shout, BalloonLook(shape: .jagged, line: .electric, fill: .yellow, tail: .lightning, tailWidth: 1.5,
+                                                 tailBase: 2.5))
         looked.tailPinned = true
         let data = try JSONEncoder().encode(looked)
         XCTAssertEqual(try JSONDecoder().decode(Balloon.self, from: data), looked)
@@ -459,5 +512,38 @@ final class BalloonLookTests: XCTestCase {
         XCTAssertEqual(viewModel.balloons.first?.tailPinned, true)
         viewModel.performUndo(renderer: renderer)
         XCTAssertEqual(viewModel.balloons.first?.tailPinned, false, "the pin undone")
+    }
+
+    /// The diamond at the end of the tail's base is taken and dragged out along the base,
+    /// setting its width, as a step; the next balloon of the kind takes it too.
+    func testTheBaseIsDraggedToItsWidth() throws {
+        let harness = try EngineHarness(width: 800, height: 600)
+        let viewModel = harness.viewModel, renderer = harness.renderer
+        viewModel.letteringDown(at: CGPoint(x: 400, y: 300), renderer: renderer)
+        viewModel.letteringUp(renderer: renderer)
+        viewModel.changeSelectedBalloon("Edit Words", renderer: renderer) { $0.text = "Who goes there? Show yourself!" }
+        let placed = try XCTUnwrap(viewModel.selectedBalloon)
+        XCTAssertNil(placed.look.tailBase)
+        let layout = BalloonLayout(placed)
+        let handle = try XCTUnwrap(layout.baseHandle)
+        let ends = try XCTUnwrap(layout.base)
+        let middle = CGPoint(x: (ends.left.x + ends.right.x) / 2, y: (ends.left.y + ends.right.y) / 2)
+        let length = hypot(ends.left.x - ends.right.x, ends.left.y - ends.right.y)
+        let along = CGPoint(x: (ends.left.x - ends.right.x) / length, y: (ends.left.y - ends.right.y) / length)
+        let steps = viewModel.undoManager.undoCount
+
+        viewModel.letteringDown(at: handle, renderer: renderer)
+        viewModel.letteringDrag(to: CGPoint(x: middle.x + along.x * 15, y: middle.y + along.y * 15), renderer: renderer)
+        viewModel.letteringDrag(to: CGPoint(x: middle.x + along.x * 26, y: middle.y + along.y * 26), renderer: renderer)
+        viewModel.letteringUp(renderer: renderer)
+        let base = try XCTUnwrap(viewModel.selectedBalloon?.look.tailBase)
+        XCTAssertEqual(base, 52 / placed.fontSize, accuracy: 0.3, "twice the drag's distance from the middle")
+        XCTAssertEqual(viewModel.selectedBalloon?.center, placed.center, "the body stays")
+        XCTAssertEqual(viewModel.selectedBalloon?.tail, placed.tail, "and the tip")
+        XCTAssertEqual(viewModel.undoManager.undoCount, steps + 1, "one step")
+        XCTAssertEqual(viewModel.balloonLook(for: .speech).tailBase, base, "the next speech balloon's too")
+
+        viewModel.performUndo(renderer: renderer)
+        XCTAssertNil(viewModel.balloons.first?.look.tailBase, "undone")
     }
 }
