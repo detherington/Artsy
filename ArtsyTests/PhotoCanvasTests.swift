@@ -1,7 +1,9 @@
 import XCTest
 import ImageIO
 import UniformTypeIdentifiers
+#if canImport(Artsy)
 @testable import Artsy
+#endif
 @testable import ArtsyEngine
 
 /// A canvas from a photo: the photo turned the right way up and held to the largest

@@ -248,6 +248,10 @@ final class StrokeBenchmarkTests: XCTestCase {
     /// fill) costs — call and GPU.
     func testLargeCanvasCosts() throws {
         let harness = try EngineHarness(width: 8192, height: 8192)
+        // A Mac's measure: a device whose memory takes fewer layers at this size (an iPad,
+        // in the engine package's tests) has nothing to say about it
+        try XCTSkipIf(harness.layerStack.layerLimit < 12,
+                      "8192² takes \(harness.layerStack.layerLimit) layers on this device, not 12")
         while harness.layerStack.layers.count < 12 { try harness.addLayer() }
         harness.layerStack.activeLayerIndex = 6
         for (index, layer) in harness.layerStack.layers.enumerated() where index % 3 == 0 {
