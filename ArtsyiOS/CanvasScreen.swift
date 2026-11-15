@@ -32,6 +32,10 @@ struct CanvasScreen: View {
                     }
                     ZStack(alignment: .bottomLeading) {
                         canvas(hidden: hidden)
+                        // The Letter tool's panel over the canvas's top-right corner
+                        LetteringPanel(viewModel: viewModel, actions: session.actions)
+                            .padding(12)
+                            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
                         if hidden {
                             ChromePillView(viewModel: viewModel, previews: session.previews, actions: session.actions)
                                 .padding(12)

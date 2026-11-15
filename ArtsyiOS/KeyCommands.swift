@@ -30,7 +30,9 @@ enum KeyCommands {
         /// A key that changes the tool, the brush or the colour: not under a stroke.
         func tool(_ id: String, _ title: String, _ key: String, _ change: @escaping (CanvasViewModel) -> Void) -> Entry {
             Entry(id, title, key) { [weak viewModel] in
-                guard let viewModel, !viewModel.isDrawing else { return }
+                // Nor while the Letter tool holds a balloon: its keys are the words'
+                guard let viewModel, !viewModel.isDrawing,
+                      !(viewModel.currentTool == .letter && viewModel.selectedBalloonID != nil) else { return }
                 change(viewModel)
             }
         }

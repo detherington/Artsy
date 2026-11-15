@@ -35,6 +35,8 @@ public final class CanvasDocument {
             let isLocked: Bool
             let opacity: Float
             let blendMode: String
+            /// A lettering layer's balloons; none in a document from before them.
+            var lettering: [Balloon]? = nil
         }
     }
 
@@ -99,7 +101,8 @@ public final class CanvasDocument {
                 isVisible: layer.isVisible,
                 isLocked: layer.isLocked,
                 opacity: layer.opacity,
-                blendMode: layer.blendMode.rawValue
+                blendMode: layer.blendMode.rawValue,
+                lettering: layer.lettering
             )
         }
         let doc = DocumentData(
@@ -385,6 +388,7 @@ public final class CanvasDocument {
             layer.isLocked = layerInfo.isLocked
             layer.opacity = layerInfo.opacity
             layer.blendMode = LayerBlendMode(rawValue: layerInfo.blendMode) ?? .normal
+            layer.lettering = layerInfo.lettering
 
             // Load PNG into the layer's texture
             let layerFile = layersDir.appendingPathComponent("layer-\(i).png")

@@ -53,6 +53,9 @@ public final class Layer: Identifiable, ObservableObject {
     /// `LayerWater`: the layer's pixels show the look throughout.
     public var water: LayerWater?
     @Published public var thumbnail: CGImage?
+    /// A lettering layer's balloons, which its pixels are drawn from; nil for any other
+    /// layer.
+    public var lettering: [Balloon]?
 
     /// Whether any paint on the layer may still be wet at `now` (the renderer's clock).
     public func isWet(at now: TimeInterval) -> Bool {

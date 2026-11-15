@@ -182,6 +182,11 @@ class CanvasView: MTKView {
 
         case .transform:
             handleTransformMouseDown(event)
+
+        case .letter:
+            let viewPoint = convert(event.locationInWindow, from: nil)
+            viewModel.letteringDown(at: viewModel.transform.viewToCanvas(viewPoint, viewSize: bounds.size), renderer: renderer)
+            redrawOverlays()
         }
     }
 
@@ -230,6 +235,12 @@ class CanvasView: MTKView {
 
         case .transform:
             handleTransformMouseDragged(event)
+
+        case .letter:
+            guard let renderer else { return }
+            let viewPoint = convert(event.locationInWindow, from: nil)
+            viewModel.letteringDrag(to: viewModel.transform.viewToCanvas(viewPoint, viewSize: bounds.size), renderer: renderer)
+            redrawOverlays()
 
         default:
             break
@@ -295,6 +306,10 @@ class CanvasView: MTKView {
 
         case .transform:
             handleTransformMouseUp(event)
+
+        case .letter:
+            viewModel.letteringUp(renderer: renderer)
+            redrawOverlays()
 
         default:
             break
@@ -1343,6 +1358,20 @@ class CanvasView: MTKView {
             }
         }
 
+        // The Letter tool: Delete takes the picked-up balloon off the page, Escape puts it down
+        if viewModel.currentTool == .letter, viewModel.selectedBalloonID != nil {
+            if event.keyCode == 51 || event.keyCode == 117 {
+                viewModel.deleteSelectedBalloon(renderer: renderer)
+                redrawOverlays()
+                return
+            }
+            if event.keyCode == 53 {
+                viewModel.selectedBalloonID = nil
+                redrawOverlays()
+                return
+            }
+        }
+
         // Delete/Backspace key — clear inside selection
         if event.keyCode == 51 || event.keyCode == 117 {
             if let path = viewModel.selectionPath,
@@ -1382,6 +1411,8 @@ class CanvasView: MTKView {
             viewModel.currentTool = .fill
         case "t", "T":
             viewModel.currentTool = .transform
+        case "l", "L":
+            viewModel.currentTool = .letter
         case "[":
             viewModel.brushSize = max(1, viewModel.brushSize - 2)
         case "]":
