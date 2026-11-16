@@ -34,6 +34,9 @@ class SelectionOverlayView: NSView {
         var transform = vm.transform.affineTransform(viewSize: bounds.size)
 
         drawGuides(vm.guides, canvasSize: vm.canvasSize, zoom: vm.transform.scale, transform: transform)
+        if let perspective = vm.guides.perspective, perspective.isShown {
+            drawPerspective(perspective, canvasSize: vm.canvasSize, editing: vm.isEditingPerspective, transform: transform)
+        }
 
         // The balloon the Letter tool holds: its box, and handles for its tail and width
         if vm.currentTool == .letter, let balloon = vm.selectedBalloon {
@@ -82,7 +85,7 @@ class SelectionOverlayView: NSView {
         }
     }
 
-    /// The grid, faint, and the guide lines, teal: built in canvas space, clipped to the
+    /// The grid, faint, light under dark, and the guide lines, teal: built in canvas space, clipped to the
     /// canvas, and transformed into the view, so they turn and zoom with the canvas.
     private func drawGuides(_ guides: CanvasGuides, canvasSize: CGSize, zoom: CGFloat, transform: CGAffineTransform) {
         let canvasRect = CGRect(origin: .zero, size: canvasSize)
@@ -109,7 +112,9 @@ class SelectionOverlayView: NSView {
             while x < canvasSize.width { segments.append((CGPoint(x: x, y: 0), CGPoint(x: x, y: canvasSize.height))); x += step }
             var y = step
             while y < canvasSize.height { segments.append((CGPoint(x: 0, y: y), CGPoint(x: canvasSize.width, y: y))); y += step }
-            stroke(segments, color: NSColor(calibratedWhite: 1.0, alpha: 0.18), width: 1)
+            // Light under dark, so the grid shows on any paper (see `GridStyle`)
+            stroke(segments, color: NSColor(cgColor: GridStyle.edge) ?? .white, width: GridStyle.edgeWidth)
+            stroke(segments, color: NSColor(cgColor: GridStyle.line) ?? .black, width: GridStyle.lineWidth)
         }
 
         if let page = guides.page, page.isShown {
@@ -125,6 +130,42 @@ class SelectionOverlayView: NSView {
             + guides.horizontals.map { (CGPoint(x: 0, y: $0), CGPoint(x: canvasSize.width, y: $0)) }
         if !lines.isEmpty {
             stroke(lines, color: NSColor.systemTeal.withAlphaComponent(0.85), width: 1)
+        }
+    }
+
+    /// Perspective (see `PerspectiveStyle`): each point's rays across the canvas in its
+    /// colour, the horizon in amber; while the points are being moved, their handles too.
+    private func drawPerspective(_ perspective: PerspectiveGuide, canvasSize: CGSize, editing: Bool, transform: CGAffineTransform) {
+        guard let context = NSGraphicsContext.current?.cgContext else { return }
+        let canvas = CGRect(origin: .zero, size: canvasSize)
+        context.saveGState()
+        defer { context.restoreGState() }
+        context.setLineWidth(1)
+        for index in perspective.points.indices {
+            context.addPath(PerspectiveStyle.path(perspective.rays(from: index, across: canvas, count: PerspectiveStyle.rays), toView: transform))
+            context.setStrokeColor(PerspectiveStyle.colour(index, alpha: PerspectiveStyle.rayAlpha(editing: editing)))
+            context.strokePath()
+        }
+        if let horizon = perspective.horizonLine(across: PerspectiveStyle.horizonRect(perspective, canvas: canvas, editing: editing)) {
+            context.addPath(PerspectiveStyle.path([horizon], toView: transform))
+            context.setStrokeColor(PerspectiveStyle.horizon)
+            context.setLineWidth(1.5)
+            context.strokePath()
+        }
+        guard editing else { return }
+        let handles = PerspectiveStyle.handles(perspective, toView: transform)
+        context.setLineWidth(2)
+        for (index, handle) in handles.points.enumerated() {
+            context.addPath(handle)
+            context.setFillColor(NSColor.white.cgColor)
+            context.setStrokeColor(PerspectiveStyle.colour(index))
+            context.drawPath(using: .fillStroke)
+        }
+        if let horizon = handles.horizon {
+            context.addPath(horizon)
+            context.setFillColor(NSColor.white.cgColor)
+            context.setStrokeColor(PerspectiveStyle.horizon)
+            context.drawPath(using: .fillStroke)
         }
     }
 

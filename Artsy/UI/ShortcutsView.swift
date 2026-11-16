@@ -46,6 +46,7 @@ enum Shortcuts {
             Entry(keys: "⌥⌘0", does: "Reset rotation"),
             Entry(keys: "⌥⌘F", does: "Flip the view"),
             Entry(keys: "⌘'", does: "Grid"),
+            Entry(keys: "⌘ drag", does: "Move a guide line or a vanishing point"),
             Entry(keys: "⌥⌘W", does: "Show wet paint"),
             Entry(keys: "Tab", does: "Hide the interface, and back"),
             Entry(keys: "⌘F", does: "Full screen"),

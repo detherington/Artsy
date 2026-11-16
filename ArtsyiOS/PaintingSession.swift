@@ -106,11 +106,18 @@ final class PaintingSession: ObservableObject {
             guard let view else { return }
             viewModel?.resetView(viewSize: view.bounds.size)
         }
-        // Guides are kept but not yet drawn on iPad
         actions.changeGuides = { [weak viewModel] change in viewModel?.changeGuides(change) }
         actions.addGuide = { [weak view, weak viewModel] horizontal in
             guard let view else { return }
             viewModel?.addGuide(horizontal: horizontal, viewSize: view.bounds.size)
+        }
+        actions.editPerspective = { [weak view, weak viewModel] in
+            guard let view else { return }
+            viewModel?.editPerspective(viewSize: view.bounds.size)
+        }
+        actions.setPerspective = { [weak view, weak viewModel] count in
+            guard let view else { return }
+            viewModel?.setPerspective(points: count, viewSize: view.bounds.size)
         }
         actions.app = app
         return actions

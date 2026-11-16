@@ -3,8 +3,9 @@ import Combine
 import ArtsyEngine
 
 /// A format's marks over the canvas on iPad and iPhone, as the Mac's overlay draws them
-/// (see `PageFrameStyle`): a print page's frame, a webtoon's slice marks; and the balloon
-/// the Letter tool holds, with its handles. Shape layers over
+/// (see `PageFrameStyle`): a print page's frame, a webtoon's slice marks; the grid, the
+/// guide lines and perspective (see `PerspectiveStyle`), with its handles while its points
+/// are being moved; and the balloon the Letter tool holds, with its handles. Shape layers over
 /// the Metal view, their paths built in canvas space and moved into the view whenever the
 /// view turns, zooms or pans, or a mark is shown or hidden. Nothing is drawn until the
 /// renderer's first frame has fitted the canvas, or the marks would show at one to one,
@@ -16,6 +17,12 @@ final class FormatMarksOverlay: UIView {
     private let trim = CAShapeLayer()
     private let safe = CAShapeLayer()
     private let slices = CAShapeLayer()
+    /// The grid: a light edge under a dark line, so it shows on any paper (see `GridStyle`).
+    private let gridEdge = CAShapeLayer()
+    private let grid = CAShapeLayer()
+    private let guideLines = CAShapeLayer()
+    /// Perspective's rays, horizon and handles, made again whenever they change.
+    private let perspective = CALayer()
     /// The balloon the Letter tool holds: a dashed box and its handles.
     private let balloonBox = CAShapeLayer()
     private let balloonHandles = CAShapeLayer()
@@ -47,10 +54,20 @@ final class FormatMarksOverlay: UIView {
         balloonHandles.fillColor = UIColor.white.cgColor
         balloonHandles.strokeColor = BalloonSelectionStyle.colour
         balloonHandles.lineWidth = 1.5
-        for shape in [veil, trim, safe, slices, balloonBox, balloonHandles] { layer.addSublayer(shape) }
+        // As the Mac's: the grid light under dark, the guide lines teal
+        gridEdge.fillColor = nil
+        gridEdge.strokeColor = GridStyle.edge
+        gridEdge.lineWidth = GridStyle.edgeWidth
+        grid.fillColor = nil
+        grid.strokeColor = GridStyle.line
+        grid.lineWidth = GridStyle.lineWidth
+        guideLines.fillColor = nil
+        guideLines.strokeColor = UIColor.systemTeal.withAlphaComponent(0.85).cgColor
+        guideLines.lineWidth = 1
+        for shape in [gridEdge, grid, guideLines, veil, trim, safe, slices, perspective, balloonBox, balloonHandles] { layer.addSublayer(shape) }
         // @Published sends the new value before the property takes it: use what is sent
-        watch = viewModel.$transform.combineLatest(viewModel.$guides)
-            .sink { [weak self] transform, guides in self?.update(transform: transform, guides: guides) }
+        watch = Publishers.CombineLatest3(viewModel.$transform, viewModel.$guides, viewModel.$isEditingPerspective)
+            .sink { [weak self] transform, guides, editing in self?.update(transform: transform, guides: guides, editing: editing) }
         // A balloon's own changes reach its layer before the count of them is sent
         balloonWatch = Publishers.CombineLatest4(viewModel.$transform, viewModel.$selectedBalloonID,
                                                  viewModel.$letteringRevision, viewModel.$currentTool)
@@ -62,7 +79,7 @@ final class FormatMarksOverlay: UIView {
     override func layoutSubviews() {
         super.layoutSubviews()
         guard let viewModel else { return }
-        update(transform: viewModel.transform, guides: viewModel.guides)
+        update(transform: viewModel.transform, guides: viewModel.guides, editing: viewModel.isEditingPerspective)
         updateBalloon(transform: viewModel.transform, id: viewModel.selectedBalloonID, tool: viewModel.currentTool)
     }
 
@@ -106,15 +123,34 @@ final class FormatMarksOverlay: UIView {
         balloonHandles.path = handles
     }
 
-    private func update(transform: CanvasTransform, guides: CanvasGuides) {
+    private func update(transform: CanvasTransform, guides: CanvasGuides, editing: Bool) {
         CATransaction.begin()
         CATransaction.setDisableActions(true)
         defer { CATransaction.commit() }
-        for shape in [veil, trim, safe, slices] { shape.path = nil }
+        for shape in [veil, trim, safe, slices, gridEdge, grid, guideLines] { shape.path = nil }
+        perspective.sublayers = nil
         guard let viewModel, renderer?.hasInitializedTransform == true, bounds.width > 0 else { return }
         // The engine's view space runs y up, as the Mac's; UIKit's runs down
         var toView = toView(transform)
         let canvas = CGRect(origin: .zero, size: viewModel.canvasSize)
+        if guides.showsGrid, guides.gridSpacing > 0 {
+            // Zoomed out, every second, fourth… line, so the grid never turns to mush
+            var step = guides.gridSpacing
+            while step * transform.scale < 8 { step *= 2 }
+            var segments: [(CGPoint, CGPoint)] = []
+            var x = step
+            while x < canvas.width { segments.append((CGPoint(x: x, y: 0), CGPoint(x: x, y: canvas.height))); x += step }
+            var y = step
+            while y < canvas.height { segments.append((CGPoint(x: 0, y: y), CGPoint(x: canvas.width, y: y))); y += step }
+            grid.path = PerspectiveStyle.path(segments, toView: toView)
+            gridEdge.path = grid.path
+        }
+        let lines = guides.verticals.map { (CGPoint(x: $0, y: 0), CGPoint(x: $0, y: canvas.height)) }
+            + guides.horizontals.map { (CGPoint(x: 0, y: $0), CGPoint(x: canvas.width, y: $0)) }
+        if !lines.isEmpty { guideLines.path = PerspectiveStyle.path(lines, toView: toView) }
+        if let shown = guides.perspective, shown.isShown {
+            addPerspective(shown, canvas: canvas, editing: editing, toView: toView)
+        }
         if let page = guides.page, page.isShown {
             let bleed = CGMutablePath()
             bleed.addRect(canvas, transform: toView)
@@ -130,6 +166,35 @@ final class FormatMarksOverlay: UIView {
                 cuts.addLine(to: CGPoint(x: canvas.width, y: y), transform: toView)
             }
             slices.path = cuts
+        }
+    }
+
+    /// Perspective, as the Mac's overlay draws it: each point's rays in its colour, the
+    /// horizon in amber, and while editing a ring at each point and a square at the
+    /// horizon's middle.
+    private func addPerspective(_ guide: PerspectiveGuide, canvas: CGRect, editing: Bool, toView: CGAffineTransform) {
+        func shape(_ path: CGPath, stroke: CGColor, width: CGFloat, fill: CGColor? = nil) {
+            let layer = CAShapeLayer()
+            layer.path = path
+            layer.strokeColor = stroke
+            layer.fillColor = fill
+            layer.lineWidth = width
+            perspective.addSublayer(layer)
+        }
+        for index in guide.points.indices {
+            shape(PerspectiveStyle.path(guide.rays(from: index, across: canvas, count: PerspectiveStyle.rays), toView: toView),
+                  stroke: PerspectiveStyle.colour(index, alpha: PerspectiveStyle.rayAlpha(editing: editing)), width: 1)
+        }
+        if let horizon = guide.horizonLine(across: PerspectiveStyle.horizonRect(guide, canvas: canvas, editing: editing)) {
+            shape(PerspectiveStyle.path([horizon], toView: toView), stroke: PerspectiveStyle.horizon, width: 1.5)
+        }
+        guard editing else { return }
+        let handles = PerspectiveStyle.handles(guide, toView: toView)
+        for (index, handle) in handles.points.enumerated() {
+            shape(handle, stroke: PerspectiveStyle.colour(index), width: 2, fill: UIColor.white.cgColor)
+        }
+        if let horizon = handles.horizon {
+            shape(horizon, stroke: PerspectiveStyle.horizon, width: 2, fill: UIColor.white.cgColor)
         }
     }
 }

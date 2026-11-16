@@ -31,6 +31,12 @@ public struct StrokePoint {
         self.timestamp = timestamp
     }
 
+    /// The same sample at `position`: one a guide has pulled.
+    public func moved(to position: CGPoint) -> StrokePoint {
+        guard position != self.position else { return self }
+        return StrokePoint(position: position, pressure: pressure, tiltX: tiltX, tiltY: tiltY,
+                           rotation: rotation, timestamp: timestamp)
+    }
 }
 
 public struct InterpolatedPoint {
