@@ -1,7 +1,7 @@
 import CoreGraphics
 
-/// Guides over the canvas: a grid, and loose horizontal and vertical lines, which strokes
-/// can snap to. Positions are canvas pixels; the view draws them and the pen snaps to
+/// Guides over the canvas: a grid, loose horizontal and vertical lines, and perspective,
+/// which strokes can snap to. Positions are canvas pixels; the view draws them and the pen snaps to
 /// them within a few screen points, whatever the zoom.
 public struct CanvasGuides: Codable, Equatable {
     public var showsGrid = false
@@ -19,6 +19,9 @@ public struct CanvasGuides: Codable, Equatable {
     /// Where a strip for the screen is cut for upload, for a canvas made as one; nil for
     /// any other. Optional for the same reason.
     public var slices: SliceMarks?
+    /// One-, two- or three-point perspective, which strokes can be held to; nil for none.
+    /// Optional for the same reason.
+    public var perspective: PerspectiveGuide?
 
     /// How close the pen has to come to a line to snap to it, in screen points.
     public static let snapDistance: CGFloat = 8

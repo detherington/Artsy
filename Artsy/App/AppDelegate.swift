@@ -744,6 +744,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         guidesMenu.addItem(withTitle: "Add Vertical Guide", action: #selector(addVerticalGuide), keyEquivalent: "")
         guidesMenu.addItem(withTitle: "Snap to Guides", action: #selector(toggleSnapToGuides), keyEquivalent: "")
         guidesMenu.addItem(withTitle: "Clear Guides", action: #selector(clearGuides), keyEquivalent: "")
+        guidesMenu.addItem(NSMenuItem.separator())
+        guidesMenu.addItem(withTitle: "Edit Perspective", action: #selector(editPerspective), keyEquivalent: "")
+        guidesMenu.addItem(withTitle: "Show Perspective", action: #selector(toggleShowPerspective), keyEquivalent: "").isHidden = true
+        guidesMenu.addItem(withTitle: "Snap to Perspective", action: #selector(toggleSnapToPerspective), keyEquivalent: "").isHidden = true
         // Only on a canvas made at a print format (see menuNeedsUpdate)
         guidesMenu.addItem(withTitle: "Show Page Frame", action: #selector(togglePageFrame), keyEquivalent: "").isHidden = true
         guidesMenu.addItem(withTitle: "Show Slice Marks", action: #selector(toggleSliceMarks), keyEquivalent: "").isHidden = true
@@ -918,6 +922,21 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc private func toggleSnapToGuides() {
         changeGuides { $0.snapsToGuides.toggle() }
+    }
+
+    /// Moving the vanishing points, two-point perspective laid out first if there is none.
+    @objc private func editPerspective() {
+        guard let store = activeStore else { return }
+        store.viewModel.editPerspective(viewSize: store.canvasView.bounds.size)
+        store.canvasView.redrawOverlays()
+    }
+
+    @objc private func toggleShowPerspective() {
+        changeGuides { $0.perspective?.isShown.toggle() }
+    }
+
+    @objc private func toggleSnapToPerspective() {
+        changeGuides { $0.perspective?.snaps.toggle() }
     }
 
     @objc private func addHorizontalGuide() {
@@ -1485,6 +1504,12 @@ extension AppDelegate: NSMenuDelegate {
             case "Show Slice Marks":
                 item.isHidden = guides.slices == nil
                 item.state = guides.slices?.isShown == true ? .on : .off
+            case "Show Perspective":
+                item.isHidden = guides.perspective == nil
+                item.state = guides.perspective?.isShown == true ? .on : .off
+            case "Snap to Perspective":
+                item.isHidden = guides.perspective == nil
+                item.state = guides.perspective?.snaps == true ? .on : .off
             default:
                 if item.tag > 0 { item.state = Int(guides.gridSpacing) == item.tag ? .on : .off }
             }

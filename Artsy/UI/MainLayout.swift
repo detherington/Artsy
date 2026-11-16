@@ -21,6 +21,8 @@ final class MainLayout: NSView {
     private let lettering: NSHostingView<LetteringPanel>
     /// The Fill tool's panel, in the same corner; empty with any other tool.
     private let fillPanel: NSHostingView<FillPanel>
+    /// The perspective panel, in the same corner while the vanishing points are moved.
+    private let perspectivePanel: NSHostingView<PerspectivePanel>
     private let selectionOverlay = SelectionOverlayView()
     private var railWidth: NSLayoutConstraint!
     private var barHeight: NSLayoutConstraint!
@@ -47,6 +49,7 @@ final class MainLayout: NSView {
         zoomHUD = NSHostingView(rootView: ZoomHUDView(viewModel: viewModel))
         lettering = NSHostingView(rootView: LetteringPanel(viewModel: viewModel, actions: actions))
         fillPanel = NSHostingView(rootView: FillPanel(viewModel: viewModel))
+        perspectivePanel = NSHostingView(rootView: PerspectivePanel(viewModel: viewModel, actions: actions))
         layersDocked = viewModel.isLayersDocked
         chromeHidden = viewModel.isChromeHidden
         super.init(frame: .zero)
@@ -54,7 +57,7 @@ final class MainLayout: NSView {
 
         selectionOverlay.viewModel = viewModel
         selectionOverlay.wantsLayer = true
-        for view in [rail, canvasView, selectionOverlay, dock, bar, pill, zoomHUD, lettering, fillPanel] as [NSView] {
+        for view in [rail, canvasView, selectionOverlay, dock, bar, pill, zoomHUD, lettering, fillPanel, perspectivePanel] as [NSView] {
             view.translatesAutoresizingMaskIntoConstraints = false
             addSubview(view)
         }
@@ -104,6 +107,8 @@ final class MainLayout: NSView {
             lettering.topAnchor.constraint(equalTo: canvasView.topAnchor, constant: 12),
             fillPanel.trailingAnchor.constraint(equalTo: canvasView.trailingAnchor, constant: -12),
             fillPanel.topAnchor.constraint(equalTo: canvasView.topAnchor, constant: 12),
+            perspectivePanel.trailingAnchor.constraint(equalTo: canvasView.trailingAnchor, constant: -12),
+            perspectivePanel.topAnchor.constraint(equalTo: canvasView.topAnchor, constant: 12),
         ])
         selectionOverlay.startAnimation()
 
@@ -164,6 +169,16 @@ final class MainLayout: NSView {
         actions.addGuide = { [weak canvasView, weak viewModel] horizontal in
             guard let canvasView else { return }
             viewModel?.addGuide(horizontal: horizontal, viewSize: canvasView.bounds.size)
+            canvasView.redrawOverlays()
+        }
+        actions.editPerspective = { [weak canvasView, weak viewModel] in
+            guard let canvasView else { return }
+            viewModel?.editPerspective(viewSize: canvasView.bounds.size)
+            canvasView.redrawOverlays()
+        }
+        actions.setPerspective = { [weak canvasView, weak viewModel] count in
+            guard let canvasView else { return }
+            viewModel?.setPerspective(points: count, viewSize: canvasView.bounds.size)
             canvasView.redrawOverlays()
         }
         return actions

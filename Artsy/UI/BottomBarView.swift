@@ -72,7 +72,7 @@ struct BottomBarView: View {
                 showingAdjust = true
             }
             .panelPopover(isPresented: $showingAdjust) {
-                AdjustPanelView(viewModel: viewModel, actions: actions)
+                AdjustPanelView(viewModel: viewModel, actions: actions, dismiss: { showingAdjust = false })
             }
             ChromeButton(systemImage: "plus", size: target, help: "AI, stock images and imports") {
                 showingAdd = true
@@ -111,7 +111,7 @@ struct BottomBarView: View {
                 showingAdjust = true
             }
             .panelPopover(isPresented: $showingAdjust) {
-                AdjustPanelView(viewModel: viewModel, actions: actions)
+                AdjustPanelView(viewModel: viewModel, actions: actions, dismiss: { showingAdjust = false })
             }
             ChromeButton(systemImage: "plus", label: "Add", help: "AI, stock images and imports") {
                 showingAdd = true
@@ -435,6 +435,8 @@ extension BrushCategory {
 struct AdjustPanelView: View {
     @ObservedObject var viewModel: CanvasViewModel
     let actions: ChromeActions
+    /// Closes the panel, for a row that hands the canvas over (moving the vanishing points).
+    var dismiss: () -> Void = {}
 
     private static let papers: [(name: String, grey: Double)] = [
         ("Dark", 0.10), ("Mid", 0.35), ("Light", 0.65), ("Black", 0), ("White", 1),
@@ -496,6 +498,19 @@ struct AdjustPanelView: View {
                     PanelRow(systemImage: "poweron", label: "Add vertical guide") { actions.addGuide(false) }
                     PanelRow(systemImage: "xmark", label: "Clear guides", note: "\(viewModel.guides.horizontals.count + viewModel.guides.verticals.count)") {
                         actions.changeGuides { $0.horizontals.removeAll(); $0.verticals.removeAll() }
+                    }
+
+                    PanelSectionLabel("Perspective")
+                    PanelRow(systemImage: "perspective", label: "Perspective",
+                             note: viewModel.guides.perspective.map { "\($0.points.count)-point, move" } ?? "add") {
+                        dismiss()
+                        actions.editPerspective()
+                    }
+                    if let perspective = viewModel.guides.perspective {
+                        PanelRow(systemImage: "eye", label: "Show perspective", note: perspective.isShown ? "On" : "Off",
+                                 isSelected: perspective.isShown) { actions.changeGuides { $0.perspective?.isShown.toggle() } }
+                        PanelRow(systemImage: "scope", label: "Snap to perspective", note: perspective.snaps ? "On" : "Off",
+                                 isSelected: perspective.snaps) { actions.changeGuides { $0.perspective?.snaps.toggle() } }
                     }
 
                     PanelSectionLabel("Paper around the canvas")

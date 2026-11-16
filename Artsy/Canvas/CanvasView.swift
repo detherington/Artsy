@@ -32,6 +32,8 @@ class CanvasView: MTKView {
     private var transformStartTransform: CGAffineTransform = .identity
     private var toolChangeObservation: AnyCancellable?
     private var brushCursorObservation: AnyCancellable?
+    /// Moving the vanishing points shows an arrow; done, the tool's cursor again.
+    private var perspectiveEditingObservation: AnyCancellable?
 
     override var acceptsFirstResponder: Bool { true }
 
@@ -93,10 +95,22 @@ class CanvasView: MTKView {
                     self.cursor(for: tool).set()
                 }
             }
+
+        perspectiveEditingObservation = viewModel.$isEditingPerspective
+            .dropFirst()
+            .receive(on: RunLoop.main)
+            .sink { [weak self] _ in
+                guard let self, let window = self.window else { return }
+                window.invalidateCursorRects(for: self)
+                if self.bounds.contains(self.convert(window.mouseLocationOutsideOfEventStream, from: nil)) {
+                    self.cursor(for: self.viewModel.currentTool).set()
+                }
+            }
     }
 
     /// The cursor to show over the canvas for a tool.
     private func cursor(for tool: ToolType) -> NSCursor {
+        if viewModel?.isEditingPerspective == true { return .arrow }
         guard tool == .brush || tool == .eraser, let viewModel = viewModel else {
             return ToolCursor.current(for: tool)
         }
@@ -113,6 +127,17 @@ class CanvasView: MTKView {
             isPanning = true
             lastPanPoint = event.locationInWindow
             return
+        }
+
+        // Moving the vanishing points, a press picks up a handle or does nothing; at any
+        // other time, so does a ⌘-press on one
+        if viewModel.isEditingPerspective || event.modifierFlags.contains(.command) {
+            let viewPoint = convert(event.locationInWindow, from: nil)
+            if viewModel.perspectiveDown(at: viewModel.transform.viewToCanvas(viewPoint, viewSize: bounds.size)) {
+                draggingPerspective = true
+                return
+            }
+            if viewModel.isEditingPerspective { return }
         }
 
         // ⌘-drag picks up a guide line
@@ -202,6 +227,13 @@ class CanvasView: MTKView {
             return
         }
 
+        if draggingPerspective {
+            let viewPoint = convert(event.locationInWindow, from: nil)
+            viewModel.perspectiveDrag(to: viewModel.transform.viewToCanvas(viewPoint, viewSize: bounds.size))
+            redrawOverlays()
+            return
+        }
+
         if isPanning {
             let currentPoint = event.locationInWindow
             let delta = CGPoint(
@@ -251,6 +283,13 @@ class CanvasView: MTKView {
 
     override func mouseUp(with event: NSEvent) {
         guard let viewModel = viewModel, let renderer = renderer else { return }
+
+        if draggingPerspective {
+            draggingPerspective = false
+            viewModel.perspectiveUp()
+            redrawOverlays()
+            return
+        }
 
         // A guide dragged off the canvas is gone
         if let line = draggingGuide {
@@ -943,6 +982,8 @@ class CanvasView: MTKView {
     /// redraw immediately, instead of waiting for their internal animation timer.
     /// The guide line being ⌘-dragged, if any.
     private var draggingGuide: CanvasGuides.Line?
+    /// Whether a press has picked up a perspective handle.
+    private var draggingPerspective = false
 
     func redrawOverlays() {
         superview?.subviews.forEach { $0.needsDisplay = true }
@@ -1182,6 +1223,13 @@ class CanvasView: MTKView {
         let viewPoint = convert(event.locationInWindow, from: nil)
         guard bounds.contains(viewPoint) else { return }
 
+        // Moving the vanishing points: a hand over a handle
+        if viewModel.isEditingPerspective {
+            let canvasPoint = viewModel.transform.viewToCanvas(viewPoint, viewSize: bounds.size)
+            (viewModel.perspectiveHandle(near: canvasPoint) != nil ? NSCursor.openHand : NSCursor.arrow).set()
+            return
+        }
+
         // Only the transform tool needs per-position dynamic cursors.
         // Every other tool gets its static cursor via `resetCursorRects`,
         // which macOS also reverts automatically on exit.
@@ -1313,6 +1361,13 @@ class CanvasView: MTKView {
         // Tab: the interface out of the way, and back
         if event.keyCode == 48 {
             viewModel.toggleChrome()
+            return
+        }
+
+        // Moving the vanishing points: Return or Escape is done
+        if viewModel.isEditingPerspective, [36, 76, 53].contains(event.keyCode) {
+            viewModel.endPerspectiveEditing()
+            redrawOverlays()
             return
         }
 

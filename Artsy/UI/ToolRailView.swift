@@ -138,6 +138,11 @@ struct ChromeActions {
     var changeGuides: ((inout CanvasGuides) -> Void) -> Void = { _ in }
     /// A guide through the middle of the view: horizontal if true.
     var addGuide: (Bool) -> Void = { _ in }
+    /// Start moving the vanishing points, laying out two-point perspective on the screen
+    /// if the canvas has none.
+    var editPerspective: () -> Void = {}
+    /// Perspective with this many points (1 to 3).
+    var setPerspective: (Int) -> Void = { _ in }
     /// An app-level action by its selector name, run after any pop-up has closed so it
     /// lands on the canvas window.
     var app: (String) -> Void = { name in

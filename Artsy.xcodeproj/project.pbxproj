@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		3D5D70C1653865A7C6BEC326 /* PerspectiveTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 52B150C66173FA1FF5D725F4 /* PerspectiveTests.swift */; };
 		55441CAB1E39DEE7D0BC3FED /* FlatsClippingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F66B8D3ED092ED58A5D16B40 /* FlatsClippingTests.swift */; };
 		BEB2D84A37C8598F4367325B /* TimelapseTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8485B7790360F4446DED4DBD /* TimelapseTests.swift */; };
 		91ECF0ED897F81F6D9DC1BFA /* PenWithoutPressureTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D2DF3D11A65CB2653F6D45D0 /* PenWithoutPressureTests.swift */; };
@@ -89,6 +90,7 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		52B150C66173FA1FF5D725F4 /* PerspectiveTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PerspectiveTests.swift; sourceTree = "<group>"; };
 		F66B8D3ED092ED58A5D16B40 /* FlatsClippingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FlatsClippingTests.swift; sourceTree = "<group>"; };
 		8485B7790360F4446DED4DBD /* TimelapseTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimelapseTests.swift; sourceTree = "<group>"; };
 		D2DF3D11A65CB2653F6D45D0 /* PenWithoutPressureTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PenWithoutPressureTests.swift; sourceTree = "<group>"; };
@@ -298,6 +300,7 @@
 				906151D16DF5DF8303645279 /* ScaleTests.swift */,
 				CF43D8B5ACBBDF0BC8CBA5DA /* LetteringTests.swift */,
 				D69C5570F03012F38CE28242 /* BalloonLookTests.swift */,
+				52B150C66173FA1FF5D725F4 /* PerspectiveTests.swift */,
 				BF0D3B6EA401832BC3B70224 /* DrawnFontFamilyTests.swift */,
 				0D30A3E2D91A3C9F065E1A90 /* DrawnFontTests.swift */,
 				3EB7258DA1CFCC0FEF7B3F66 /* PanelLayoutTests.swift */,
@@ -621,6 +624,7 @@
 				910557AE248C5E6C2EB1180D /* ScaleTests.swift in Sources */,
 				A4D9478CA72ABD94AC239F57 /* LetteringTests.swift in Sources */,
 				3A9CE334EA02E3941F29D370 /* BalloonLookTests.swift in Sources */,
+				3D5D70C1653865A7C6BEC326 /* PerspectiveTests.swift in Sources */,
 				6990FF67C1DF2C9307D6C40D /* DrawnFontFamilyTests.swift in Sources */,
 				96E0F905127FD4934B2327C1 /* DrawnFontTests.swift in Sources */,
 				9910EAD68BCB245F1F2FD01D /* PanelLayoutTests.swift in Sources */,

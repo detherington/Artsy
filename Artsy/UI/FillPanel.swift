@@ -11,7 +11,7 @@ struct FillPanel: View {
     static let width: CGFloat = 300
 
     var body: some View {
-        if viewModel.currentTool == .fill, !viewModel.isChromeHidden {
+        if viewModel.currentTool == .fill, !viewModel.isChromeHidden, !viewModel.isEditingPerspective {
             panel
         }
     }

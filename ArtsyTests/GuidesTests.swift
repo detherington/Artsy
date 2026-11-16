@@ -108,11 +108,59 @@ final class GuidesTests: XCTestCase {
         XCTAssertGreaterThan(onGuide.blueComponent, onGuide.redComponent + 0.2, "in teal")
         XCTAssertGreaterThan(pixel(250, 150).alphaComponent, 0.5, "the horizontal guide too")
         XCTAssertGreaterThan(pixel(64, 40).alphaComponent, 0.05, "a grid line, faint")
+        // It shows on any paper: over white it darkens it, over black it lightens it
+        let gridLine = pixel(64, 40)
+        func over(paper: CGFloat) -> CGFloat {
+            gridLine.redComponent * gridLine.alphaComponent + paper * (1 - gridLine.alphaComponent)
+        }
+        XCTAssertLessThan(over(paper: 1), 0.95, "a grid line shows on white paper")
+        XCTAssertGreaterThan(over(paper: 0), 0.1, "and on black")
         XCTAssertEqual(pixel(40, 40).alphaComponent, 0, accuracy: 0.01, "nothing between lines")
 
         viewModel.guides = CanvasGuides()
         rep = try capture()
         XCTAssertEqual(pixel(100, 75).alphaComponent, 0, accuracy: 0.01, "cleared")
+    }
+
+    /// Perspective: each point's rays in its own colour across the canvas, the horizon in
+    /// amber; handles only while the points are being moved; nothing when hidden.
+    func testTheOverlayDrawsPerspectiveAndItsHandlesWhileEditing() throws {
+        let viewModel = CanvasViewModel(canvasSize: CGSize(width: 400, height: 300))
+        // One point in the middle of the canvas, its horizon level through it
+        viewModel.guides.perspective = PerspectiveGuide(points: [CGPoint(x: 200, y: 150)])
+        viewModel.transform.scale = 1
+        viewModel.transform.offset = CGPoint(x: -200, y: -150)
+        let overlay = SelectionOverlayView(frame: NSRect(x: 0, y: 0, width: 400, height: 300))
+        overlay.viewModel = viewModel
+        func capture() throws -> NSBitmapImageRep {
+            let rep = try XCTUnwrap(overlay.bitmapImageRepForCachingDisplay(in: overlay.bounds))
+            overlay.cacheDisplay(in: overlay.bounds, to: rep)
+            return rep
+        }
+        var rep = try capture()
+        let scale = CGFloat(rep.pixelsWide) / 400
+        func pixel(_ x: CGFloat, _ y: CGFloat) -> NSColor {
+            rep.colorAt(x: Int(x * scale), y: Int((300 - y) * scale))!.usingColorSpace(.deviceRGB)!
+        }
+        let horizon = pixel(60, 150)
+        XCTAssertGreaterThan(horizon.alphaComponent, 0.5, "the horizon is drawn")
+        XCTAssertGreaterThan(horizon.redComponent, horizon.blueComponent + 0.3, "in amber")
+        // A ray straight up from the point (36 all round, one every 10°)
+        let ray = pixel(200, 260)
+        XCTAssertGreaterThan(ray.alphaComponent, 0.2, "a ray")
+        XCTAssertGreaterThan(ray.redComponent, ray.greenComponent + 0.2, "in the first point's red")
+        // The handle is filled white: inside it, white only while editing (the rays are
+        // red there, the horizon amber, neither of them white)
+        func isWhite(_ c: NSColor) -> Bool { c.alphaComponent > 0.9 && c.greenComponent > 0.9 && c.blueComponent > 0.9 }
+        XCTAssertFalse(isWhite(pixel(204, 153)), "no handle while not editing")
+
+        viewModel.isEditingPerspective = true
+        rep = try capture()
+        XCTAssertTrue(isWhite(pixel(204, 153)), "a handle at the point while editing")
+
+        viewModel.guides.perspective?.isShown = false
+        rep = try capture()
+        XCTAssertEqual(pixel(60, 150).alphaComponent, 0, accuracy: 0.01, "hidden")
     }
 
     // MARK: - Print pages
