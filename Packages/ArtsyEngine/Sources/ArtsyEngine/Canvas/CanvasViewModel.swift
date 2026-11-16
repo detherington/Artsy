@@ -196,13 +196,18 @@ public final class CanvasViewModel: ObservableObject {
     /// The last step saved by a lettering change, to fold the next one into it.
     var lastLetteringStep: (balloon: UUID, kind: String, token: Int?)?
 
-    /// Whether the vanishing points are being moved: presses on the canvas pick up the
-    /// perspective's handles and draw nothing (see CanvasViewModel+Perspective).
-    @Published public var isEditingPerspective = false
-    /// The perspective handle a press has picked up, and where the press last was.
-    var perspectiveGesture: (handle: PerspectiveGuide.Handle, last: CGPoint)?
+    /// The drawing guide being moved, if one is: presses on the canvas pick up its handles
+    /// and draw nothing (see CanvasViewModel+DrawingGuides).
+    @Published public var editingGuide: DrawingGuide?
+    /// The drawing guide's handle a press has picked up, and where the press last was.
+    var guideGesture: (handle: GuideHandle, last: CGPoint)?
+    /// Speed or focus lines being laid out, shown as a preview until they are made into a
+    /// layer or cancelled; never saved.
+    @Published public var comicLines: ComicLines?
+    /// The stroke in progress held to a drawing guide, if it is.
+    public private(set) var heldStroke: HeldStroke?
     /// The stroke in progress held to the perspective, if it is.
-    public private(set) var perspectiveStroke: PerspectiveStroke?
+    public var perspectiveStroke: PerspectiveStroke? { heldStroke?.perspective }
 
     /// `point` pulled onto any guide within reach, at the current zoom.
     private func snappedToGuides(_ point: StrokePoint) -> StrokePoint {
@@ -210,24 +215,28 @@ public final class CanvasViewModel: ObservableObject {
         return point.moved(to: guides.snapped(point.position, zoom: transform.scale))
     }
 
-    /// A sample of the stroke in progress on its way in: onto the perspective's line, if
-    /// the stroke is held to one (which it chooses once the pen has gone far enough), or
-    /// else onto any guide within reach.
+    /// A sample of the stroke in progress on its way in: onto the drawing guide holding the
+    /// stroke, if one is (the perspective choosing its line once the pen has gone far
+    /// enough), or else onto any guide line within reach.
     private func placed(_ point: StrokePoint) -> StrokePoint {
-        guard var held = perspectiveStroke else { return snappedToGuides(point) }
-        let chose = held.direction == nil
+        guard var held = heldStroke else { return snappedToGuides(point) }
+        let undecided = held.logName == nil
         let placed = point.moved(to: held.place(point.position))
-        perspectiveStroke = held
-        if chose, let direction = held.direction {
-            DiagnosticsLog.shared.note(.stroke, "in perspective: \(direction.logName)")
-        }
+        heldStroke = held
+        if undecided, let name = held.logName { DiagnosticsLog.shared.note(.stroke, name) }
         return placed
     }
 
     /// A predicted sample, placed as `placed` would, choosing nothing.
     private func placedAhead(_ point: StrokePoint) -> StrokePoint {
-        guard let held = perspectiveStroke else { return snappedToGuides(point) }
+        guard let held = heldStroke else { return snappedToGuides(point) }
         return point.moved(to: held.preview(point.position))
+    }
+
+    /// A sample after smoothing, back on the curve holding the stroke, if one does.
+    private func kept(_ point: StrokePoint) -> StrokePoint {
+        guard let held = heldStroke else { return point }
+        return point.moved(to: held.kept(point.position))
     }
 
     // Transform tool — non-nil while transforming a layer.
@@ -323,11 +332,12 @@ public final class CanvasViewModel: ObservableObject {
         recorder?.beginStroke(settingsFrom: self, firstPoint: rawPoint)
         speedPressure = PressureFromSpeed(zoom: Float(transform.scale),   // the hand's speed is on the screen
                                           pace: input == .penWithoutPressure ? .pen : .hand)
-        let point = snappedToGuides(substitutingPressure(rawPoint, from: &speedPressure))
-        // Held to the perspective from where it starts, on a guide if it starts by one
-        perspectiveStroke = guides.perspective.flatMap {
-            $0.holdsStrokes ? PerspectiveStroke(guide: $0, anchor: point.position, zoom: transform.scale) : nil
-        }
+        let snapped = snappedToGuides(substitutingPressure(rawPoint, from: &speedPressure))
+        // Held to a drawing guide from where it lands (on a guide line if it lands by one):
+        // a ruler or an ellipse laid against, or the perspective
+        heldStroke = HeldStroke.landing(at: snapped.position, guides: guides, zoom: transform.scale)
+        let point = heldStroke.map { snapped.moved(to: $0.preview(snapped.position)) } ?? snapped
+        if let name = heldStroke?.logName { DiagnosticsLog.shared.note(.stroke, name) }
         smoother.mode = smoothingMode
         smoother.strength = smoothingStrength
         smoother.zoom = transform.scale
@@ -341,7 +351,7 @@ public final class CanvasViewModel: ObservableObject {
             spraysWhileResting: { if case .stamp(let s) = currentBrush.rendering { return s.holdRate > 0 } else { return false } }(),
             easeLength: input.hasPressure || !easesStrokesWithoutPressure ? 0 : Self.easeLength(forBrushSize: brushSize)
         ))
-        path.append(smoother.filter(point))
+        path.append(kept(smoother.filter(point)))
         activePath = path
         lastInput = point
         sampleArrivedSinceFrame = true
@@ -414,7 +424,7 @@ public final class CanvasViewModel: ObservableObject {
         guard isDrawing, !strokeIsSettled else { return }
         strokeIsSettled = true
         if let point = smoother.catchUpPoint() {
-            activePath?.append(point)
+            activePath?.append(kept(point))
         }
     }
 
@@ -430,7 +440,7 @@ public final class CanvasViewModel: ObservableObject {
         guard isDrawing else { return }
         let point = placed(substitutingPressure(rawPoint, from: &speedPressure))
         lastInput = point
-        activePath?.append(smoother.filter(point))
+        activePath?.append(kept(smoother.filter(point)))
         checkShapeSnap()
     }
 
@@ -448,7 +458,7 @@ public final class CanvasViewModel: ObservableObject {
         if samples.isEmpty, predictedSamples.isEmpty { return }
         var speed = speedPressure
         let readied = samples.filter(\.isFinite).map { placedAhead(substitutingPressure($0, from: &speed)) }
-        predictedSamples = smoother.preview(readied)
+        predictedSamples = smoother.preview(readied).map(kept)
         predictionVersion += 1
     }
 
@@ -456,8 +466,8 @@ public final class CanvasViewModel: ObservableObject {
     /// back to the stroke as drawn once the pen moves on, and keep drawing it.
     private func checkShapeSnap() {
         // A brush that sprays while the pen rests is held still on purpose
-        // A stroke held to the perspective is a straight line already
-        guard snapsShapesOnHold, perspectiveStroke == nil, currentBrush.smudgeSettings == nil, let path = activePath,
+        // A stroke held to a drawing guide has its shape already
+        guard snapsShapesOnHold, heldStroke == nil, currentBrush.smudgeSettings == nil, let path = activePath,
               !path.style.spraysWhileResting, let end = path.samples.last?.position else { return }
         if snappedPath != nil {
             if let anchor = snapAnchor, hypot(end.x - anchor.x, end.y - anchor.y) > 6 {
@@ -528,7 +538,7 @@ public final class CanvasViewModel: ObservableObject {
         snappedPath = nil
         snappedShapeName = nil
         snapAnchor = nil
-        perspectiveStroke = nil
+        heldStroke = nil
         isDrawing = false
     }
 

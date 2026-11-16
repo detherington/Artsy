@@ -683,6 +683,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         editMenu.addItem(deselectItem)
         editMenu.addItem(NSMenuItem.separator())
         editMenu.addItem(withTitle: "Dry Layer", action: #selector(handleDryLayer), keyEquivalent: "")
+        editMenu.addItem(NSMenuItem.separator())
+        editMenu.addItem(withTitle: "Focus Lines…", action: #selector(startFocusLines), keyEquivalent: "")
+        editMenu.addItem(withTitle: "Speed Lines…", action: #selector(startSpeedLines), keyEquivalent: "")
         editMenuItem.submenu = editMenu
 
         // View menu
@@ -748,6 +751,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         guidesMenu.addItem(withTitle: "Edit Perspective", action: #selector(editPerspective), keyEquivalent: "")
         guidesMenu.addItem(withTitle: "Show Perspective", action: #selector(toggleShowPerspective), keyEquivalent: "").isHidden = true
         guidesMenu.addItem(withTitle: "Snap to Perspective", action: #selector(toggleSnapToPerspective), keyEquivalent: "").isHidden = true
+        guidesMenu.addItem(withTitle: "Edit Ruler", action: #selector(editRuler), keyEquivalent: "")
+        guidesMenu.addItem(withTitle: "Show Ruler", action: #selector(toggleShowRuler), keyEquivalent: "").isHidden = true
+        guidesMenu.addItem(withTitle: "Snap to Ruler", action: #selector(toggleSnapToRuler), keyEquivalent: "").isHidden = true
+        guidesMenu.addItem(withTitle: "Edit Ellipse", action: #selector(editEllipse), keyEquivalent: "")
+        guidesMenu.addItem(withTitle: "Show Ellipse", action: #selector(toggleShowEllipse), keyEquivalent: "").isHidden = true
+        guidesMenu.addItem(withTitle: "Snap to Ellipse", action: #selector(toggleSnapToEllipse), keyEquivalent: "").isHidden = true
         // Only on a canvas made at a print format (see menuNeedsUpdate)
         guidesMenu.addItem(withTitle: "Show Page Frame", action: #selector(togglePageFrame), keyEquivalent: "").isHidden = true
         guidesMenu.addItem(withTitle: "Show Slice Marks", action: #selector(toggleSliceMarks), keyEquivalent: "").isHidden = true
@@ -924,12 +933,26 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         changeGuides { $0.snapsToGuides.toggle() }
     }
 
-    /// Moving the vanishing points, two-point perspective laid out first if there is none.
-    @objc private func editPerspective() {
+    /// Moving a drawing guide's handles, one laid out first if there is none.
+    private func edit(_ guide: DrawingGuide) {
         guard let store = activeStore else { return }
-        store.viewModel.editPerspective(viewSize: store.canvasView.bounds.size)
+        store.viewModel.editGuide(guide, viewSize: store.canvasView.bounds.size)
         store.canvasView.redrawOverlays()
     }
+
+    @objc private func editPerspective() { edit(.perspective) }
+
+    /// Laying out speed or focus lines round a clear area in the middle of the canvas view.
+    private func startLines(_ kind: ComicLines.Kind) {
+        guard let store = activeStore else { return }
+        store.viewModel.startLines(kind, viewSize: store.canvasView.bounds.size)
+        store.canvasView.redrawOverlays()
+    }
+
+    @objc private func startFocusLines() { startLines(.focus) }
+    @objc private func startSpeedLines() { startLines(.speed) }
+    @objc private func editRuler() { edit(.ruler) }
+    @objc private func editEllipse() { edit(.ellipse) }
 
     @objc private func toggleShowPerspective() {
         changeGuides { $0.perspective?.isShown.toggle() }
@@ -937,6 +960,22 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc private func toggleSnapToPerspective() {
         changeGuides { $0.perspective?.snaps.toggle() }
+    }
+
+    @objc private func toggleShowRuler() {
+        changeGuides { $0.ruler?.isShown.toggle() }
+    }
+
+    @objc private func toggleSnapToRuler() {
+        changeGuides { $0.ruler?.snaps.toggle() }
+    }
+
+    @objc private func toggleShowEllipse() {
+        changeGuides { $0.ellipse?.isShown.toggle() }
+    }
+
+    @objc private func toggleSnapToEllipse() {
+        changeGuides { $0.ellipse?.snaps.toggle() }
     }
 
     @objc private func addHorizontalGuide() {
@@ -1510,6 +1549,18 @@ extension AppDelegate: NSMenuDelegate {
             case "Snap to Perspective":
                 item.isHidden = guides.perspective == nil
                 item.state = guides.perspective?.snaps == true ? .on : .off
+            case "Show Ruler":
+                item.isHidden = guides.ruler == nil
+                item.state = guides.ruler?.isShown == true ? .on : .off
+            case "Snap to Ruler":
+                item.isHidden = guides.ruler == nil
+                item.state = guides.ruler?.snaps == true ? .on : .off
+            case "Show Ellipse":
+                item.isHidden = guides.ellipse == nil
+                item.state = guides.ellipse?.isShown == true ? .on : .off
+            case "Snap to Ellipse":
+                item.isHidden = guides.ellipse == nil
+                item.state = guides.ellipse?.snaps == true ? .on : .off
             default:
                 if item.tag > 0 { item.state = Int(guides.gridSpacing) == item.tag ? .on : .off }
             }

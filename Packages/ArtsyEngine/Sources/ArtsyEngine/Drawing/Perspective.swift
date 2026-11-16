@@ -85,12 +85,20 @@ public struct PerspectiveGuide: Codable, Equatable {
     }
 
     /// How near a press has to come to a handle to pick it up, in screen points.
-    public static let handleReach: CGFloat = 24
+    public static let handleReach: CGFloat = DrawingGuide.handleReach
 
     /// The horizon's handle: halfway between the two points on it, for two or three points.
     public var horizonHandle: CGPoint? {
         guard points.count >= 2 else { return nil }
         return CGPoint(x: (points[0].x + points[1].x) / 2, y: (points[0].y + points[1].y) / 2)
+    }
+
+    /// Where `handle` is; none for one it does not have.
+    public func position(of handle: Handle) -> CGPoint? {
+        switch handle {
+        case .point(let index): return points.indices.contains(index) ? points[index] : nil
+        case .horizon: return horizonHandle
+        }
     }
 
     /// The handle within `reach` canvas pixels of `point`, the nearest if more than one.

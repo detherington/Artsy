@@ -21,8 +21,8 @@ final class MainLayout: NSView {
     private let lettering: NSHostingView<LetteringPanel>
     /// The Fill tool's panel, in the same corner; empty with any other tool.
     private let fillPanel: NSHostingView<FillPanel>
-    /// The perspective panel, in the same corner while the vanishing points are moved.
-    private let perspectivePanel: NSHostingView<PerspectivePanel>
+    /// The drawing guide's panel, in the same corner while a guide's handles are moved.
+    private let perspectivePanel: NSHostingView<DrawingGuidePanel>
     private let selectionOverlay = SelectionOverlayView()
     private var railWidth: NSLayoutConstraint!
     private var barHeight: NSLayoutConstraint!
@@ -49,7 +49,7 @@ final class MainLayout: NSView {
         zoomHUD = NSHostingView(rootView: ZoomHUDView(viewModel: viewModel))
         lettering = NSHostingView(rootView: LetteringPanel(viewModel: viewModel, actions: actions))
         fillPanel = NSHostingView(rootView: FillPanel(viewModel: viewModel))
-        perspectivePanel = NSHostingView(rootView: PerspectivePanel(viewModel: viewModel, actions: actions))
+        perspectivePanel = NSHostingView(rootView: DrawingGuidePanel(viewModel: viewModel, actions: actions))
         layersDocked = viewModel.isLayersDocked
         chromeHidden = viewModel.isChromeHidden
         super.init(frame: .zero)
@@ -171,9 +171,14 @@ final class MainLayout: NSView {
             viewModel?.addGuide(horizontal: horizontal, viewSize: canvasView.bounds.size)
             canvasView.redrawOverlays()
         }
-        actions.editPerspective = { [weak canvasView, weak viewModel] in
+        actions.editGuide = { [weak canvasView, weak viewModel] guide in
             guard let canvasView else { return }
-            viewModel?.editPerspective(viewSize: canvasView.bounds.size)
+            viewModel?.editGuide(guide, viewSize: canvasView.bounds.size)
+            canvasView.redrawOverlays()
+        }
+        actions.startLines = { [weak canvasView, weak viewModel] kind in
+            guard let canvasView else { return }
+            viewModel?.startLines(kind, viewSize: canvasView.bounds.size)
             canvasView.redrawOverlays()
         }
         actions.setPerspective = { [weak canvasView, weak viewModel] count in

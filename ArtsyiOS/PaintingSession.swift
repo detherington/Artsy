@@ -111,9 +111,13 @@ final class PaintingSession: ObservableObject {
             guard let view else { return }
             viewModel?.addGuide(horizontal: horizontal, viewSize: view.bounds.size)
         }
-        actions.editPerspective = { [weak view, weak viewModel] in
+        actions.editGuide = { [weak view, weak viewModel] guide in
             guard let view else { return }
-            viewModel?.editPerspective(viewSize: view.bounds.size)
+            viewModel?.editGuide(guide, viewSize: view.bounds.size)
+        }
+        actions.startLines = { [weak view, weak viewModel] kind in
+            guard let view else { return }
+            viewModel?.startLines(kind, viewSize: view.bounds.size)
         }
         actions.setPerspective = { [weak view, weak viewModel] count in
             guard let view else { return }

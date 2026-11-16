@@ -30,8 +30,8 @@ final class PaintingView: MTKView {
     var fingerPaints = true
     /// The touch holding a balloon with the Letter tool, if any.
     private var letteringTouch: UITouch?
-    /// The touch moving a perspective handle, if any.
-    private var perspectiveTouch: UITouch?
+    /// The touch moving a drawing guide's handle, if any.
+    private var guideTouch: UITouch?
     /// A format's marks over the canvas (a page frame, slice marks), for a canvas that has them.
     private let formatMarks: FormatMarksOverlay
 
@@ -89,13 +89,13 @@ final class PaintingView: MTKView {
     // MARK: - Strokes
 
     override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
-        // Moving the vanishing points: a pencil or one finger picks up a handle, or does nothing
-        if let viewModel, viewModel.isEditingPerspective {
-            guard perspectiveTouch == nil, drawingTouch == nil,
+        // Moving a drawing guide's handles: a pencil or one finger picks one up, or does nothing
+        if let viewModel, viewModel.editingGuide != nil {
+            guard guideTouch == nil, drawingTouch == nil,
                   let touch = touches.first(where: { $0.type == .pencil }) ?? touches.first(where: { $0.type == .direct }),
                   touch.type == .pencil || event?.allTouches?.filter({ $0.type == .direct }).count ?? 1 == 1
             else { return }
-            if viewModel.perspectiveDown(at: canvasPoint(of: touch)) { perspectiveTouch = touch }
+            if viewModel.guideHandleDown(at: canvasPoint(of: touch)) { guideTouch = touch }
             return
         }
         guard drawingTouch == nil, let viewModel, let renderer,
@@ -126,8 +126,8 @@ final class PaintingView: MTKView {
     }
 
     override func touchesMoved(_ touches: Set<UITouch>, with event: UIEvent?) {
-        if let touch = perspectiveTouch, touches.contains(touch), let viewModel {
-            viewModel.perspectiveDrag(to: canvasPoint(of: touch))
+        if let touch = guideTouch, touches.contains(touch), let viewModel {
+            viewModel.guideHandleDrag(to: canvasPoint(of: touch))
             return
         }
         if let touch = letteringTouch, touches.contains(touch), let viewModel, let renderer {
@@ -189,22 +189,22 @@ final class PaintingView: MTKView {
     }
 
     override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent?) {
-        if let touch = perspectiveTouch, touches.contains(touch) { endPerspectiveDrag(); return }
+        if let touch = guideTouch, touches.contains(touch) { endGuideDrag(); return }
         if let touch = letteringTouch, touches.contains(touch) { endLettering(); return }
         guard let touch = drawingTouch, touches.contains(touch) else { return }
         endStroke(with: touch)
     }
 
     override func touchesCancelled(_ touches: Set<UITouch>, with event: UIEvent?) {
-        if let touch = perspectiveTouch, touches.contains(touch) { endPerspectiveDrag(); return }
+        if let touch = guideTouch, touches.contains(touch) { endGuideDrag(); return }
         if let touch = letteringTouch, touches.contains(touch) { endLettering(); return }
         guard let touch = drawingTouch, touches.contains(touch) else { return }
         endStroke(with: touch)
     }
 
-    private func endPerspectiveDrag() {
-        perspectiveTouch = nil
-        viewModel?.perspectiveUp()
+    private func endGuideDrag() {
+        guideTouch = nil
+        viewModel?.guideHandleUp()
     }
 
     private func endLettering() {

@@ -33,7 +33,7 @@ class CanvasView: MTKView {
     private var toolChangeObservation: AnyCancellable?
     private var brushCursorObservation: AnyCancellable?
     /// Moving the vanishing points shows an arrow; done, the tool's cursor again.
-    private var perspectiveEditingObservation: AnyCancellable?
+    private var guideEditingObservation: AnyCancellable?
 
     override var acceptsFirstResponder: Bool { true }
 
@@ -96,7 +96,7 @@ class CanvasView: MTKView {
                 }
             }
 
-        perspectiveEditingObservation = viewModel.$isEditingPerspective
+        guideEditingObservation = viewModel.$editingGuide
             .dropFirst()
             .receive(on: RunLoop.main)
             .sink { [weak self] _ in
@@ -110,7 +110,7 @@ class CanvasView: MTKView {
 
     /// The cursor to show over the canvas for a tool.
     private func cursor(for tool: ToolType) -> NSCursor {
-        if viewModel?.isEditingPerspective == true { return .arrow }
+        if viewModel?.editingGuide != nil { return .arrow }
         guard tool == .brush || tool == .eraser, let viewModel = viewModel else {
             return ToolCursor.current(for: tool)
         }
@@ -129,15 +129,15 @@ class CanvasView: MTKView {
             return
         }
 
-        // Moving the vanishing points, a press picks up a handle or does nothing; at any
+        // Moving a drawing guide's handles, a press picks one up or does nothing; at any
         // other time, so does a ⌘-press on one
-        if viewModel.isEditingPerspective || event.modifierFlags.contains(.command) {
+        if viewModel.editingGuide != nil || event.modifierFlags.contains(.command) {
             let viewPoint = convert(event.locationInWindow, from: nil)
-            if viewModel.perspectiveDown(at: viewModel.transform.viewToCanvas(viewPoint, viewSize: bounds.size)) {
-                draggingPerspective = true
+            if viewModel.guideHandleDown(at: viewModel.transform.viewToCanvas(viewPoint, viewSize: bounds.size)) {
+                draggingGuideHandle = true
                 return
             }
-            if viewModel.isEditingPerspective { return }
+            if viewModel.editingGuide != nil { return }
         }
 
         // ⌘-drag picks up a guide line
@@ -227,9 +227,9 @@ class CanvasView: MTKView {
             return
         }
 
-        if draggingPerspective {
+        if draggingGuideHandle {
             let viewPoint = convert(event.locationInWindow, from: nil)
-            viewModel.perspectiveDrag(to: viewModel.transform.viewToCanvas(viewPoint, viewSize: bounds.size))
+            viewModel.guideHandleDrag(to: viewModel.transform.viewToCanvas(viewPoint, viewSize: bounds.size))
             redrawOverlays()
             return
         }
@@ -284,9 +284,9 @@ class CanvasView: MTKView {
     override func mouseUp(with event: NSEvent) {
         guard let viewModel = viewModel, let renderer = renderer else { return }
 
-        if draggingPerspective {
-            draggingPerspective = false
-            viewModel.perspectiveUp()
+        if draggingGuideHandle {
+            draggingGuideHandle = false
+            viewModel.guideHandleUp()
             redrawOverlays()
             return
         }
@@ -982,8 +982,8 @@ class CanvasView: MTKView {
     /// redraw immediately, instead of waiting for their internal animation timer.
     /// The guide line being ⌘-dragged, if any.
     private var draggingGuide: CanvasGuides.Line?
-    /// Whether a press has picked up a perspective handle.
-    private var draggingPerspective = false
+    /// Whether a press has picked up a drawing guide's handle.
+    private var draggingGuideHandle = false
 
     func redrawOverlays() {
         superview?.subviews.forEach { $0.needsDisplay = true }
@@ -1223,10 +1223,10 @@ class CanvasView: MTKView {
         let viewPoint = convert(event.locationInWindow, from: nil)
         guard bounds.contains(viewPoint) else { return }
 
-        // Moving the vanishing points: a hand over a handle
-        if viewModel.isEditingPerspective {
+        // Moving a drawing guide's handles: a hand over one
+        if viewModel.editingGuide != nil {
             let canvasPoint = viewModel.transform.viewToCanvas(viewPoint, viewSize: bounds.size)
-            (viewModel.perspectiveHandle(near: canvasPoint) != nil ? NSCursor.openHand : NSCursor.arrow).set()
+            (viewModel.guideHandle(near: canvasPoint) != nil ? NSCursor.openHand : NSCursor.arrow).set()
             return
         }
 
@@ -1364,9 +1364,14 @@ class CanvasView: MTKView {
             return
         }
 
-        // Moving the vanishing points: Return or Escape is done
-        if viewModel.isEditingPerspective, [36, 76, 53].contains(event.keyCode) {
-            viewModel.endPerspectiveEditing()
+        // Moving a drawing guide's handles: Return or Escape is done. Laying out speed or
+        // focus lines, Return makes them and Escape lets them go
+        if viewModel.editingGuide != nil, [36, 76, 53].contains(event.keyCode) {
+            if viewModel.editingGuide == .lines, event.keyCode != 53, let renderer {
+                do { try viewModel.makeLines(renderer: renderer) } catch { NSSound.beep() }
+            } else {
+                viewModel.endGuideEditing()
+            }
             redrawOverlays()
             return
         }

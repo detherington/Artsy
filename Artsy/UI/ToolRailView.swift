@@ -138,9 +138,12 @@ struct ChromeActions {
     var changeGuides: ((inout CanvasGuides) -> Void) -> Void = { _ in }
     /// A guide through the middle of the view: horizontal if true.
     var addGuide: (Bool) -> Void = { _ in }
-    /// Start moving the vanishing points, laying out two-point perspective on the screen
-    /// if the canvas has none.
-    var editPerspective: () -> Void = {}
+    /// Start moving a drawing guide's handles (perspective, the ruler, the ellipse), laying
+    /// one out on the screen if the canvas has none.
+    var editGuide: (DrawingGuide) -> Void = { _ in }
+    /// Start laying out speed or focus lines round a clear area in the middle of the screen,
+    /// or change the kind of those being laid out.
+    var startLines: (ComicLines.Kind) -> Void = { _ in }
     /// Perspective with this many points (1 to 3).
     var setPerspective: (Int) -> Void = { _ in }
     /// An app-level action by its selector name, run after any pop-up has closed so it

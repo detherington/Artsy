@@ -154,13 +154,102 @@ final class GuidesTests: XCTestCase {
         func isWhite(_ c: NSColor) -> Bool { c.alphaComponent > 0.9 && c.greenComponent > 0.9 && c.blueComponent > 0.9 }
         XCTAssertFalse(isWhite(pixel(204, 153)), "no handle while not editing")
 
-        viewModel.isEditingPerspective = true
+        viewModel.editingGuide = .perspective
         rep = try capture()
         XCTAssertTrue(isWhite(pixel(204, 153)), "a handle at the point while editing")
 
         viewModel.guides.perspective?.isShown = false
         rep = try capture()
         XCTAssertEqual(pixel(60, 150).alphaComponent, 0, accuracy: 0.01, "hidden")
+    }
+
+    /// The ruler and the ellipse in violet; the ellipse's other sizes with every size on;
+    /// handles only on the one being moved; nothing when hidden.
+    func testTheOverlayDrawsTheRulerAndEllipseAndTheEditedOnesHandles() throws {
+        let viewModel = CanvasViewModel(canvasSize: CGSize(width: 400, height: 300))
+        viewModel.guides.ruler = RulerGuide(start: CGPoint(x: 40, y: 60), end: CGPoint(x: 360, y: 60))
+        viewModel.guides.ellipse = EllipseGuide(centre: CGPoint(x: 200, y: 180), radii: CGSize(width: 100, height: 50))
+        viewModel.transform.scale = 1
+        viewModel.transform.offset = CGPoint(x: -200, y: -150)
+        let overlay = SelectionOverlayView(frame: NSRect(x: 0, y: 0, width: 400, height: 300))
+        overlay.viewModel = viewModel
+        var rep = try XCTUnwrap(overlay.bitmapImageRepForCachingDisplay(in: overlay.bounds))
+        func capture() {
+            rep = overlay.bitmapImageRepForCachingDisplay(in: overlay.bounds)!
+            overlay.cacheDisplay(in: overlay.bounds, to: rep)
+        }
+        capture()
+        let scale = CGFloat(rep.pixelsWide) / 400
+        func pixel(_ x: CGFloat, _ y: CGFloat) -> NSColor {
+            rep.colorAt(x: Int(x * scale), y: Int((300 - y) * scale))!.usingColorSpace(.deviceRGB)!
+        }
+        func isViolet(_ c: NSColor) -> Bool {
+            c.alphaComponent > 0.3 && c.blueComponent > c.greenComponent + 0.2 && c.redComponent > c.greenComponent
+        }
+        func isWhite(_ c: NSColor) -> Bool { c.alphaComponent > 0.9 && c.greenComponent > 0.9 && c.blueComponent > 0.9 }
+        XCTAssertTrue(isViolet(pixel(150, 60)), "the ruler")
+        XCTAssertTrue(isViolet(pixel(300, 180)), "the ellipse at its first axis's end")
+        XCTAssertTrue(isViolet(pixel(200, 230)), "and across")
+        XCTAssertEqual(pixel(250, 180).alphaComponent, 0, accuracy: 0.01, "one size only")
+        // Inside the ruler's start handle and the ellipse's centre square, off every line
+        XCTAssertFalse(isWhite(pixel(44, 64)), "no handles while not editing")
+        XCTAssertFalse(isWhite(pixel(203, 183)))
+
+        viewModel.editingGuide = .ruler
+        capture()
+        XCTAssertTrue(isWhite(pixel(44, 64)), "the ruler's handles while it is moved")
+        XCTAssertFalse(isWhite(pixel(203, 183)), "not the ellipse's")
+        viewModel.editingGuide = .ellipse
+        capture()
+        XCTAssertTrue(isWhite(pixel(203, 183)), "the ellipse's while it is moved")
+        XCTAssertFalse(isWhite(pixel(44, 64)))
+
+        viewModel.editingGuide = nil
+        viewModel.guides.ellipse?.everySize = true
+        capture()
+        XCTAssertGreaterThan(pixel(250, 180).alphaComponent, 0.1, "the half size, with every size on")
+
+        viewModel.guides.ruler?.isShown = false
+        viewModel.guides.ellipse?.isShown = false
+        capture()
+        XCTAssertEqual(pixel(150, 60).alphaComponent, 0, accuracy: 0.01, "hidden")
+        XCTAssertEqual(pixel(300, 180).alphaComponent, 0, accuracy: 0.01)
+    }
+
+    /// Speed or focus lines being laid out are previewed in the current colour, the clear
+    /// area left clear, with its handle; once let go, nothing.
+    func testTheOverlayPreviewsLinesBeingLaidOut() throws {
+        let viewModel = CanvasViewModel(canvasSize: CGSize(width: 400, height: 300))
+        viewModel.transform.scale = 1
+        viewModel.transform.offset = CGPoint(x: -200, y: -150)
+        viewModel.currentColor = StrokeColor(red: 1, green: 0, blue: 0, alpha: 1)
+        viewModel.comicLines = ComicLines(kind: .focus, clear: EllipseGuide(centre: CGPoint(x: 200, y: 150),
+                                                                             radii: CGSize(width: 60, height: 40)),
+                                          count: 90, width: 10, variety: 0)
+        viewModel.editingGuide = .lines
+        let overlay = SelectionOverlayView(frame: NSRect(x: 0, y: 0, width: 400, height: 300))
+        overlay.viewModel = viewModel
+        var rep = try XCTUnwrap(overlay.bitmapImageRepForCachingDisplay(in: overlay.bounds))
+        func capture() {
+            rep = overlay.bitmapImageRepForCachingDisplay(in: overlay.bounds)!
+            overlay.cacheDisplay(in: overlay.bounds, to: rep)
+        }
+        capture()
+        let scale = CGFloat(rep.pixelsWide) / 400
+        func pixel(_ x: CGFloat, _ y: CGFloat) -> NSColor {
+            rep.colorAt(x: Int(x * scale), y: Int((300 - y) * scale))!.usingColorSpace(.deviceRGB)!
+        }
+        let reds = stride(from: 2, to: 398, by: 3).map { pixel(CGFloat($0), 297) }
+            .filter { $0.alphaComponent > 0.5 && $0.redComponent > 0.6 && $0.greenComponent < 0.3 }
+        XCTAssertGreaterThan(reds.count, 10, "lines in red along the top edge")
+        XCTAssertEqual(pixel(230, 150).alphaComponent, 0, accuracy: 0.01, "the clear area clear")
+        let handle = pixel(203, 153)
+        XCTAssertTrue(handle.alphaComponent > 0.9 && handle.greenComponent > 0.9, "the clear area's centre handle, white")
+
+        viewModel.endGuideEditing()
+        capture()
+        XCTAssertEqual(pixel(203, 153).alphaComponent, 0, accuracy: 0.01, "let go: nothing")
+        XCTAssertFalse(stride(from: 2, to: 398, by: 3).contains { pixel(CGFloat($0), 297).alphaComponent > 0.1 })
     }
 
     // MARK: - Print pages
