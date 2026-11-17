@@ -8,6 +8,8 @@ enum BalloonSelectionStyle {
     static let dash: [CGFloat] = [4, 3]
     /// The handles' radius, in points.
     static let handleRadius: CGFloat = 5
+    /// The line a balloon being drawn by hand shows as, in points.
+    static let sketchWidth: CGFloat = 2
 }
 
 /// The Letter tool's panel, over the canvas's top-right corner while the tool is in use:
@@ -61,7 +63,7 @@ struct LetteringPanel: View {
                     }
                 }
                 drawnFonts(selected: drawn) { id in viewModel.balloonDrawnFont = id }
-                Text("Tap the page to place a balloon; tap one to change it.")
+                Text("Tap the page to place a balloon, or draw one round where the words go; tap one to change it.")
                     .font(Chrome.labelFont)
                     .foregroundColor(Chrome.secondaryText)
                     .fixedSize(horizontal: false, vertical: true)
@@ -224,11 +226,18 @@ struct LetteringPanel: View {
     @ViewBuilder
     private func lookRows(style: BalloonStyle, look: BalloonLook) -> some View {
         let shape = look.shape.flatMap { style.shapes.contains($0) ? $0 : nil } ?? style.shapes.first
+        // A balloon drawn by hand shows its own outline first, picked; another shape replaces it
+        let drawn = viewModel.selectedBalloon.flatMap { balloon in balloon.drawn.map { ($0, balloon.fontSize) } }
         lookRow("shape") {
+            if let (outline, size) = drawn {
+                LookChoice(isSelected: true, help: "Drawn by hand; choose another shape to replace it", action: {}) {
+                    drawnPreview(style, look, outline: outline, drawnSize: size)
+                }
+            }
             ForEach(style.shapes) { choice in
                 let changed = look.with { $0.shape = choice }
-                LookChoice(isSelected: shape == choice, help: "\(choice.rawValue.capitalized) \(style.rawValue)",
-                           action: { editLook("Balloon Shape") { $0.shape = choice } }) {
+                LookChoice(isSelected: drawn == nil && shape == choice, help: "\(choice.rawValue.capitalized) \(style.rawValue)",
+                           action: { editLook("Balloon Shape", replacingDrawn: true) { $0.shape = choice } }) {
                     preview(style, changed, tail: false, size: Self.wideTile)
                 }
             }
@@ -363,6 +372,25 @@ struct LetteringPanel: View {
 
     /// A picture of a balloon of `style` in `look`, drawn by the engine on a tile of paper,
     /// so its black line shows on a dark panel as it would on a page.
+    /// The picture of a balloon drawn by hand: its own outline in its look.
+    private func drawnPreview(_ style: BalloonStyle, _ look: BalloonLook, outline: DrawnOutline, drawnSize: CGFloat) -> some View {
+        let size = Self.wideTile
+        let inner = CGSize(width: size.width - 4, height: size.height - 4)
+        let image = BalloonLayout.preview(style, look: look, tail: false, width: Int(inner.width * displayScale),
+                                          height: Int(inner.height * displayScale), scale: displayScale,
+                                          drawn: outline, drawnSize: drawnSize)
+        return Group {
+            if let image {
+                Image(decorative: image, scale: displayScale)
+            } else {
+                Color.clear
+            }
+        }
+        .frame(width: inner.width, height: inner.height)
+        .frame(width: size.width, height: size.height)
+        .background(RoundedRectangle(cornerRadius: 4).fill(Color(white: 0.93)))
+    }
+
     private func preview(_ style: BalloonStyle, _ look: BalloonLook, tail: Bool, size: CGSize) -> some View {
         let inner = CGSize(width: size.width - 4, height: size.height - 4)
         return Group {
@@ -401,11 +429,13 @@ struct LetteringPanel: View {
     /// The picked-up balloon's look changed by `edit`, as a step, and the next one's of its
     /// kind; or with none picked up, only the next one's. Edited as it is when chosen, not as
     /// the panel last drew it, so quick choices in a row each keep the last.
-    private func editLook(_ kind: String, addingTail: Bool = false, _ edit: (inout BalloonLook) -> Void) {
+    private func editLook(_ kind: String, addingTail: Bool = false, replacingDrawn: Bool = false,
+                          _ edit: (inout BalloonLook) -> Void) {
         let style = viewModel.selectedBalloon?.style ?? viewModel.balloonStyle
         var look = viewModel.selectedBalloon?.look ?? viewModel.balloonLook(for: style)
         edit(&look)
-        viewModel.setBalloonLook(look, as: kind, addingTail: addingTail, renderer: actions.renderer())
+        viewModel.setBalloonLook(look, as: kind, addingTail: addingTail, replacingDrawn: replacingDrawn,
+                                 renderer: actions.renderer())
     }
 
     private func change(_ kind: String, _ edit: (inout Balloon) -> Void) {

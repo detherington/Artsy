@@ -66,10 +66,13 @@ public struct Balloon: Codable, Equatable, Identifiable {
     /// Whether its tail's tip is pinned where it is on the page, pointing at its speaker, so
     /// it stays there when the balloon moves; unpinned, it goes with the balloon.
     public var tailPinned: Bool
+    /// Its body as the artist drew it, in place of its look's shape; nil for the look's.
+    public var drawn: DrawnOutline?
 
     public init(style: BalloonStyle, center: CGPoint, text: String = "", wrapWidth: CGFloat, face: LetteringFace,
                 drawnFont: UUID? = nil, fontSize: CGFloat, allCaps: Bool = true, tail: CGPoint? = nil,
-                bold: Bool = false, italic: Bool = false, look: BalloonLook = BalloonLook(), tailPinned: Bool = false) {
+                bold: Bool = false, italic: Bool = false, look: BalloonLook = BalloonLook(), tailPinned: Bool = false,
+                drawn: DrawnOutline? = nil) {
         self.style = style
         self.center = center
         self.text = text
@@ -83,13 +86,14 @@ public struct Balloon: Codable, Equatable, Identifiable {
         self.italic = italic
         self.look = look
         self.tailPinned = tailPinned
+        self.drawn = drawn
     }
 
     // Balloons saved before bold and italic read as neither, and before looks as the plain
     // look; older builds ignore them. A look's part a later build adds reads as the plain one.
     private enum CodingKeys: String, CodingKey {
         case id, style, center, text, wrapWidth, face, drawnFont, fontSize, allCaps, tail, bold, italic
-        case shape, line, fill, tailShape, tailWidth, tailBase, tailPinned
+        case shape, line, fill, tailShape, tailWidth, tailBase, tailPinned, drawn
     }
 
     public init(from decoder: Decoder) throws {
@@ -113,6 +117,7 @@ public struct Balloon: Codable, Equatable, Identifiable {
                            tail: try part(.tailShape), tailWidth: try c.decodeIfPresent(CGFloat.self, forKey: .tailWidth) ?? 1,
                            tailBase: try c.decodeIfPresent(CGFloat.self, forKey: .tailBase))
         tailPinned = try c.decodeIfPresent(Bool.self, forKey: .tailPinned) ?? false
+        drawn = try c.decodeIfPresent(DrawnOutline.self, forKey: .drawn)
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -136,6 +141,7 @@ public struct Balloon: Codable, Equatable, Identifiable {
         if look.tailWidth != 1 { try c.encode(look.tailWidth, forKey: .tailWidth) }
         try c.encodeIfPresent(look.tailBase, forKey: .tailBase)
         if tailPinned { try c.encode(tailPinned, forKey: .tailPinned) }
+        try c.encodeIfPresent(drawn, forKey: .drawn)
     }
 
     /// A lettering size for a canvas `canvasWidth` across: about 8 points at print size on
@@ -340,8 +346,8 @@ public struct BalloonLayout {
         let size = balloon.fontSize
         // Its own irregular shapes, the same every time it is drawn
         var random = BalloonRandom(balloon.id)
-        var (outline, e) = Self.outline(shape, of: balloon.style, around: box, pad: pad, size: size, lineWidth: lineWidth,
-                                        random: &random)
+        var (outline, e) = Self.outline(shape, of: balloon.style, drawn: balloon.drawn, around: box, pad: pad, size: size,
+                                        lineWidth: lineWidth, random: &random)
         outline = balloon.look.line.reshaping(outline, lineWidth: lineWidth)
         guard balloon.style.hasTail, let tip = balloon.tail, outside(tip, of: e), !outline.contains(tip) else { return (outline, nil) }
         let scale = max(0.1, balloon.look.tailWidth)
@@ -370,7 +376,7 @@ public struct BalloonLayout {
             // From just clear of the body: a cloud's bubbles start past where its scallops can
             // bulge, as they always have; any other's past where the line to the tip leaves it
             let start: CGPoint, clear: CGFloat
-            if shape == .cloud {
+            if shape == .cloud, balloon.drawn == nil {
                 start = point(on: e, toward: tip)
                 clear = size * 1.9
             } else {
@@ -385,10 +391,17 @@ public struct BalloonLayout {
     }
 
     /// The shape of a body round its words, before its tail, and the ellipse its tail grows
-    /// from: the ellipse the words sit in, or the one inside a box.
-    private static func outline(_ shape: BalloonShape, of style: BalloonStyle, around box: CGRect, pad: CGFloat, size: CGFloat,
-                                lineWidth: CGFloat, random: inout BalloonRandom) -> (CGPath, BalloonGeometry.Ellipse) {
+    /// from: the ellipse the words sit in, or the one inside a box. A body drawn by hand is
+    /// laid on the ellipse its words need or the one it was drawn round, whichever is larger
+    /// each way, and grows its tail from that.
+    private static func outline(_ shape: BalloonShape, of style: BalloonStyle, drawn: DrawnOutline?, around box: CGRect,
+                                pad: CGFloat, size: CGFloat, lineWidth: CGFloat,
+                                random: inout BalloonRandom) -> (CGPath, BalloonGeometry.Ellipse) {
         let e = ellipse(around: box, pad: pad)
+        if let drawn {
+            let laid: BalloonGeometry.Ellipse = (e.center, max(e.a, drawn.radii.width), max(e.b, drawn.radii.height))
+            return (drawn.path(center: laid.center, a: laid.a, b: laid.b), laid)
+        }
         let (c, a, b) = e
         switch shape {
         case .oval:
@@ -612,15 +625,21 @@ public struct BalloonLayout {
     /// tail down to the left, fitted into `width` × `height` pixels and centred, over
     /// nothing: the lettering panel's choices. Laid out in points, `scale` pixels each, so
     /// its line is at least a point and a half and a heavy or electric line reads. Nil for a
-    /// sound effect.
+    /// sound effect. With `drawn`, the body is that outline, as drawn round words lettered
+    /// at `drawnSize`.
     public static func preview(_ style: BalloonStyle, look: BalloonLook, tail: Bool, width: Int, height: Int,
-                               scale: CGFloat = 1) -> CGImage? {
+                               scale: CGFloat = 1, drawn: DrawnOutline? = nil, drawnSize: CGFloat = 1) -> CGImage? {
         guard style != .sound, width > 0, height > 0, scale > 0 else { return nil }
         let room = CGSize(width: CGFloat(width) / scale, height: CGFloat(height) / scale)
         func layout(size: CGFloat) -> BalloonLayout {
             var balloon = Balloon(style: style, center: .zero, wrapWidth: size * 9, face: .dialogue, fontSize: size,
                                   allCaps: true, look: look)
             balloon.id = previewID
+            if let drawn {
+                let k = size / max(drawnSize, 1e-6)
+                balloon.drawn = DrawnOutline(points: drawn.points,
+                                             radii: CGSize(width: drawn.radii.width * k, height: drawn.radii.height * k))
+            }
             // Long enough down and out for bubbles to fit
             if tail, style.hasTail { balloon.tail = CGPoint(x: -size * 3, y: -size * 3) }
             return BalloonLayout(balloon)

@@ -37,8 +37,9 @@ extension CanvasViewModel {
     // MARK: - The tool
 
     /// A press at `point`: on the picked-up balloon's tail tip, tail base or width handle, takes it;
-    /// on a balloon, picks it up to move; elsewhere, puts down the one picked up, or with
-    /// none picked up, places a new balloon there and asks the panel for the keyboard.
+    /// on a balloon, picks it up to move; elsewhere, puts down the one picked up, and starts a
+    /// sketch: dragged, it draws a balloon by hand; lifted as a tap with none picked up, it
+    /// places a new balloon there and asks the panel for the keyboard.
     public func letteringDown(at point: CGPoint, renderer: CanvasRenderer) {
         let reach = Self.balloonHandleReach / max(transform.scale, 0.01)
         if let selected = selectedBalloon {
@@ -63,15 +64,22 @@ extension CanvasViewModel {
             letteringGesture = LetteringGesture(part: .body, balloon: hit.id, last: point)
             return
         }
-        if selectedBalloonID != nil {
-            selectedBalloonID = nil
-            return
-        }
-        placeBalloon(at: point, renderer: renderer)
+        let placesOnTap = selectedBalloonID == nil
+        selectedBalloonID = nil
+        sketchStart = (point, placesOnTap)
+        balloonSketch = [point]
     }
+
+    /// How far, in screen points, a press goes in all before it is drawing, not a tap.
+    static let sketchTravel: CGFloat = 10
 
     /// The press moved to `point`: moves the balloon, its tail's tip, its tail's base, or its width.
     public func letteringDrag(to point: CGPoint, renderer: CanvasRenderer) {
+        if sketchStart != nil {
+            if let last = balloonSketch.last, last == point { return }
+            balloonSketch.append(point)
+            return
+        }
         guard var gesture = letteringGesture, let layer = letteringLayer else { return }
         let dx = point.x - gesture.last.x, dy = point.y - gesture.last.y
         guard dx != 0 || dy != 0 else { return }
@@ -104,6 +112,18 @@ extension CanvasViewModel {
 
     /// The press lifted: the layer's thumbnail catches up.
     public func letteringUp(renderer: CanvasRenderer) {
+        if let start = sketchStart {
+            let sketch = balloonSketch
+            sketchStart = nil
+            balloonSketch = []
+            let travel = zip(sketch, sketch.dropFirst()).reduce(0) { $0 + hypot($1.1.x - $1.0.x, $1.1.y - $1.0.y) }
+            if travel * transform.scale < Self.sketchTravel {
+                if start.placesOnTap { placeBalloon(at: start.point, renderer: renderer) }
+            } else {
+                drawBalloon(sketch, renderer: renderer)
+            }
+            return
+        }
         if letteringGesture?.saved == true, let layer = letteringLayer {
             renderer.updateThumbnail(for: layer)
         }
@@ -118,10 +138,55 @@ extension CanvasViewModel {
     /// A new balloon at `point`, in the style, face and capitals last chosen, picked up,
     /// with the panel asked for the keyboard. The lettering layer is made if there is none.
     public func placeBalloon(at point: CGPoint, renderer: CanvasRenderer) {
+        // A drawn font since deleted is not carried on
+        let drawn = balloonDrawnFont.flatMap { DrawnFontLibrary.shared.font(id: $0)?.id }
+        let balloon = Balloon.new(balloonStyle, at: point, face: balloonFace, drawnFont: drawn,
+                                  fontSize: Balloon.fontSize(canvasWidth: canvasSize.width), allCaps: balloonCaps,
+                                  look: balloonLook(for: balloonStyle))
+        add(balloon, as: "Place Balloon", renderer: renderer)
+    }
+
+    /// A balloon drawn by hand in `sketch`, if it makes one: the panel's kind (a shout for
+    /// a sound effect, which has no body of its own) with the outline as drawn, its words
+    /// wrapping inside it, and its tail where a point was drawn, or else down and to the
+    /// left of it. Placed as a step, picked up, with the keyboard asked for.
+    public func drawBalloon(_ sketch: [CGPoint], renderer: CanvasRenderer) {
+        let style: BalloonStyle = balloonStyle == .sound ? .shout : balloonStyle
+        let size = Balloon.fontSize(canvasWidth: canvasSize.width)
+        guard let fitted = BalloonSketch.fit(sketch, size: size, takesTail: style.hasTail) else {
+            DiagnosticsLog.shared.note(.tool, "a balloon sketch of \(sketch.count) points made no balloon: not a closed loop large enough")
+            return
+        }
+        let font = balloonDrawnFont.flatMap { DrawnFontLibrary.shared.font(id: $0)?.id }
+        var balloon = Balloon.new(style, at: fitted.center, face: balloonFace, drawnFont: font, fontSize: size,
+                                  allCaps: balloonCaps, look: balloonLook(for: style))
+        balloon.drawn = fitted.outline
+        // Words wrapping where the ellipse they sit in fills the drawn one across
+        let pad = size * 0.5
+        balloon.wrapWidth = max(size * 2.5, 2 * (fitted.outline.radii.width / 1.32 - pad))
+        if style.hasTail {
+            if let tip = fitted.tail {
+                balloon.tail = tip
+                balloon.look.tailBase = fitted.tailBase
+            } else {
+                // Down and to the left, clear of the body as drawn
+                let r = fitted.outline.radii, c = fitted.center
+                let reach = (fitted.outline.points.map { hypot($0.x, $0.y) }.max() ?? 1) + 0.2
+                balloon.tail = CGPoint(x: c.x - r.width * reach * 0.38 - size, y: c.y - r.height * reach * 0.92 - size * 3)
+            }
+        }
+        DiagnosticsLog.shared.note(.tool, "drew a \(style.rawValue) balloon by hand, \(Int(fitted.outline.radii.width * 2))×\(Int(fitted.outline.radii.height * 2)) inside, " +
+                                   (fitted.tail == nil ? "no tail drawn" : "its tail drawn, base \(String(format: "%.1f", fitted.tailBase ?? 0)) sizes"))
+        add(balloon, as: "Draw Balloon", renderer: renderer)
+    }
+
+    /// `balloon` put on the lettering layer as a step called `kind`, the layer made if there
+    /// is none, and picked up with the keyboard asked for.
+    private func add(_ balloon: Balloon, as kind: String, renderer: CanvasRenderer) {
         guard let layerStack else { return }
         let existing = letteringLayer
         // Placing is a step: copying the lettering layer, or, if it is made now, nothing
-        saveUndoSnapshot(renderer: renderer, description: "Place Balloon", changing: existing.map { .layer($0) } ?? .nothing)
+        saveUndoSnapshot(renderer: renderer, description: kind, changing: existing.map { .layer($0) } ?? .nothing)
         lastLetteringStep = nil
         let layer: Layer
         if let existing {
@@ -139,11 +204,6 @@ extension CanvasViewModel {
             layer.isLocked = true
             layerStack.activeLayerIndex = current
         }
-        // A drawn font since deleted is not carried on
-        let drawn = balloonDrawnFont.flatMap { DrawnFontLibrary.shared.font(id: $0)?.id }
-        let balloon = Balloon.new(balloonStyle, at: point, face: balloonFace, drawnFont: drawn,
-                                  fontSize: Balloon.fontSize(canvasWidth: canvasSize.width), allCaps: balloonCaps,
-                                  look: balloonLook(for: balloonStyle))
         layer.lettering = (layer.lettering ?? []) + [balloon]
         renderer.drawLettering(layer.lettering ?? [], into: layer, in: BalloonLayout(balloon).bounds)
         renderer.updateThumbnail(for: layer)
@@ -180,17 +240,20 @@ extension CanvasViewModel {
     /// balloon of that kind; with none picked up, only keeps it for the next balloon of the
     /// kind chosen. `addingTail` puts a tail on a balloon that has none, as choosing a tail's
     /// shape does.
-    public func setBalloonLook(_ look: BalloonLook, as kind: String, addingTail: Bool = false, renderer: CanvasRenderer?) {
+    public func setBalloonLook(_ look: BalloonLook, as kind: String, addingTail: Bool = false, replacingDrawn: Bool = false,
+                               renderer: CanvasRenderer?) {
         guard let balloon = selectedBalloon else {
             balloonLooks[balloonStyle] = look
             return
         }
         balloonLooks[balloon.style] = look
-        // Nothing to change is no step
+        // Nothing to change is no step; a shape chosen for one drawn by hand replaces its outline
         let tails = addingTail && balloon.style.hasTail && balloon.tail == nil
-        guard let renderer, balloon.look != look || tails else { return }
+        let redraws = replacingDrawn && balloon.drawn != nil
+        guard let renderer, balloon.look != look || tails || redraws else { return }
         changeSelectedBalloon(kind, renderer: renderer) { b in
             b.look = look
+            if replacingDrawn { b.drawn = nil }
             if addingTail, b.style.hasTail, b.tail == nil {
                 b.tail = Balloon.new(b.style, at: b.center, face: b.face, fontSize: b.fontSize, allCaps: b.allCaps).tail
             }

@@ -416,6 +416,7 @@ final class BalloonLookTests: XCTestCase {
         XCTAssertEqual(viewModel.selectedBalloon?.look, narration, "a caption placed in it")
 
         viewModel.letteringDown(at: CGPoint(x: 700, y: 50), renderer: renderer)
+        viewModel.letteringUp(renderer: renderer)
         viewModel.restyleSelectedBalloon(.speech, renderer: renderer)
         viewModel.letteringDown(at: CGPoint(x: 600, y: 200), renderer: renderer)
         viewModel.letteringUp(renderer: renderer)

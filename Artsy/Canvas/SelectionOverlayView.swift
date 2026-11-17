@@ -71,6 +71,17 @@ class SelectionOverlayView: NSView {
         if vm.currentTool == .letter, let balloon = vm.selectedBalloon {
             drawBalloonSelection(BalloonLayout(balloon), transform: transform)
         }
+        // A balloon being drawn by hand, as the pen goes
+        if vm.currentTool == .letter, vm.balloonSketch.count > 1 {
+            let sketch = NSBezierPath()
+            sketch.move(to: vm.balloonSketch[0].applying(transform))
+            for p in vm.balloonSketch.dropFirst() { sketch.line(to: p.applying(transform)) }
+            sketch.lineWidth = BalloonSelectionStyle.sketchWidth
+            sketch.lineJoinStyle = .round
+            sketch.lineCapStyle = .round
+            (NSColor(cgColor: BalloonSelectionStyle.colour) ?? .systemRed).setStroke()
+            sketch.stroke()
+        }
 
         // Draw symmetry guide lines (subtle dashed lines across the canvas center)
         if vm.symmetryMode.isOn {

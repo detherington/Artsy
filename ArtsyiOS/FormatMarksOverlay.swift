@@ -28,6 +28,9 @@ final class FormatMarksOverlay: UIView {
     /// The balloon the Letter tool holds: a dashed box and its handles.
     private let balloonBox = CAShapeLayer()
     private let balloonHandles = CAShapeLayer()
+    /// A balloon being drawn by hand with the Letter tool, as the pen goes.
+    private let balloonSketch = CAShapeLayer()
+    private var sketchWatch: AnyCancellable?
     private var watch: AnyCancellable?
     private var balloonWatch: AnyCancellable?
 
@@ -73,6 +76,14 @@ final class FormatMarksOverlay: UIView {
                 self?.update(transform: transform, guides: guides, editing: editing, comicLines: comicLines)
             }
         // A balloon's own changes reach its layer before the count of them is sent
+        balloonSketch.fillColor = nil
+        balloonSketch.strokeColor = BalloonSelectionStyle.colour
+        balloonSketch.lineWidth = BalloonSelectionStyle.sketchWidth
+        balloonSketch.lineJoin = .round
+        balloonSketch.lineCap = .round
+        layer.addSublayer(balloonSketch)
+        sketchWatch = Publishers.CombineLatest(viewModel.$transform, viewModel.$balloonSketch)
+            .sink { [weak self] transform, sketch in self?.updateSketch(transform: transform, sketch: sketch) }
         balloonWatch = Publishers.CombineLatest4(viewModel.$transform, viewModel.$selectedBalloonID,
                                                  viewModel.$letteringRevision, viewModel.$currentTool)
             .sink { [weak self] transform, id, _, tool in self?.updateBalloon(transform: transform, id: id, tool: tool) }
@@ -91,6 +102,17 @@ final class FormatMarksOverlay: UIView {
     private func toView(_ transform: CanvasTransform) -> CGAffineTransform {
         transform.affineTransform(viewSize: bounds.size)
             .concatenating(CGAffineTransform(a: 1, b: 0, c: 0, d: -1, tx: 0, ty: bounds.height))
+    }
+
+    private func updateSketch(transform: CanvasTransform, sketch: [CGPoint]) {
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        defer { CATransaction.commit() }
+        guard sketch.count > 1, bounds.width > 0 else { balloonSketch.path = nil; return }
+        let toView = toView(transform)
+        let path = CGMutablePath()
+        path.addLines(between: sketch.map { $0.applying(toView) })
+        balloonSketch.path = path
     }
 
     private func updateBalloon(transform: CanvasTransform, id: UUID?, tool: ToolType) {
