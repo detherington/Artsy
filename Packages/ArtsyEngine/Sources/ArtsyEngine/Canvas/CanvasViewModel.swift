@@ -193,6 +193,11 @@ public final class CanvasViewModel: ObservableObject {
     @Published public var balloonLooks: [BalloonStyle: BalloonLook] = [:]
     /// The Letter tool's gesture in progress.
     var letteringGesture: LetteringGesture?
+    /// A balloon being drawn by hand with the Letter tool: the points so far, in canvas
+    /// pixels, for the overlays to show; empty when none is.
+    @Published public internal(set) var balloonSketch: [CGPoint] = []
+    /// Where the sketch began, and whether lifting there, as a tap, places a balloon.
+    var sketchStart: (point: CGPoint, placesOnTap: Bool)?
     /// The last step saved by a lettering change, to fold the next one into it.
     var lastLetteringStep: (balloon: UUID, kind: String, token: Int?)?
 

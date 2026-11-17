@@ -262,6 +262,7 @@ final class DrawnFontTests: XCTestCase {
         let viewModel = harness.viewModel
         viewModel.balloonDrawnFont = drawn.id
         viewModel.letteringDown(at: CGPoint(x: 200, y: 150), renderer: harness.renderer)
+        viewModel.letteringUp(renderer: harness.renderer)
         viewModel.changeSelectedBalloon("Edit Words", renderer: harness.renderer) { $0.text = "III" }
         let placed = try XCTUnwrap(viewModel.balloons.first)
         XCTAssertEqual(placed.drawnFont, drawn.id)
@@ -297,6 +298,7 @@ final class DrawnFontTests: XCTestCase {
         let harness = try EngineHarness(width: 400, height: 300)
         harness.viewModel.balloonDrawnFont = drawn.id
         harness.viewModel.letteringDown(at: CGPoint(x: 200, y: 150), renderer: harness.renderer)
+        harness.viewModel.letteringUp(renderer: harness.renderer)
         harness.viewModel.changeSelectedBalloon("Edit Words", renderer: harness.renderer) { $0.text = "A" }
 
         let url = FileManager.default.temporaryDirectory.appendingPathComponent("ArtsyFonts-\(UUID().uuidString).artsy")

@@ -295,10 +295,13 @@ final class DrawnFontFamilyTests: XCTestCase {
         let harness = try EngineHarness(width: 300, height: 200)
         harness.viewModel.balloonDrawnFont = restricted.id
         harness.viewModel.letteringDown(at: CGPoint(x: 150, y: 100), renderer: harness.renderer)
+        harness.viewModel.letteringUp(renderer: harness.renderer)
         XCTAssertNil(CanvasDocument.drawnFonts(of: harness.layerStack), "it does not travel")
         harness.viewModel.balloonDrawnFont = imported.id
         harness.viewModel.letteringDown(at: CGPoint(x: 20, y: 20), renderer: harness.renderer)
+        harness.viewModel.letteringUp(renderer: harness.renderer)
         harness.viewModel.letteringDown(at: CGPoint(x: 40, y: 40), renderer: harness.renderer)
+        harness.viewModel.letteringUp(renderer: harness.renderer)
         XCTAssertEqual(CanvasDocument.drawnFonts(of: harness.layerStack)?.map(\.id), [imported.id])
 
         XCTAssertThrowsError(try library.importFont(Data("ttcf and more".utf8)))

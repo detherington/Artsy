@@ -155,10 +155,12 @@ final class LetteringTests: XCTestCase {
         XCTAssertEqual(alpha(harness, layer, CGPoint(x: 100, y: 500)), 0, accuracy: 0.01, "nothing elsewhere")
 
         viewModel.letteringDown(at: CGPoint(x: 100, y: 500), renderer: harness.renderer)
+        viewModel.letteringUp(renderer: harness.renderer)
         XCTAssertNil(viewModel.selectedBalloonID, "a tap away puts it down")
         XCTAssertEqual(viewModel.balloons.count, 1)
         viewModel.balloonStyle = .caption
         viewModel.letteringDown(at: CGPoint(x: 100, y: 500), renderer: harness.renderer)
+        viewModel.letteringUp(renderer: harness.renderer)
         XCTAssertEqual(viewModel.balloons.count, 2, "the next tap places another")
         XCTAssertEqual(viewModel.balloons.last?.style, .caption, "in the style chosen")
         XCTAssertEqual(harness.layerStack.layers.filter { $0.lettering != nil }.count, 1, "on the same layer")
@@ -231,6 +233,7 @@ final class LetteringTests: XCTestCase {
         let harness = try EngineHarness(width: 800, height: 600)
         let viewModel = harness.viewModel, renderer = harness.renderer
         viewModel.letteringDown(at: CGPoint(x: 400, y: 300), renderer: renderer)
+        viewModel.letteringUp(renderer: renderer)
         let layer = try XCTUnwrap(viewModel.letteringLayer)
         let steps = viewModel.undoManager.undoCount
         for words in ["W", "Wh", "Wha", "What?"] {
@@ -261,6 +264,7 @@ final class LetteringTests: XCTestCase {
     func testBalloonsSaveWithTheDocument() throws {
         let harness = try EngineHarness(width: 400, height: 300)
         harness.viewModel.letteringDown(at: CGPoint(x: 200, y: 150), renderer: harness.renderer)
+        harness.viewModel.letteringUp(renderer: harness.renderer)
         harness.viewModel.changeSelectedBalloon("Edit Words", renderer: harness.renderer) { $0.text = "Saved" }
         let url = FileManager.default.temporaryDirectory.appendingPathComponent("ArtsyLettering-\(UUID().uuidString).artsy")
         defer { try? FileManager.default.removeItem(at: url) }

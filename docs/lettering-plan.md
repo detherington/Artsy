@@ -10,6 +10,9 @@ effects, on a layer of their own over the art.
 - Taps the page where a balloon goes: a balloon appears there in the style last used,
   with its tail down and to the left, and the lettering panel's text box takes the
   keyboard. Typing fills the balloon, which grows around the words.
+- Or draws the balloon by hand, a loop round where the words go, and it becomes a balloon
+  with that outline and the usual tail (`hand-drawn-balloons-plan.md`). A tap places when
+  it lifts.
 - Drags a balloon to move it, its tail's tip to point it, and the handle on its right to
   change how wide the words run before they wrap.
 - Taps a balloon to pick it up again; taps the page away from it to put it down; taps
