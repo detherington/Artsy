@@ -4,8 +4,8 @@ import ArtsyEngine
 
 /// A format's marks over the canvas on iPad and iPhone, as the Mac's overlay draws them
 /// (see `PageFrameStyle`): a print page's frame, a webtoon's slice marks; the grid, the
-/// guide lines and perspective (see `PerspectiveStyle`), with its handles while its points
-/// are being moved; and the balloon the Letter tool holds, with its handles. Shape layers over
+/// guide lines, perspective (see `PerspectiveStyle`), the ruler and the ellipse template (see
+/// `RulerStyle`), with their handles while they are being moved; and the balloon the Letter tool holds, with its handles. Shape layers over
 /// the Metal view, their paths built in canvas space and moved into the view whenever the
 /// view turns, zooms or pans, or a mark is shown or hidden. Nothing is drawn until the
 /// renderer's first frame has fitted the canvas, or the marks would show at one to one,
@@ -23,6 +23,8 @@ final class FormatMarksOverlay: UIView {
     private let guideLines = CAShapeLayer()
     /// Perspective's rays, horizon and handles, made again whenever they change.
     private let perspective = CALayer()
+    /// The ruler and the ellipse template with their handles, made again whenever they change.
+    private let rulers = CALayer()
     /// The balloon the Letter tool holds: a dashed box and its handles.
     private let balloonBox = CAShapeLayer()
     private let balloonHandles = CAShapeLayer()
@@ -64,10 +66,12 @@ final class FormatMarksOverlay: UIView {
         guideLines.fillColor = nil
         guideLines.strokeColor = UIColor.systemTeal.withAlphaComponent(0.85).cgColor
         guideLines.lineWidth = 1
-        for shape in [gridEdge, grid, guideLines, veil, trim, safe, slices, perspective, balloonBox, balloonHandles] { layer.addSublayer(shape) }
+        for shape in [gridEdge, grid, guideLines, veil, trim, safe, slices, perspective, rulers, balloonBox, balloonHandles] { layer.addSublayer(shape) }
         // @Published sends the new value before the property takes it: use what is sent
-        watch = Publishers.CombineLatest3(viewModel.$transform, viewModel.$guides, viewModel.$isEditingPerspective)
-            .sink { [weak self] transform, guides, editing in self?.update(transform: transform, guides: guides, editing: editing) }
+        watch = Publishers.CombineLatest4(viewModel.$transform, viewModel.$guides, viewModel.$editingGuide, viewModel.$comicLines)
+            .sink { [weak self] transform, guides, editing, comicLines in
+                self?.update(transform: transform, guides: guides, editing: editing, comicLines: comicLines)
+            }
         // A balloon's own changes reach its layer before the count of them is sent
         balloonWatch = Publishers.CombineLatest4(viewModel.$transform, viewModel.$selectedBalloonID,
                                                  viewModel.$letteringRevision, viewModel.$currentTool)
@@ -79,7 +83,7 @@ final class FormatMarksOverlay: UIView {
     override func layoutSubviews() {
         super.layoutSubviews()
         guard let viewModel else { return }
-        update(transform: viewModel.transform, guides: viewModel.guides, editing: viewModel.isEditingPerspective)
+        update(transform: viewModel.transform, guides: viewModel.guides, editing: viewModel.editingGuide, comicLines: viewModel.comicLines)
         updateBalloon(transform: viewModel.transform, id: viewModel.selectedBalloonID, tool: viewModel.currentTool)
     }
 
@@ -123,12 +127,13 @@ final class FormatMarksOverlay: UIView {
         balloonHandles.path = handles
     }
 
-    private func update(transform: CanvasTransform, guides: CanvasGuides, editing: Bool) {
+    private func update(transform: CanvasTransform, guides: CanvasGuides, editing: DrawingGuide?, comicLines: ComicLines?) {
         CATransaction.begin()
         CATransaction.setDisableActions(true)
         defer { CATransaction.commit() }
         for shape in [veil, trim, safe, slices, gridEdge, grid, guideLines] { shape.path = nil }
         perspective.sublayers = nil
+        rulers.sublayers = nil
         guard let viewModel, renderer?.hasInitializedTransform == true, bounds.width > 0 else { return }
         // The engine's view space runs y up, as the Mac's; UIKit's runs down
         var toView = toView(transform)
@@ -149,7 +154,27 @@ final class FormatMarksOverlay: UIView {
             + guides.horizontals.map { (CGPoint(x: 0, y: $0), CGPoint(x: canvas.width, y: $0)) }
         if !lines.isEmpty { guideLines.path = PerspectiveStyle.path(lines, toView: toView) }
         if let shown = guides.perspective, shown.isShown {
-            addPerspective(shown, canvas: canvas, editing: editing, toView: toView)
+            addPerspective(shown, canvas: canvas, editing: editing == .perspective, toView: toView)
+        }
+        var marks = RulerStyle.marks(ruler: guides.ruler, ellipse: guides.ellipse, editing: editing, toView: toView)
+        if let comicLines {
+            marks += ComicLinesStyle.marks(comicLines, canvasSize: viewModel.canvasSize, colour: viewModel.currentColor, toView: toView)
+        }
+        for mark in marks {
+            let shape = CAShapeLayer()
+            shape.path = mark.path
+            shape.strokeColor = mark.stroke
+            shape.fillColor = mark.fill
+            shape.lineWidth = mark.width
+            shape.lineDashPattern = mark.dash?.map { NSNumber(value: Double($0)) }
+            if let clip = mark.clip {
+                shape.frame = CGRect(origin: .zero, size: bounds.size)
+                let mask = CAShapeLayer()
+                mask.frame = shape.bounds
+                mask.path = clip
+                shape.mask = mask
+            }
+            rulers.addSublayer(shape)
         }
         if let page = guides.page, page.isShown {
             let bleed = CGMutablePath()

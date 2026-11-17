@@ -23,7 +23,7 @@ struct LetteringPanel: View {
     static let width: CGFloat = 300
 
     var body: some View {
-        if viewModel.currentTool == .letter, !viewModel.isChromeHidden, !viewModel.isEditingPerspective {
+        if viewModel.currentTool == .letter, !viewModel.isChromeHidden, viewModel.editingGuide == nil {
             panel
         }
     }

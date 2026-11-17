@@ -250,8 +250,8 @@ final class PerspectiveTests: XCTestCase {
         // The canvas fills the view one to one
         viewModel.transform.scale = 1
         viewModel.transform.offset = CGPoint(x: -200, y: -150)
-        viewModel.editPerspective(viewSize: view)
-        XCTAssertTrue(viewModel.isEditingPerspective)
+        viewModel.editGuide(.perspective, viewSize: view)
+        XCTAssertEqual(viewModel.editingGuide, .perspective)
         let laidOut = try XCTUnwrap(viewModel.guides.perspective)
         XCTAssertEqual(laidOut.points.count, 2)
         XCTAssertEqual(laidOut.points[0].x, 40, accuracy: 1)
@@ -260,37 +260,37 @@ final class PerspectiveTests: XCTestCase {
         XCTAssertEqual(laidOut.points[1].y, laidOut.points[0].y, accuracy: 1e-9, "level")
 
         viewModel.markClean()
-        XCTAssertTrue(viewModel.perspectiveDown(at: CGPoint(x: 42, y: 148)))
-        viewModel.perspectiveDrag(to: CGPoint(x: 52, y: 168))
-        viewModel.perspectiveUp()
+        XCTAssertTrue(viewModel.guideHandleDown(at: CGPoint(x: 42, y: 148)))
+        viewModel.guideHandleDrag(to: CGPoint(x: 52, y: 168))
+        viewModel.guideHandleUp()
         XCTAssertEqual(viewModel.guides.perspective!.points[0].x, laidOut.points[0].x + 10, accuracy: 1e-9)
         XCTAssertEqual(viewModel.guides.perspective!.points[0].y, laidOut.points[0].y + 20, accuracy: 1e-9)
         XCTAssertTrue(viewModel.isDirty)
 
         let middle = try XCTUnwrap(viewModel.guides.perspective?.horizonHandle)
-        XCTAssertTrue(viewModel.perspectiveDown(at: middle))
-        viewModel.perspectiveDrag(to: CGPoint(x: middle.x, y: middle.y - 50))
-        viewModel.perspectiveUp()
+        XCTAssertTrue(viewModel.guideHandleDown(at: middle))
+        viewModel.guideHandleDrag(to: CGPoint(x: middle.x, y: middle.y - 50))
+        viewModel.guideHandleUp()
         XCTAssertEqual(viewModel.guides.perspective!.points[1].y, laidOut.points[1].y - 50, accuracy: 1e-9)
-        XCTAssertFalse(viewModel.perspectiveDown(at: CGPoint(x: 200, y: 280)), "nothing there")
+        XCTAssertFalse(viewModel.guideHandleDown(at: CGPoint(x: 200, y: 280)), "nothing there")
 
         // Zoomed out, the reach is the same on the screen and more of the canvas
         viewModel.transform.scale = 0.25
         let point = viewModel.guides.perspective!.points[1]
-        XCTAssertNotNil(viewModel.perspectiveHandle(near: CGPoint(x: point.x + 80, y: point.y)))
+        XCTAssertNotNil(viewModel.guideHandle(near: CGPoint(x: point.x + 80, y: point.y)))
 
         viewModel.setPerspective(points: 3, viewSize: view)
         XCTAssertEqual(viewModel.guides.perspective?.points.count, 3)
-        viewModel.endPerspectiveEditing()
-        XCTAssertFalse(viewModel.isEditingPerspective)
+        viewModel.endGuideEditing()
+        XCTAssertNil(viewModel.editingGuide)
         viewModel.changeGuides { $0.perspective?.isShown = false }
-        XCTAssertNil(viewModel.perspectiveHandle(near: point), "a hidden guide has no handles")
-        viewModel.editPerspective(viewSize: view)
+        XCTAssertNil(viewModel.guideHandle(near: point), "a hidden guide has no handles")
+        viewModel.editGuide(.perspective, viewSize: view)
         XCTAssertEqual(viewModel.guides.perspective?.isShown, true, "editing shows it again")
         XCTAssertEqual(viewModel.guides.perspective?.points.count, 3, "as it was")
-        viewModel.removePerspective()
+        viewModel.removeGuide(.perspective)
         XCTAssertNil(viewModel.guides.perspective)
-        XCTAssertFalse(viewModel.isEditingPerspective)
+        XCTAssertNil(viewModel.editingGuide)
     }
 
     // MARK: - Saving

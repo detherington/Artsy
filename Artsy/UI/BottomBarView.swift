@@ -500,17 +500,39 @@ struct AdjustPanelView: View {
                         actions.changeGuides { $0.horizontals.removeAll(); $0.verticals.removeAll() }
                     }
 
-                    PanelSectionLabel("Perspective")
+                    PanelSectionLabel("Drawing guides")
                     PanelRow(systemImage: "perspective", label: "Perspective",
                              note: viewModel.guides.perspective.map { "\($0.points.count)-point, move" } ?? "add") {
                         dismiss()
-                        actions.editPerspective()
+                        actions.editGuide(.perspective)
                     }
                     if let perspective = viewModel.guides.perspective {
                         PanelRow(systemImage: "eye", label: "Show perspective", note: perspective.isShown ? "On" : "Off",
                                  isSelected: perspective.isShown) { actions.changeGuides { $0.perspective?.isShown.toggle() } }
                         PanelRow(systemImage: "scope", label: "Snap to perspective", note: perspective.snaps ? "On" : "Off",
                                  isSelected: perspective.snaps) { actions.changeGuides { $0.perspective?.snaps.toggle() } }
+                    }
+                    PanelRow(systemImage: "ruler", label: "Ruler",
+                             note: viewModel.guides.ruler.map { "\(Int($0.angle.rounded()) % 180)°, move" } ?? "add") {
+                        dismiss()
+                        actions.editGuide(.ruler)
+                    }
+                    if let ruler = viewModel.guides.ruler {
+                        PanelRow(systemImage: "eye", label: "Show ruler", note: ruler.isShown ? "On" : "Off",
+                                 isSelected: ruler.isShown) { actions.changeGuides { $0.ruler?.isShown.toggle() } }
+                        PanelRow(systemImage: "scope", label: "Snap to ruler", note: ruler.snaps ? "On" : "Off",
+                                 isSelected: ruler.snaps) { actions.changeGuides { $0.ruler?.snaps.toggle() } }
+                    }
+                    PanelRow(systemImage: "oval", label: "Ellipse",
+                             note: viewModel.guides.ellipse.map { "\(Int($0.degree.rounded()))°, move" } ?? "add") {
+                        dismiss()
+                        actions.editGuide(.ellipse)
+                    }
+                    if let ellipse = viewModel.guides.ellipse {
+                        PanelRow(systemImage: "eye", label: "Show ellipse", note: ellipse.isShown ? "On" : "Off",
+                                 isSelected: ellipse.isShown) { actions.changeGuides { $0.ellipse?.isShown.toggle() } }
+                        PanelRow(systemImage: "scope", label: "Snap to ellipse", note: ellipse.snaps ? "On" : "Off",
+                                 isSelected: ellipse.snaps) { actions.changeGuides { $0.ellipse?.snaps.toggle() } }
                     }
 
                     PanelSectionLabel("Paper around the canvas")
@@ -612,6 +634,14 @@ struct AddPanelView: View {
                         PanelLayoutPicker(viewModel: viewModel, actions: actions, dismiss: dismiss)
                     }
                     Divider().overlay(Chrome.hairline).padding(.vertical, 8)
+                    PanelRow(systemImage: "rays", label: "Focus lines", note: "on a layer") {
+                        dismiss()
+                        actions.startLines(.focus)
+                    }
+                    PanelRow(systemImage: "wind", label: "Speed lines", note: "on a layer") {
+                        dismiss()
+                        actions.startLines(.speed)
+                    }
                     PanelRow(systemImage: "photo.on.rectangle", label: "Import an image…", note: "as a layer") {
                         dismiss()
                         actions.app("handleImportImage")

@@ -39,7 +39,7 @@ struct CanvasScreen: View {
                         FillPanel(viewModel: viewModel)
                             .padding(12)
                             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
-                        PerspectivePanel(viewModel: viewModel, actions: session.actions)
+                        DrawingGuidePanel(viewModel: viewModel, actions: session.actions)
                             .padding(12)
                             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
                         if hidden {

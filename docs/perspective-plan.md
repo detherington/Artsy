@@ -58,7 +58,8 @@ background's buildings, streets and rooms come out in perspective without a rule
   projected the same way without choosing a line. Smoothing runs after the projection,
   and an average of points on one line stays on it. Holding the pen still to snap to a
   shape is off for the stroke, since its line is already straight.
-- **Editing** is a mode on the view model (`isEditingPerspective`, not saved). The Mac's
+- **Editing** is a mode on the view model (`isEditingPerspective`, not saved; since the
+  ruler and ellipse, `editingGuide`, shared with them: see `rulers-and-ellipses-plan.md`). The Mac's
   canvas and the iPad's pass it canvas points on down, drag and up, as they do for the
   Letter tool. A drag changes the guides at once, so the overlays follow it. Edits change
   no pixels, so like the guide lines they take no undo step, but they do mark the

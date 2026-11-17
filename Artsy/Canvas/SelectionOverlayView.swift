@@ -35,7 +35,36 @@ class SelectionOverlayView: NSView {
 
         drawGuides(vm.guides, canvasSize: vm.canvasSize, zoom: vm.transform.scale, transform: transform)
         if let perspective = vm.guides.perspective, perspective.isShown {
-            drawPerspective(perspective, canvasSize: vm.canvasSize, editing: vm.isEditingPerspective, transform: transform)
+            drawPerspective(perspective, canvasSize: vm.canvasSize, editing: vm.editingGuide == .perspective, transform: transform)
+        }
+        // The ruler and the ellipse template (see `RulerStyle`), and speed or focus lines
+        // being laid out (see `ComicLinesStyle`)
+        if let context = NSGraphicsContext.current?.cgContext {
+            var marks = RulerStyle.marks(ruler: vm.guides.ruler, ellipse: vm.guides.ellipse, editing: vm.editingGuide,
+                                         toView: transform)
+            if let lines = vm.comicLines {
+                marks += ComicLinesStyle.marks(lines, canvasSize: vm.canvasSize, colour: vm.currentColor, toView: transform)
+            }
+            for mark in marks {
+                context.saveGState()
+                if let clip = mark.clip {
+                    context.addPath(clip)
+                    context.clip()
+                }
+                context.setLineDash(phase: 0, lengths: mark.dash ?? [])
+                if let fill = mark.fill {
+                    context.addPath(mark.path)
+                    context.setFillColor(fill)
+                    context.fillPath()
+                }
+                if let stroke = mark.stroke {
+                    context.addPath(mark.path)
+                    context.setLineWidth(mark.width)
+                    context.setStrokeColor(stroke)
+                    context.strokePath()
+                }
+                context.restoreGState()
+            }
         }
 
         // The balloon the Letter tool holds: its box, and handles for its tail and width
