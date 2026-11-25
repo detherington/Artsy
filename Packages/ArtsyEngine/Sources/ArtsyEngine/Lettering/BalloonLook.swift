@@ -71,20 +71,27 @@ public struct BalloonLook: Codable, Hashable {
     /// keeps its width as the balloon grows or shrinks; nil for a base in proportion to the
     /// body, as tails always were. Wedges and lightning; bubbles have no base.
     public var tailBase: CGFloat?
+    /// How much room the words have between them and the body's edge, as a share of the
+    /// usual room, which goes by the words and their size: 0 for the outline as close round
+    /// the words as its shape goes, 2 for twice the usual room (`BalloonLayout.margin`).
+    public var margin: CGFloat
 
     /// The narrowest and widest a tail is made, as a share of its usual width.
     public static let tailWidths: ClosedRange<CGFloat> = 0.3...3
     /// The narrowest and widest a tail's base is set, in sizes of the lettering.
     public static let tailBases: ClosedRange<CGFloat> = 0.25...8
+    /// The least and most room round the words, as a share of the usual margin.
+    public static let margins: ClosedRange<CGFloat> = 0...4
 
     public init(shape: BalloonShape? = nil, line: BalloonLine = .solid, fill: BalloonFill = .white, tail: BalloonTail? = nil,
-                tailWidth: CGFloat = 1, tailBase: CGFloat? = nil) {
+                tailWidth: CGFloat = 1, tailBase: CGFloat? = nil, margin: CGFloat = 1) {
         self.shape = shape
         self.line = line
         self.fill = fill
         self.tail = tail
         self.tailWidth = tailWidth
         self.tailBase = tailBase
+        self.margin = margin
     }
 }
 
@@ -121,6 +128,15 @@ extension Balloon {
 
     /// Its tail's shape: its look's, else its kind's own.
     public var tailShape: BalloonTail { look.tail ?? style.ownTail }
+
+    /// How wide words lettered at `size` with `margin` times the usual room round them run
+    /// inside an outline drawn by hand with `radii`, so the ellipse they sit in fills it across.
+    static func wrapWidth(inside radii: CGSize, size: CGFloat, margin: CGFloat) -> CGFloat {
+        let pad = size * 0.5, m = max(0, margin)
+        // The ellipse's half-width is the words' and m times the room past them (`BalloonLayout.ellipse`)
+        let half = m == 1 ? radii.width / 1.32 - pad : (radii.width - m * 1.32 * pad) / (1 + 0.32 * m)
+        return max(size * 2.5, 2 * half)
+    }
 }
 
 /// The shapes' geometry, for `BalloonLayout`: canvas pixels, y up.

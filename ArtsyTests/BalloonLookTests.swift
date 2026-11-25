@@ -5,7 +5,7 @@ import CoreGraphics
 #endif
 @testable import ArtsyEngine
 
-/// Balloon looks: each kind's shapes, the lines, fills and tails; saved with the balloon,
+/// Balloon looks: each kind's shapes, the lines, fills, tails and margins; saved with the balloon,
 /// kept per kind for the next one, and changed as steps to undo.
 final class BalloonLookTests: XCTestCase {
     private let sentence = "Hello there, how are you today? Fine, I hope."
@@ -379,17 +379,113 @@ final class BalloonLookTests: XCTestCase {
         XCTAssertNil(BalloonLayout.preview(.sound, look: BalloonLook(), tail: false, width: 60, height: 44))
     }
 
+    // MARK: - The margin
+
+    /// The margin is the room between the words and the body's edge, that many times the
+    /// usual: a box's own margin round the words, an oval's room past them; the usual draws
+    /// as balloons always have, and more room makes every shape larger.
+    func testTheMarginIsTheRoomRoundTheWords() {
+        for style in [BalloonStyle.speech, .thought, .shout, .caption] {
+            XCTAssertEqual(BalloonLayout(balloon(style, BalloonLook(margin: 1))).body, BalloonLayout(balloon(style)).body,
+                           "\(style): the usual margin is the plain look")
+        }
+        // A caption's box is the words' with the margin round it: half the size across, four
+        // tenths up and down, at 20 px lettering
+        let words = BalloonLayout(balloon(.caption)).textBox
+        for margin: CGFloat in [0.5, 2, 4] {
+            let layout = BalloonLayout(balloon(.caption, BalloonLook(margin: margin)))
+            XCTAssertEqual(layout.margin, margin, "\(margin): drawn as set")
+            let box = layout.body.boundingBoxOfPath
+            XCTAssertEqual(box.width, words.width + 20 * margin, accuracy: 0.01, "\(margin) across")
+            XCTAssertEqual(box.height, words.height + 16 * margin, accuracy: 0.01, "\(margin) up and down")
+        }
+        // An oval's room past its words, twice and four times over
+        func room(_ margin: CGFloat) -> CGSize {
+            let layout = BalloonLayout(balloon(.speech, BalloonLook(margin: margin), tail: nil))
+            let body = layout.body.boundingBoxOfPath
+            return CGSize(width: body.width - layout.textBox.width, height: body.height - layout.textBox.height)
+        }
+        for margin: CGFloat in [2, 4] {
+            XCTAssertEqual(room(margin).width, room(1).width * margin, accuracy: 0.01, "an oval's room across, \(margin) times")
+            XCTAssertEqual(room(margin).height, room(1).height * margin, accuracy: 0.01, "and up and down")
+        }
+        // Every shape: tighter with less, larger with more
+        for style in [BalloonStyle.speech, .thought, .shout, .caption] {
+            for shape in style.shapes {
+                func size(_ margin: CGFloat) -> CGSize {
+                    BalloonLayout(balloon(style, BalloonLook(shape: shape, margin: margin), tail: nil)).body.boundingBoxOfPath.size
+                }
+                let tight = size(0), usual = size(1), roomy = size(4)
+                XCTAssertLessThan(tight.width * tight.height, usual.width * usual.height * 0.97, "\(shape) \(style): tighter")
+                XCTAssertGreaterThan(roomy.width, usual.width + 40, "\(shape) \(style): wider with more room")
+                XCTAssertGreaterThan(roomy.height, usual.height + 30, "\(shape) \(style): taller with more room")
+            }
+        }
+    }
+
+    /// However tight the margin, every shape in every line still holds its words: all along
+    /// each line's ink, wide, in a tall narrow block or in one long line. Where the margin is
+    /// tighter than the shape can go round them, it is drawn as tight as it can, never past
+    /// the usual; an oval can still go well inside its usual size.
+    func testATightMarginStillHoldsItsWords() {
+        for style in BalloonStyle.allCases where style != .sound {
+            for shape in style.shapes {
+                for line in BalloonLine.allCases {
+                    for wrap: CGFloat in [200, 90, 600] {
+                        for margin: CGFloat in [0, 0.25, 0.5] {
+                            let layout = BalloonLayout(balloon(style, BalloonLook(shape: shape, line: line, margin: margin),
+                                                               tail: nil, wrap: wrap))
+                            let named = "\(shape) \(style), \(line) line, \(wrap) wide, margin \(margin)"
+                            XCTAssertGreaterThanOrEqual(layout.margin, margin, named)
+                            XCTAssertLessThanOrEqual(layout.margin, 1, named)
+                            XCTAssertFalse(layout.lines.isEmpty, named)
+                            for r in layout.lines {
+                                let along = (0...20).flatMap { i -> [CGPoint] in
+                                    let x = r.minX + r.width * CGFloat(i) / 20
+                                    return [CGPoint(x: x, y: r.minY), CGPoint(x: x, y: r.maxY)]
+                                }
+                                let ends = [CGPoint(x: r.minX, y: r.midY), CGPoint(x: r.maxX, y: r.midY)]
+                                XCTAssertTrue((along + ends).allSatisfy { layout.body.contains($0) }, "\(named): holds \(r)")
+                                XCTAssertTrue(layout.textBox.insetBy(dx: -1, dy: -1).contains(r), "\(named): the ink is in the words' box")
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        // Moved, or its tail pointed elsewhere, a tight balloon keeps its shape and margin
+        for (style, shape) in [(BalloonStyle.shout, BalloonShape.burst), (.thought, .cloud), (.caption, .notched)] {
+            let tight = balloon(style, BalloonLook(shape: shape, margin: 0))
+            var moved = tight
+            moved.center = CGPoint(x: 537, y: 488)
+            moved.tail = tight.tail.map { CGPoint(x: $0.x - 60, y: $0.y + 20) }
+            let before = BalloonLayout(tight), after = BalloonLayout(moved)
+            XCTAssertEqual(after.margin, before.margin, "\(shape): its margin")
+            let a = before.body.boundingBoxOfPath, b = after.body.boundingBoxOfPath
+            if style == .caption {
+                XCTAssertEqual(b.width, a.width, accuracy: 0.01, "\(shape): its shape, moved")
+                XCTAssertEqual(b.minX - a.minX, 37, accuracy: 0.01)
+            }
+            XCTAssertTrue(after.lines.flatMap { corners($0) }.allSatisfy { after.body.contains($0) }, "\(shape): its words, moved")
+        }
+        for wrap: CGFloat in [200, 90] {
+            let usual = BalloonLayout(balloon(.speech, tail: nil, wrap: wrap)).body.boundingBoxOfPath
+            let tight = BalloonLayout(balloon(.speech, BalloonLook(margin: 0), tail: nil, wrap: wrap)).body.boundingBoxOfPath
+            XCTAssertLessThan(tight.width * tight.height, usual.width * usual.height * 0.85, "an oval \(wrap) wide, tighter")
+        }
+    }
+
     // MARK: - Saving
 
     /// A look saves with its balloon and comes back; the plain look saves nothing, so a
     /// balloon from before looks reads as it was; a part a later build adds reads as plain.
     func testALookSavesWithItsBalloon() throws {
         let plain = try JSONSerialization.jsonObject(with: JSONEncoder().encode(balloon(.speech))) as? [String: Any]
-        for key in ["shape", "line", "fill", "tailShape", "tailWidth", "tailBase", "tailPinned"] {
+        for key in ["shape", "line", "fill", "tailShape", "tailWidth", "tailBase", "margin", "tailPinned"] {
             XCTAssertNil(plain?[key], "the plain look saves no \(key)")
         }
         var looked = balloon(.shout, BalloonLook(shape: .jagged, line: .electric, fill: .yellow, tail: .lightning, tailWidth: 1.5,
-                                                 tailBase: 2.5))
+                                                 tailBase: 2.5, margin: 0.75))
         looked.tailPinned = true
         let data = try JSONEncoder().encode(looked)
         XCTAssertEqual(try JSONDecoder().decode(Balloon.self, from: data), looked)
@@ -398,6 +494,7 @@ final class BalloonLookTests: XCTestCase {
         let read = try JSONDecoder().decode(Balloon.self, from: Data(later.utf8))
         XCTAssertNil(read.look.shape, "a shape this build does not know reads as the kind's own")
         XCTAssertEqual(read.look.line, .electric, "and the rest as saved")
+        XCTAssertEqual(read.look.margin, 0.75)
     }
 
     // MARK: - The tool
@@ -546,5 +643,56 @@ final class BalloonLookTests: XCTestCase {
 
         viewModel.performUndo(renderer: renderer)
         XCTAssertNil(viewModel.balloons.first?.look.tailBase, "undone")
+    }
+
+    /// A margin set on a picked-up balloon is a step, kept for the next balloon of its kind,
+    /// and stays when its kind changes, as its line and fill do. A balloon drawn by hand keeps
+    /// its outline: its words wrap afresh inside it, wider with less room, narrower with more.
+    func testAMarginIsKeptAndADrawnBalloonsWordsRewrap() throws {
+        let harness = try EngineHarness(width: 800, height: 600)
+        let viewModel = harness.viewModel, renderer = harness.renderer
+        viewModel.letteringDown(at: CGPoint(x: 400, y: 300), renderer: renderer)
+        viewModel.letteringUp(renderer: renderer)
+        viewModel.changeSelectedBalloon("Edit Words", renderer: renderer) { $0.text = "Who goes there? Show yourself!" }
+        let placed = try XCTUnwrap(viewModel.selectedBalloon)
+        let steps = viewModel.undoManager.undoCount
+        viewModel.setBalloonLook(BalloonLook(margin: 2), as: "Balloon Margin", renderer: renderer)
+        viewModel.setBalloonLook(BalloonLook(margin: 2.25), as: "Balloon Margin", renderer: renderer)
+        let roomy = try XCTUnwrap(viewModel.selectedBalloon)
+        XCTAssertEqual(roomy.look.margin, 2.25)
+        XCTAssertEqual(viewModel.undoManager.undoCount, steps + 1, "margins in a row are one step")
+        XCTAssertEqual(viewModel.balloonLook(for: .speech).margin, 2.25, "the next speech balloon's too")
+        XCTAssertGreaterThan(BalloonLayout(roomy).body.boundingBoxOfPath.width,
+                             BalloonLayout(placed).body.boundingBoxOfPath.width + 20, "more room")
+        XCTAssertEqual(roomy.wrapWidth, placed.wrapWidth, "a plain balloon's words wrap as they did")
+
+        viewModel.restyleSelectedBalloon(.caption, renderer: renderer)
+        XCTAssertEqual(viewModel.selectedBalloon?.look.margin, 2.25, "kept as the kind changes")
+        viewModel.performUndo(renderer: renderer)
+        viewModel.performUndo(renderer: renderer)
+        XCTAssertEqual(viewModel.balloons.first?.look.margin, 1, "undone")
+
+        // A loop drawn round where the words go
+        viewModel.balloonStyle = .speech
+        viewModel.balloonLooks[.speech] = BalloonLook()
+        let loop = (0...206).map { i -> CGPoint in
+            let t = 2 * CGFloat.pi * CGFloat(i) / 200
+            return CGPoint(x: 400 + 200 * cos(t), y: 330 + 120 * sin(t))
+        }
+        viewModel.selectedBalloonID = nil
+        viewModel.drawBalloon(loop, renderer: renderer)
+        viewModel.changeSelectedBalloon("Edit Words", renderer: renderer) {
+            $0.text = "Who goes there? Show yourself, or I shall have to come down and find you myself!"
+        }
+        let drawn = try XCTUnwrap(viewModel.selectedBalloon)
+        let outline = try XCTUnwrap(drawn.drawn)
+        viewModel.setBalloonLook(BalloonLook(margin: 0.25), as: "Balloon Margin", renderer: renderer)
+        let tight = try XCTUnwrap(viewModel.selectedBalloon)
+        XCTAssertEqual(tight.drawn, outline, "the outline as drawn")
+        XCTAssertGreaterThan(tight.wrapWidth, drawn.wrapWidth + 20, "the words wider inside it")
+        viewModel.setBalloonLook(BalloonLook(margin: 2), as: "Balloon Margin", renderer: renderer)
+        let roomyDrawn = try XCTUnwrap(viewModel.selectedBalloon)
+        XCTAssertLessThan(roomyDrawn.wrapWidth, drawn.wrapWidth - 20, "narrower with more room")
+        XCTAssertEqual(roomyDrawn.drawn, outline)
     }
 }

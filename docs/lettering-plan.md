@@ -153,6 +153,75 @@ balloon with white words.
   the diamond at the base's end, a drag widening the base from 111 to 376 px, and the
   panel's minus bringing it to 193 in one step.
 
+## The margin (branch `balloon-margin`)
+
+How much room the words have between them and the balloon's edge, set like the rest of
+the look.
+
+### What the artist does
+
+- In the lettering panel, under **fill**, a **margin** row: minus and plus, a quarter of
+  the usual at a time, from none (0%) to four times the usual (400%). With a balloon picked
+  up it changes that balloon as one step (taps in a row are one); with none, it sets the
+  next balloon of the kind, which keeps it as kinds keep their looks. A balloon changing
+  kind keeps its margin, as it keeps its line and fill.
+- However tight it is set, the outline never comes onto the words. Where a shape can go
+  no tighter round them (an oval round a block whose widest line is at the top, say), the
+  readout shows the margin it is drawn with and minus greys out.
+- A balloon drawn by hand keeps the outline as drawn; a new margin wraps its words afresh
+  inside it, wider with less room and narrower with more.
+
+### How it is built
+
+- **`BalloonLook.margin`** (1 by default, saved as `margin` only when set, so balloons
+  from before read as the usual). The margin is the *air* between the words and the
+  usual outline, that many times over: a box's own margin round the words' box (half a
+  size across, four tenths up and down for a caption); for the shapes built on the
+  ellipse (oval, wobbly, cloud, puffy, burst, jagged, blast), the room between the words'
+  box and the usual ellipse. At 1 every shape draws exactly as before.
+- **The floor**: below 1, `BalloonLayout` measures each line's ink (Core Text glyph path
+  bounds, so capitals are not held to the face's full height) and draws with the least
+  margin from the set one up to the usual at which the outline holds every line, the
+  line's own inner reach and a little air clear of them. "Holds" is checked on the
+  outline before a wavy or electric line moves it (their swing is in the clearance):
+  points along each line's room inside, and no vertex of the flattened outline in it, so a
+  cloud's cusp or a shout's notch between the points still counts. It is a bisection,
+  so the result is cached (`BalloonMargins`) by everything it depends on except the
+  balloon's centre and tail: moving a tight balloon or pointing its tail lays it out as
+  fast as a usual one. Registering or removing a drawn font clears the cache.
+  `BalloonLayout.margin` is the margin drawn, which the panel reads.
+- **Drawn balloons** wrap at the width whose ellipse fills the drawn one across with the
+  margin's room (`Balloon.wrapWidth(inside:size:margin:)`, the old formula at 1).
+
+## Status (2026-11-25, branch `balloon-margin`)
+
+- `BalloonLookTests` (19): three new. The margin is the room round the words: the usual
+  draws as the plain look; a caption's box is the words' box with 20 × margin across and
+  16 × margin up and down at 20 px lettering; an oval's room past its words doubles and
+  quadruples; every shape is tighter at 0 and larger at 4. A tight margin still holds the
+  words: every shape in every line, wide, a tall narrow block and one long line, at 0,
+  ¼ and ½, along each line's ink; the margin drawn never under the set one or past the
+  usual; a tight balloon moved, or its tail pointed, keeps its shape and margin; an oval
+  at 0 at least 15% smaller in area than the usual. The tool: a margin set on a balloon
+  is one step for taps in a row, kept for the next balloon of the kind and through a
+  change of kind, undone; a drawn balloon keeps its outline and wraps its words wider
+  at ¼ and narrower at 2. Saving: the plain look writes no `margin`, a set one round-trips.
+- Measured (iPad simulator): the test sentence's oval goes from 276 × 136 px at the usual
+  margin to 250 × 122 at none, its tall narrow block from 137 × 289 to 107 × 240, and up
+  to 878 × 90 for one long line at 2. Ovals and bursts reach their floor around ½; boxes
+  and rounded boxes tighten all the way to the words. A tight burst's layout took about
+  9 ms before the cache and about 0.2 ms once moved.
+- The whole engine package (353 tests, 3 skipped) passes on the iPad simulator; the Mac and
+  iPad apps build. The Mac suite passes too: 462 tests, 3 skipped (the golden and brush
+  files read from disk), ShellTests among them.
+- Seen on the iPad simulator (iPad Pro 11-inch): the margin row under fill, its label in
+  line with the others; a speech oval stepping 100% → 75% → 50% and stopping at 48% with
+  minus greyed; the box shape at 25%, tight round the words, and up to 200%, the panel's
+  shape and tail pictures following the margin; seven taps of plus undone in one step.
+- A first version scaled only the pad inside the 1.32 ellipse factor, which tightened an
+  oval by about 2% from 100% to 0% and let it clip the corners of the words' box; the air
+  is now what scales, with the floor keeping the words in.
+
 ## Later
 
 - An OFL lettering face bundled with the app.
