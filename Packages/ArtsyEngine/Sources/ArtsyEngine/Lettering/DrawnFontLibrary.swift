@@ -25,6 +25,8 @@ public enum DrawnFonts {
         lock.lock()
         descriptors[id, default: [:]][style] = descriptor
         lock.unlock()
+        // Words set in it may ink differently now
+        BalloonMargins.forget()
         return true
     }
 
@@ -50,6 +52,7 @@ public enum DrawnFonts {
         descriptors[id] = nil
         varieties[id] = nil
         lock.unlock()
+        BalloonMargins.forget()
     }
 
     public static func isRegistered(_ id: UUID, style: DrawnFontStyle = .regular) -> Bool {

@@ -221,8 +221,8 @@ struct LetteringPanel: View {
 
     // MARK: - The look
 
-    /// The balloon's look, a row each for its shape, line, fill and tail, every choice a
-    /// picture of the balloon as it would be.
+    /// The balloon's look, a row each for its shape, line, fill, the room round its words
+    /// and its tail, every choice a picture of the balloon as it would be.
     @ViewBuilder
     private func lookRows(style: BalloonStyle, look: BalloonLook) -> some View {
         let shape = look.shape.flatMap { style.shapes.contains($0) ? $0 : nil } ?? style.shapes.first
@@ -262,6 +262,26 @@ struct LetteringPanel: View {
                         .frame(width: 24, height: 16)
                 }
             }
+        }
+        // The picked-up balloon's as drawn: a shape that can go no tighter round its words stops there
+        let drawnMargin = viewModel.selectedBalloon.map { BalloonLayout($0).margin } ?? look.margin
+        let tightest = drawnMargin > look.margin || look.margin <= BalloonLook.margins.lowerBound
+        lookRow("margin") {
+            ChromeButton(systemImage: "minus", size: 30, help: "Less room between the words and the balloon's edge") {
+                setMargin(by: -Self.marginStep, from: drawnMargin)
+            }
+            .disabled(tightest)
+            .opacity(tightest ? 0.35 : 1)
+            Text("\(Int((drawnMargin * 100).rounded()))%")
+                .font(Chrome.valueFont)
+                .foregroundColor(Chrome.text)
+                .frame(minWidth: 46)
+                .help(drawnMargin > look.margin ? "As tight as this shape goes round these words"
+                                                : "The room between the words and the balloon's edge, as a share of the usual")
+            ChromeButton(systemImage: "plus", size: 30, help: "More room between the words and the balloon's edge") {
+                setMargin(by: Self.marginStep, from: drawnMargin)
+            }
+            Spacer(minLength: 0)
         }
         if style.hasTail {
             let tail = look.tail ?? style.ownTail
@@ -356,12 +376,22 @@ struct LetteringPanel: View {
         }
     }
 
+    /// The room round the words `step` more or less than `current`, on the quarter, within
+    /// the least and most.
+    private func setMargin(by step: CGFloat, from current: CGFloat) {
+        let range = BalloonLook.margins
+        let margin = min(range.upperBound, max(range.lowerBound, ((current + step) * 4).rounded() / 4))
+        editLook("Balloon Margin") { $0.margin = margin }
+    }
+
+    private static let marginStep: CGFloat = 0.25
+
     private func lookRow<Content: View>(_ label: String, @ViewBuilder content: () -> Content) -> some View {
         HStack(spacing: 3) {
             Text(label)
                 .font(Chrome.labelFont)
                 .foregroundColor(Chrome.secondaryText)
-                .frame(width: 34, alignment: .leading)
+                .frame(width: 40, alignment: .leading)
             content()
         }
     }

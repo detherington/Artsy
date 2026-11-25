@@ -90,10 +90,11 @@ public struct Balloon: Codable, Equatable, Identifiable {
     }
 
     // Balloons saved before bold and italic read as neither, and before looks as the plain
-    // look; older builds ignore them. A look's part a later build adds reads as the plain one.
+    // look (a margin as the usual one); older builds ignore them. A look's part a later
+    // build adds reads as the plain one.
     private enum CodingKeys: String, CodingKey {
         case id, style, center, text, wrapWidth, face, drawnFont, fontSize, allCaps, tail, bold, italic
-        case shape, line, fill, tailShape, tailWidth, tailBase, tailPinned, drawn
+        case shape, line, fill, tailShape, tailWidth, tailBase, margin, tailPinned, drawn
     }
 
     public init(from decoder: Decoder) throws {
@@ -115,7 +116,8 @@ public struct Balloon: Codable, Equatable, Identifiable {
         }
         look = BalloonLook(shape: try part(.shape), line: try part(.line) ?? .solid, fill: try part(.fill) ?? .white,
                            tail: try part(.tailShape), tailWidth: try c.decodeIfPresent(CGFloat.self, forKey: .tailWidth) ?? 1,
-                           tailBase: try c.decodeIfPresent(CGFloat.self, forKey: .tailBase))
+                           tailBase: try c.decodeIfPresent(CGFloat.self, forKey: .tailBase),
+                           margin: try c.decodeIfPresent(CGFloat.self, forKey: .margin) ?? 1)
         tailPinned = try c.decodeIfPresent(Bool.self, forKey: .tailPinned) ?? false
         drawn = try c.decodeIfPresent(DrawnOutline.self, forKey: .drawn)
     }
@@ -140,6 +142,7 @@ public struct Balloon: Codable, Equatable, Identifiable {
         try c.encodeIfPresent(look.tail?.rawValue, forKey: .tailShape)
         if look.tailWidth != 1 { try c.encode(look.tailWidth, forKey: .tailWidth) }
         try c.encodeIfPresent(look.tailBase, forKey: .tailBase)
+        if look.margin != 1 { try c.encode(look.margin, forKey: .margin) }
         if tailPinned { try c.encode(tailPinned, forKey: .tailPinned) }
         try c.encodeIfPresent(drawn, forKey: .drawn)
     }
@@ -253,6 +256,12 @@ public struct BalloonLayout {
     public let balloon: Balloon
     /// The words' box, as tight as they are set.
     public let textBox: CGRect
+    /// Each line's words as inked, which a tight margin keeps the outline round; the words'
+    /// box itself for no words.
+    public let lines: [CGRect]
+    /// The margin its body is drawn with: its look's, or the least that holds its words
+    /// where that is tighter than its shape can go.
+    public let margin: CGFloat
     /// The outline, body and tail as one; empty for a sound effect.
     public let body: CGPath
     /// The outline's width.
@@ -313,19 +322,22 @@ public struct BalloonLayout {
         let textWidth = ceil(fitted.width), textHeight = ceil(fitted.height)
         let center = balloon.center
         textBox = CGRect(x: center.x - textWidth / 2, y: center.y - textHeight / 2, width: textWidth, height: textHeight)
-        if words.isEmpty {
-            frame = nil
-        } else {
-            // Set at the wrap width, centred, so the lines break where they were measured
-            let frameRect = CGRect(x: center.x - wrap / 2, y: textBox.minY, width: wrap, height: textHeight + 1)
-            frame = CTFramesetterCreateFrame(CTFramesetterCreateWithAttributedString(attributed(runs)),
-                                             CFRange(location: 0, length: 0), CGPath(rect: frameRect, transform: nil), nil)
-        }
+        // Set at the wrap width, centred, so the lines break where they were measured
+        let frameRect = CGRect(x: center.x - wrap / 2, y: textBox.minY, width: wrap, height: textHeight + 1)
+        frame = words.isEmpty ? nil : CTFramesetterCreateFrame(CTFramesetterCreateWithAttributedString(attributed(runs)),
+                                                               CFRange(location: 0, length: 0),
+                                                               CGPath(rect: frameRect, transform: nil), nil)
+        let box = textBox
+        let inked = frame.map { Self.lineBoxes(of: $0, in: frameRect) }.flatMap { $0.isEmpty ? nil : $0 } ?? [box]
+        lines = inked
 
         let line = max(1.5, (size * 0.075).rounded(.up))
         lineWidth = balloon.look.line == .heavy ? line * 2 : line
         let pad = size * 0.5
-        (body, base) = Self.body(of: balloon, around: textBox, pad: pad, lineWidth: line)
+        let drawnMargin = balloon.shape.map { Self.margin(of: balloon, $0, around: box, lines: inked, pad: pad, lineWidth: line) }
+            ?? max(0, balloon.look.margin)
+        margin = drawnMargin
+        (body, base) = Self.body(of: balloon, around: box, margin: drawnMargin, pad: pad, lineWidth: line)
         let outline = balloon.style == .sound ? textBox : body.boundingBoxOfPath
         // A double line reaches half again as far out as one
         let reach = lineWidth * (balloon.look.line == .double ? 1.5 : 1) + 2
@@ -333,21 +345,100 @@ public struct BalloonLayout {
     }
 
     /// The ellipse a balloon's words sit in: through the corners of their box and a margin
-    /// round it, a little fuller than the box itself.
-    static func ellipse(around box: CGRect, pad: CGFloat) -> (center: CGPoint, a: CGFloat, b: CGFloat) {
-        (CGPoint(x: box.midX, y: box.midY), (box.width / 2 + pad) * 1.32, (box.height / 2 + pad * 0.8) * 1.32)
+    /// round it, a little fuller than the box itself; with `margin`, the room between the
+    /// box and that ellipse that many times over, so none leaves only the box's own.
+    static func ellipse(around box: CGRect, pad: CGFloat, margin: CGFloat = 1) -> (center: CGPoint, a: CGFloat, b: CGFloat) {
+        let a = (box.width / 2 + pad) * 1.32, b = (box.height / 2 + pad * 0.8) * 1.32
+        guard margin != 1 else { return (CGPoint(x: box.midX, y: box.midY), a, b) }
+        return (CGPoint(x: box.midX, y: box.midY), box.width / 2 + (a - box.width / 2) * margin,
+                box.height / 2 + (b - box.height / 2) * margin)
     }
 
-    /// The body, its tail joined on: its shape round the words, reshaped by a wavy or
-    /// electric line, and the tail grown from the ellipse inside it, as wide as its look says.
-    private static func body(of balloon: Balloon, around box: CGRect, pad: CGFloat, lineWidth: CGFloat)
+    /// The boxes of `frame`'s lines, set in `rect`, round their glyphs' ink: capitals sit
+    /// well inside the face's height. A line with no ink, all spaces, has none.
+    private static func lineBoxes(of frame: CTFrame, in rect: CGRect) -> [CGRect] {
+        guard let lines = CTFrameGetLines(frame) as? [CTLine], !lines.isEmpty else { return [] }
+        var origins = [CGPoint](repeating: .zero, count: lines.count)
+        CTFrameGetLineOrigins(frame, CFRange(location: 0, length: 0), &origins)
+        return zip(lines, origins).compactMap { line, origin in
+            let ink = CTLineGetBoundsWithOptions(line, .useGlyphPathBounds)
+            guard !ink.isNull, ink.width > 0 || ink.height > 0 else { return nil }
+            return ink.offsetBy(dx: rect.minX + origin.x, dy: rect.minY + origin.y)
+        }
+    }
+
+    /// The margin `balloon` is drawn with: its look's; or, where that is too tight for its
+    /// outline to hold the words' `lines` with its line clear of them, the least that does,
+    /// never past the usual one. A balloon drawn by hand is held by the ellipse inside it.
+    private static func margin(of balloon: Balloon, _ shape: BalloonShape, around box: CGRect, lines: [CGRect], pad: CGFloat,
+                               lineWidth: CGFloat) -> CGFloat {
+        let set = max(0, balloon.look.margin)
+        guard set < 1 else { return set }
+        return BalloonMargins.margin(for: balloon) {
+            leastMargin(of: balloon, shape, from: set, around: box, lines: lines, pad: pad, lineWidth: lineWidth)
+        }
+    }
+
+    /// The least margin from `set` up to the usual at which `balloon`'s outline holds its
+    /// words' `lines`, its line clear of them.
+    private static func leastMargin(of balloon: Balloon, _ shape: BalloonShape, from set: CGFloat, around box: CGRect,
+                                    lines: [CGRect], pad: CGFloat, lineWidth: CGFloat) -> CGFloat {
+        // As far in as the line reaches: half its width, a double line's three, and a wavy
+        // or electric line's swing; and a little air, with room for a heavier stand-in bold
+        let look = balloon.look
+        let inked = look.line == .heavy ? lineWidth * 2 : lineWidth
+        let clear = inked * (look.line == .double ? 1.5 : 0.5) + (look.line.reshapes ? lineWidth * 1.25 : 0)
+            + 1 + balloon.fontSize * 0.03
+        // Round each line, often enough that no point or notch of a shout's edge falls between
+        let step = max(2, balloon.fontSize * 0.3)
+        let rooms = lines.map { $0.insetBy(dx: -clear, dy: -clear) }
+        let points = rooms.flatMap { r -> [CGPoint] in
+            let across = Int((r.width / step).rounded(.up)), up = Int((r.height / step).rounded(.up))
+            let xs = (0...across).map { r.minX + r.width * CGFloat($0) / CGFloat(across) }
+            let ys = (1..<max(1, up)).map { r.minY + r.height * CGFloat($0) / CGFloat(up) }
+            return xs.flatMap { [CGPoint(x: $0, y: r.minY), CGPoint(x: $0, y: r.maxY)] }
+                + ys.flatMap { [CGPoint(x: r.minX, y: $0), CGPoint(x: r.maxX, y: $0)] }
+        }
+        func holds(_ margin: CGFloat) -> Bool {
+            if balloon.drawn != nil {
+                let e = ellipse(around: box, pad: pad, margin: margin)
+                return points.allSatisfy { !outside($0, of: e, by: 1) }
+            }
+            var random = BalloonRandom(balloon.id)
+            let (path, _) = outline(shape, of: balloon.style, drawn: nil, around: box, pad: pad, margin: margin,
+                                    size: balloon.fontSize, lineWidth: lineWidth, random: &random)
+            guard points.allSatisfy({ path.contains($0) }) else { return false }
+            // Nor any of the outline in the room round a line: a cloud's cusp or a shout's notch
+            // reaching in between the points
+            var clear = true
+            path.flattened(threshold: 0.5).applyWithBlock { element in
+                guard clear, element.pointee.type != .closeSubpath else { return }
+                let p = element.pointee.points[0]
+                if rooms.contains(where: { $0.contains(p) }) { clear = false }
+            }
+            return clear
+        }
+        if holds(set) { return set }
+        // To within a 256th of the way to the usual
+        var low = set, high: CGFloat = 1
+        for _ in 0..<8 {
+            let middle = (low + high) / 2
+            if holds(middle) { high = middle } else { low = middle }
+        }
+        return high
+    }
+
+    /// The body, its tail joined on: its shape round the words, `margin` times the usual room
+    /// round them, reshaped by a wavy or electric line, and the tail grown from the ellipse
+    /// inside it, as wide as its look says.
+    private static func body(of balloon: Balloon, around box: CGRect, margin: CGFloat, pad: CGFloat, lineWidth: CGFloat)
         -> (CGPath, (right: CGPoint, left: CGPoint)?) {
         guard let shape = balloon.shape else { return (CGMutablePath(), nil) }
         let size = balloon.fontSize
         // Its own irregular shapes, the same every time it is drawn
         var random = BalloonRandom(balloon.id)
-        var (outline, e) = Self.outline(shape, of: balloon.style, drawn: balloon.drawn, around: box, pad: pad, size: size,
-                                        lineWidth: lineWidth, random: &random)
+        var (outline, e) = Self.outline(shape, of: balloon.style, drawn: balloon.drawn, around: box, pad: pad, margin: margin,
+                                        size: size, lineWidth: lineWidth, random: &random)
         outline = balloon.look.line.reshaping(outline, lineWidth: lineWidth)
         guard balloon.style.hasTail, let tip = balloon.tail, outside(tip, of: e), !outline.contains(tip) else { return (outline, nil) }
         let scale = max(0.1, balloon.look.tailWidth)
@@ -391,13 +482,15 @@ public struct BalloonLayout {
     }
 
     /// The shape of a body round its words, before its tail, and the ellipse its tail grows
-    /// from: the ellipse the words sit in, or the one inside a box. A body drawn by hand is
-    /// laid on the ellipse its words need or the one it was drawn round, whichever is larger
-    /// each way, and grows its tail from that.
+    /// from: the ellipse the words sit in, or the one inside a box, `margin` times the usual
+    /// room round them. A body drawn by hand is laid on the ellipse its words need or the one
+    /// it was drawn round, whichever is larger each way, and grows its tail from that.
     private static func outline(_ shape: BalloonShape, of style: BalloonStyle, drawn: DrawnOutline?, around box: CGRect,
-                                pad: CGFloat, size: CGFloat, lineWidth: CGFloat,
+                                pad usual: CGFloat, margin: CGFloat, size: CGFloat, lineWidth: CGFloat,
                                 random: inout BalloonRandom) -> (CGPath, BalloonGeometry.Ellipse) {
-        let e = ellipse(around: box, pad: pad)
+        let e = ellipse(around: box, pad: usual, margin: margin)
+        // A box's margin is its room
+        let pad = usual * margin
         if let drawn {
             let laid: BalloonGeometry.Ellipse = (e.center, max(e.a, drawn.radii.width), max(e.b, drawn.radii.height))
             return (drawn.path(center: laid.center, a: laid.a, b: laid.b), laid)
@@ -507,9 +600,9 @@ public struct BalloonLayout {
         return path
     }
 
-    private static func outside(_ p: CGPoint, of e: (center: CGPoint, a: CGFloat, b: CGFloat)) -> Bool {
+    private static func outside(_ p: CGPoint, of e: (center: CGPoint, a: CGFloat, b: CGFloat), by reach: CGFloat = 1.15) -> Bool {
         let dx = (p.x - e.center.x) / e.a, dy = (p.y - e.center.y) / e.b
-        return dx * dx + dy * dy > 1.15
+        return dx * dx + dy * dy > reach
     }
 
     private static func point(on e: (center: CGPoint, a: CGFloat, b: CGFloat), toward p: CGPoint) -> CGPoint {
@@ -659,6 +752,56 @@ public struct BalloonLayout {
         context.translateBy(x: -bounds.midX, y: -bounds.midY)
         fitted.draw(in: context)
         return context.makeImage()
+    }
+}
+
+/// The margins balloons too tight for their words were drawn with, by everything they go by
+/// but where the balloon is and where its tail points: moving one, or pointing its tail,
+/// does not work its margin out again. Forgotten when a drawn font changes.
+enum BalloonMargins {
+    private struct Key: Hashable {
+        let balloon: Balloon
+
+        init(_ balloon: Balloon) {
+            var placed = balloon
+            placed.center = .zero
+            placed.tail = nil
+            placed.tailPinned = false
+            self.balloon = placed
+        }
+
+        func hash(into hasher: inout Hasher) {
+            hasher.combine(balloon.id)
+            hasher.combine(balloon.text)
+            hasher.combine(balloon.wrapWidth)
+            hasher.combine(balloon.fontSize)
+            hasher.combine(balloon.look)
+        }
+    }
+
+    private static let lock = NSLock()
+    private static var margins: [Key: CGFloat] = [:]
+
+    /// `balloon`'s margin, worked out by `work` the first time.
+    static func margin(for balloon: Balloon, _ work: () -> CGFloat) -> CGFloat {
+        let key = Key(balloon)
+        lock.lock()
+        let known = margins[key]
+        lock.unlock()
+        if let known { return known }
+        let margin = work()
+        lock.lock()
+        // A page's balloons, and their last few edits, with room to spare
+        if margins.count >= 512 { margins.removeAll(keepingCapacity: true) }
+        margins[key] = margin
+        lock.unlock()
+        return margin
+    }
+
+    static func forget() {
+        lock.lock()
+        margins.removeAll()
+        lock.unlock()
     }
 }
 

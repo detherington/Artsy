@@ -161,9 +161,8 @@ extension CanvasViewModel {
         var balloon = Balloon.new(style, at: fitted.center, face: balloonFace, drawnFont: font, fontSize: size,
                                   allCaps: balloonCaps, look: balloonLook(for: style))
         balloon.drawn = fitted.outline
-        // Words wrapping where the ellipse they sit in fills the drawn one across
-        let pad = size * 0.5
-        balloon.wrapWidth = max(size * 2.5, 2 * (fitted.outline.radii.width / 1.32 - pad))
+        // Words wrapping where the ellipse they sit in, its margin round them, fills the drawn one across
+        balloon.wrapWidth = Balloon.wrapWidth(inside: fitted.outline.radii, size: size, margin: balloon.look.margin)
         if style.hasTail {
             if let tip = fitted.tail {
                 balloon.tail = tip
@@ -239,7 +238,7 @@ extension CanvasViewModel {
     /// Gives the picked-up balloon `look`, as a step called `kind`, and keeps it for the next
     /// balloon of that kind; with none picked up, only keeps it for the next balloon of the
     /// kind chosen. `addingTail` puts a tail on a balloon that has none, as choosing a tail's
-    /// shape does.
+    /// shape does. A new margin for one drawn by hand wraps its words afresh inside its outline.
     public func setBalloonLook(_ look: BalloonLook, as kind: String, addingTail: Bool = false, replacingDrawn: Bool = false,
                                renderer: CanvasRenderer?) {
         guard let balloon = selectedBalloon else {
@@ -252,8 +251,13 @@ extension CanvasViewModel {
         let redraws = replacingDrawn && balloon.drawn != nil
         guard let renderer, balloon.look != look || tails || redraws else { return }
         changeSelectedBalloon(kind, renderer: renderer) { b in
+            let margin = b.look.margin
             b.look = look
             if replacingDrawn { b.drawn = nil }
+            // One drawn by hand keeps its outline: its words wrap afresh inside it, the new margin round them
+            if let drawn = b.drawn, look.margin != margin {
+                b.wrapWidth = Balloon.wrapWidth(inside: drawn.radii, size: b.fontSize, margin: look.margin)
+            }
             if addingTail, b.style.hasTail, b.tail == nil {
                 b.tail = Balloon.new(b.style, at: b.center, face: b.face, fontSize: b.fontSize, allCaps: b.allCaps).tail
             }
